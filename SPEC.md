@@ -1,4 +1,4 @@
-# Cop–Thief League Protocol — SPEC v0.2-draft
+# Cop–Thief League Protocol — SPEC v0.3-draft
 
 **Status:** DRAFT for league review — written *before* the official final-project assignment
 publishes. Everything here is either (a) battle-tested in the EX06 inter-group bonus (played live,
@@ -9,6 +9,27 @@ what it must resolve.
 **Goal:** let any two conforming teams play a full cross-team series — connection, game, result
 agreement, identical report emails — with **zero pairwise negotiation**. Conformance is self-serve:
 implement to this spec, pass the test vectors in `vectors/`, and you can play anyone who did the same.
+
+## Changes from v0.2-draft
+
+Second review pass in [issue #1](https://github.com/Imreec/copthief-league-protocol/issues/1)
+(anrbj666 independently verified v0.2 — all vectors, a fresh §6.4 implementation from the spec
+text alone, the terminal frame — then found the holes below):
+
+- **§5.2 — the chain is now evidence, not decoration:** `prev_recv` cross-links every trailer to
+  the exact bytes last received from the opponent, interlocking the two per-sender chains into one
+  DAG — a re-forged history contradicts itself the moment it acknowledges anything later. Chains
+  are rooted in `config_sha256` instead of `null` (no cross-match replay), `move` trailers carry
+  `attempt` (stragglers from a voided attempt are cleanly discarded), and `hello`/`report_sha` are
+  chained too — the settlement claim is bound to the transcript.
+- **§9:** the emailed body MUST be the exact canonical bytes that were hashed — never a
+  re-serialization (an EX06 series was nearly lost to a pretty-printed email; graders compare
+  emails, not hashes). Committed transcripts MUST store the verbatim trailer bytes, sent and
+  received, or the chain cannot be verified from the artifact.
+- **§6.4/§8.3:** re-run attempts capped at 15 (the `game*16 + attempt` index can no longer collide);
+  the re-draw loop capped at 64 draws with a deterministic opposite-corners fallback — termination
+  is now provably bounded, not just almost-sure. Existing fixtures unaffected.
+- Protocol string bumped to `league/0.3`; match-card fixture and worked example regenerated.
 
 ## Changes from v0.1-draft
 
@@ -104,7 +125,7 @@ legitimately change between issuance and game time — a restarted tunnel MUST N
 ```json
 {
   "agreement": {
-    "protocol": "league/0.2",
+    "protocol": "league/0.3",
     "match_id": "2026-08-01-aleph-vs-bet",
     "groups": {"group_1": "Team-Aleph", "group_2": "Team-Bet"},
     "grid": [10, 10],
@@ -171,10 +192,12 @@ previous agreed game.
 Before any move of sub-game 0, each orchestrator sends one greeting message whose trailer (§5) is:
 
 ```json
-{"v": 1, "type": "hello", "protocol": "league/0.2", "config_sha256": "<hex64>", "group": "Team-Aleph"}
+{"v": 1, "type": "hello", "protocol": "league/0.3", "config_sha256": "<hex64>", "group": "Team-Aleph", "prev": "<config_sha256>", "prev_recv": null}
 ```
 
 - `config_sha256` = canonical hash of the match card's `agreement` (§4.1).
+- Chain fields (§5.2): a hello's `prev` is the `config_sha256` itself (the root anchor); its
+  `prev_recv` is the hash of the opponent's hello bytes if one was already received, else `null`.
 - If the two sides' `protocol` or `config_sha256` differ, the match **MUST NOT start**. Report the
   mismatch to the humans; nothing is void because nothing began.
 - The greeting prose is a natural place to confirm readiness and announce current `transport`
@@ -188,7 +211,7 @@ Every message is **one string** passed to `deliver_message`, with two parts:
 Your scent trail is getting colder toward the north-east, so I'm
 sweeping back along the west wall. Committing my move below.
 ---LEAGUE-v1---
-{"v":1,"type":"move","game":2,"ply":14,"ack":13,"move":[3,4],"commit":"<hex64>","nonce":"8f2c01ab","reveal":null,"state":"<hex64>","prev":"<hex64>"}
+{"v":1,"type":"move","game":2,"attempt":0,"ply":14,"ack":13,"move":[3,4],"commit":"<hex64>","nonce":"8f2c01ab","reveal":null,"state":"<hex64>","prev":"<hex64>","prev_recv":"<hex64>"}
 ```
 
 ### 5.1 The prose body (above the fence)
@@ -220,6 +243,7 @@ correctness: a conforming implementation can verify and apply the ply from the t
 | `v` | int | trailer schema version (this spec: `1`) |
 | `type` | string | `"move"` |
 | `game` | int | 0-based sub-game index in the series (kills cross-game misattribution) |
+| `attempt` | int | 0-based attempt counter for this sub-game (bumped on each void re-run, §8.3) — a straggler block from a dead attempt is discarded by field mismatch, not by a confusing state explosion |
 | `ply` | int | 0-based ply number of **this** move within the sub-game |
 | `ack` | int | highest opponent `ply` applied so far; `-1` if none |
 | `move` | `[row,col]` \| null | this ply's destination — cleartext in Mode A; `null` in Mode B |
@@ -227,19 +251,25 @@ correctness: a conforming implementation can verify and apply the ply from the t
 | `nonce` | string \| null | revealed immediately in Mode A (audit); `null` in Mode B |
 | `reveal` | object \| null | Mode B delayed reveal: `{"ply": t-k, "pos": [row,col], "nonce": "..."}` |
 | `state` | hex64 | common-state hash **after** applying this ply (§6.3) |
-| `prev` | hex64 \| null | SHA-256 of the exact UTF-8 bytes of the previous `move` trailer **this sender** transmitted in this sub-game (the line after the fence, no trailing newline); `null` for the sender's first move of the sub-game |
+| `prev` | hex64 | SHA-256 of the exact UTF-8 bytes of the previous trailer **this sender** transmitted in this `(game, attempt)` (the line after the fence, no trailing newline); for the sender's **first** trailer of the attempt: the match's `config_sha256` (root anchor — a chain can never be replayed into a different match) |
+| `prev_recv` | hex64 \| null | SHA-256 of the exact UTF-8 bytes of the last opponent trailer **received and accepted** in this `(game, attempt)` at composition time; `null` only when nothing has been received yet (the thief's opening move) |
 
-- `prev` makes each side's per-sub-game transcript a **tamper-evident hash chain**: neither side
-  can later rewrite its own history, and a committed JSONL transcript plus the chain is
-  self-authenticating evidence for dispute resolution. Resends (§8.2) retransmit identical bytes,
-  so the chain is unaffected.
+- `prev` + `prev_recv` make the two sides' transcripts **one interlocked DAG**, not two independent
+  chains: your ply-10 hashes my ply-9's exact bytes, and my ply-11 hashes your ply-10's — so
+  neither side can re-forge its own history offline without contradicting every later message of
+  the opponent's that acknowledged it. Earliest divergence between two committed transcripts is
+  provable, and the interleaving order is pinned cryptographically (`ack` asserts it only
+  numerically). Chains restart per `(game, attempt)`, always rooted in `config_sha256`. Resends
+  (§8.2) retransmit identical bytes, so both chains are unaffected. `hello` (§4.3) and
+  `report_sha` (§9) trailers are chained with the same two fields.
 - Unknown fields: receivers MUST ignore unknown keys (forward compatibility within a major `v`).
 - Coordinate frame (normative, as in EX06): **0-based, top-left origin, `[row, col]`, row-major**.
 - Sequencing: `game`/`ply`/`ack` subsume EX06's `SG:` prefix and hold/skip patch. Plies are
   numbered globally within a sub-game (thief-first ⇒ one role owns the even plies, the other the
   odd), so the opponent's expected next `ply` is always known: their first ply by role, then
   `last_applied_opponent_ply + 2`. A receiver holds a future-`ply` block, discards an
-  already-applied one (idempotent by `commit`), and applies only the expected same-`game` block.
+  already-applied one (idempotent by `commit`) or one from a dead `attempt`, and applies only the
+  expected same-`(game, attempt)` block.
 
 ## 6. Hash constructions (normative — pinned by `vectors/`)
 
@@ -282,11 +312,13 @@ canonicalization sorts.) Binding both ways: changing position **or** nonce chang
 For a draw counter `draw = 0, 1, 2, …` on an `n×n` board:
 
 ```
-digest    = SHA-256(utf8(f"{seed}:{index}:{draw}"))          # raw digest bytes
-cop_cell  = int.from_bytes(digest[0:4],  "big") mod n²
-thief_cell= int.from_bytes(digest[4:8],  "big") mod n²
-d_min     = min(max(ceil(n/3), 2), n-1)                       # 5→2, 8→3, 10→4
-accept iff chebyshev(cop, thief) ≥ d_min, else draw += 1 and re-derive
+for draw in 0..63:
+    digest    = SHA-256(utf8(f"{seed}:{index}:{draw}"))       # raw digest bytes
+    cop_cell  = int.from_bytes(digest[0:4],  "big") mod n²
+    thief_cell= int.from_bytes(digest[4:8],  "big") mod n²
+    d_min     = min(max(ceil(n/3), 2), n-1)                   # 5→2, 8→3, 10→4
+    accept iff chebyshev(cop, thief) ≥ d_min
+fallback (no draw in 0..63 accepted): cop = [0, 0], thief = [n-1, n-1]
 cell i → [i // n, i mod n]
 ```
 
@@ -295,10 +327,13 @@ cell i → [i // n, i mod n]
 - **`d_min` (minimum Chebyshev start distance)** removes instant-capture starts: in the accepted
   EX06 series, three sub-games were decided in one round because the derivation put the cop
   next to the thief. The re-draw is deterministic (both sides walk the same `draw` sequence), and
-  termination is guaranteed for n ≥ 2 (opposite corners are always at distance `n-1 ≥ d_min`).
+  the **64-draw cap with the opposite-corners fallback** makes termination provably bounded — not
+  merely almost-sure — while staying deterministic (corners are at distance `n-1 ≥ d_min`, so the
+  fallback always satisfies the invariant; every current fixture accepts by draw ≤ 2).
 - **`index` (deterministic re-runs):** for sub-game `g`, attempt `a` (first play = 0, first re-run
-  after a void = 1, …): `index = g * 16 + a`. No "bump by agreement" — re-runs re-derive with zero
-  negotiation.
+  after a void = 1, …): `index = g * 16 + a`, with **`a ≤ 15`** so indices never collide across
+  sub-games (§8.3 hands the match to humans long before that). No "bump by agreement" — re-runs
+  re-derive with zero negotiation.
 
 ### 6.5 Report hash
 
@@ -357,9 +392,11 @@ by revealing on a lag `k` (match-card `scent_k`):
 
 - Commitment/reveal verification failure, out-of-sequence block that never resolves, `state`
   mismatch, or budget exhaustion → the sub-game is **void** (technical loss handling): record
-  evidence (ply, both state hashes, the offending block, your `prev`-chained transcript), notify
-  the opponent in prose, **re-run** the sub-game — same `game` index `g`, next attempt `a`, starts
-  re-derived deterministically via `index = g * 16 + a` (§6.4).
+  evidence (ply, both state hashes, the offending block, your chained transcript), notify
+  the opponent in prose, **re-run** the sub-game — same `game` index `g`, next attempt `a` (`a ≤
+  15`), starts re-derived deterministically via `index = g * 16 + a` (§6.4). Re-run trailers carry
+  the new `attempt`, so any straggler block from the dead attempt is discarded on sight (§5.2)
+  rather than exploding a state comparison.
 - Repeated failure of the same sub-game (default: 2 attempts) → humans decide; the series is not
   reportable as mutually agreed until resolved.
 
@@ -371,9 +408,14 @@ by revealing on a lag `k` (match-card `scent_k`):
 2. Canonicalize (§2) → `report_hash` (§6.5).
 3. **Two-phase confirm** (EX06-proven mechanism, now a typed trailer): send a message to the
    opponent's cop mailbox whose trailer is
-   `{"v":1,"type":"report_sha","match_id":"<id>","sha":"<hex64>"}`; poll for theirs. Email is sent
-   **only** on byte-identical match, by both teams — to the `report_email` from the match card,
-   subject to the `stage` interlock (§4.1).
+   `{"v":1,"type":"report_sha","match_id":"<id>","sha":"<hex64>","prev":"<hex64>","prev_recv":"<hex64>"}`
+   — `prev` = hash of the exact bytes of your last transmitted `move` trailer of the final
+   sub-game, `prev_recv` = of the last one received, binding the settlement claim into the game
+   transcript. Poll for theirs. Email is sent **only** on byte-identical match, by both teams — to
+   the `report_email` from the match card, subject to the `stage` interlock (§4.1). **The email
+   body MUST be the exact canonical bytes that were hashed — never a re-serialization** (no
+   pretty-printing, no `ensure_ascii` changes: an EX06 series nearly scored 0 because hashes
+   matched but one side's *email* was a re-serialization — graders compare emails, not hashes).
 4. On mismatch (PROPOSED escalation, replaces "humans stare at JSONs"):
    a. Exchange full canonical report bytes.
    b. Machine-diff; classify the first diverging field.
@@ -381,9 +423,11 @@ by revealing on a lag `k` (match-card `scent_k`):
    d. Metadata divergence (names, ordering) → fix to the match card's `agreement` values →
       re-confirm.
    e. Nothing is ever emailed without a confirmed match (mismatched reports score 0 for both).
-5. Both teams SHOULD commit their per-ply JSONL transcript (with the `prev` chain) alongside the
-   emailed report — the chain makes each side's log self-authenticating evidence that the game
-   actually happened as reported.
+5. Both teams SHOULD commit their per-ply JSONL transcript alongside the emailed report, and a
+   committed transcript MUST include the **verbatim trailer line** (exact bytes, sent *and*
+   received) for every message — the `prev`/`prev_recv` DAG can only be verified against raw
+   bytes, and a transcript without them is not checkable evidence. The interlocked chains make
+   the pair of committed logs self-authenticating proof that the game happened as reported.
 
 ## 10. Conformance
 
@@ -394,7 +438,8 @@ A team is **league-conformant** when:
    checks into your own test suite against *your* implementation). This includes the **negative**
    vectors: your canonicalizer must *reject* the float cases.
 2. **Wire discipline** — trailers constructed programmatically, parsed without LLM involvement;
-   prose interpreted by LLM only; hold-don't-advance on unexpected input (§5.2).
+   prose interpreted by LLM only; hold-don't-advance on unexpected input; maintains the
+   `prev`/`prev_recv` chain and stores the raw bytes of every sent and received trailer (§5.2, §9).
 3. **Handshake discipline** — refuses to start on protocol/config hash mismatch.
 4. **Settlement discipline** — derived totals; never emails without a confirmed `report_sha` match;
    respects the `stage` interlock.

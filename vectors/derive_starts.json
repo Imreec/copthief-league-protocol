@@ -1,5 +1,5 @@
 {
-  "description": "v0.2 seed-derived start cells: for draw=0,1,...: digest=sha256(f'{seed}:{index}:{draw}'); cop=int(digest[0:4])%n^2, thief=int(digest[4:8])%n^2; accept iff chebyshev>=d_min where d_min=min(max(ceil(n/3),2),n-1); cell i -> [i//n, i%n]. Re-runs: index = game*16 + attempt.",
+  "description": "Seed-derived start cells (SPEC 6.4): for draw=0..63: digest=sha256(f'{seed}:{index}:{draw}'); cop=int(digest[0:4])%n^2, thief=int(digest[4:8])%n^2; accept iff chebyshev>=d_min where d_min=min(max(ceil(n/3),2),n-1); no draw accepted -> fallback cop=[0,0], thief=[n-1,n-1]. cell i -> [i//n, i%n]. Re-runs: index = game*16 + attempt, attempt <= 15.",
   "vectors": [
     {
       "seed": "league-spec-v0.2-example",

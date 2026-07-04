@@ -3,11 +3,12 @@
 **A shared wire protocol + self-serve conformance kit for cross-team Cop–Thief games**
 (final project, Orchestration of AI Agents 203.3763, University of Haifa).
 
-**Status: v0.2-draft** — written before the official final-project assignment publishes, so game
+**Status: v0.3-draft** — written before the official final-project assignment publishes, so game
 rules (board, scent, scoring, report schema) are placeholders. What this draft pins is the part
 that is rule-agnostic and already proven to work between two independent implementations: message
-framing, hashing, seeds, sequencing, and result settlement. v0.2 incorporates a full EX06
-post-mortem review contributed by the partner team we played against
+framing, hashing, seeds, sequencing, and result settlement. v0.2 and v0.3 incorporate two review
+passes contributed by the partner team we played against in EX06 — including their independent
+re-implementation of the constructions from the spec text alone
 ([issue #1](https://github.com/Imreec/copthief-league-protocol/issues/1) — see the SPEC changelog).
 **v1.0 lands after the assignment PDF.**
 

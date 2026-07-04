@@ -12,7 +12,7 @@ Team-Bet is the thief (thief moves first, so the thief owns even plies).
 ```json
 {
   "agreement": {
-    "protocol": "league/0.2",
+    "protocol": "league/0.3",
     "match_id": "2026-08-01-aleph-vs-bet",
     "groups": {
       "group_1": "Team-Aleph",
@@ -53,7 +53,7 @@ Only the `agreement` part is hashed (SPEC §2 canonical form) — `transport` ma
 restart, reschedule) without invalidating the handshake:
 
 ```
-config_sha256 = 87c7b8af4846416f902efdd453c5dcb9bfdd97f41682e48e4687a542ea23716e
+config_sha256 = c4d3ab9197c54b6e0b8a5ed88e920bf74258f425af1660f525f45b9361a9c3bc
 ```
 
 ## 2. Start cells from the seed (SPEC §6.4, v0.2 construction)
@@ -78,23 +78,25 @@ Hello Team-Bet! Aleph here, confirming we are ready to start series
 on the match Issue. Our trailer carries the protocol version and our
 hash of the match-card agreement - please verify it matches yours.
 ---LEAGUE-v1---
-{"v":1,"type":"hello","protocol":"league/0.2","config_sha256":"87c7b8af4846416f902efdd453c5dcb9bfdd97f41682e48e4687a542ea23716e","group":"Team-Aleph"}
+{"v":1,"type":"hello","protocol":"league/0.3","config_sha256":"c4d3ab9197c54b6e0b8a5ed88e920bf74258f425af1660f525f45b9361a9c3bc","group":"Team-Aleph","prev":"c4d3ab9197c54b6e0b8a5ed88e920bf74258f425af1660f525f45b9361a9c3bc","prev_recv":null}
 ```
 
-Team-Bet replies symmetrically:
+Team-Bet replies (note its `prev_recv` hashes the exact bytes of Aleph's hello):
 
 ```
 ---LEAGUE-v1---
-{"v":1,"type":"hello","protocol":"league/0.2","config_sha256":"87c7b8af4846416f902efdd453c5dcb9bfdd97f41682e48e4687a542ea23716e","group":"Team-Bet"}
+{"v":1,"type":"hello","protocol":"league/0.3","config_sha256":"c4d3ab9197c54b6e0b8a5ed88e920bf74258f425af1660f525f45b9361a9c3bc","group":"Team-Bet","prev":"c4d3ab9197c54b6e0b8a5ed88e920bf74258f425af1660f525f45b9361a9c3bc","prev_recv":"34434b1de500b01f87b73734db200042b20581f6dbe4c848de15fb83dd029ffc"}
 ```
 
 Both `config_sha256` values match -> the match may begin. If they differ, nothing starts.
 
 ## 4. Three in-game plies (SPEC §5, Mode A)
 
-Each `move` trailer chains to the sender's previous trailer via `prev` = SHA-256 of the exact
-bytes of that sender's last transmitted trailer line (null for a sender's first move of the
-sub-game) — so each side's transcript is tamper-evident.
+Each `move` trailer carries two chain fields (SPEC §5.2): `prev` = SHA-256 of the exact bytes of
+this sender's previous trailer in this (game, attempt) — `config_sha256` for its first — and
+`prev_recv` = SHA-256 of the last opponent trailer received (null only for the thief's opening
+move). The two chains interlock into one DAG: neither side can re-forge its history without
+contradicting the other's later messages.
 
 ### Ply 0 — Team-Bet (thief) moves to `[8, 7]`
 
@@ -102,7 +104,7 @@ sub-game) — so each side's transcript is tamper-evident.
 I'm on the move. You'll have to do better than waiting in a corner, officer.
 My move and commitment are below, as per the league protocol.
 ---LEAGUE-v1---
-{"v":1,"type":"move","game":0,"ply":0,"ack":-1,"move":[8,7],"commit":"2802706b48ea2b7f8a9bdc71fedb9c6df89e3fb2b62a858e643a132e130ce3c3","nonce":"a1b2c3d4e5f60718","reveal":null,"state":"5f4a5b18b67c6959f4f9ea30228bb5c80b93558f87d5a88c1ed3d4216315d07a","prev":null}
+{"v":1,"type":"move","game":0,"attempt":0,"ply":0,"ack":-1,"move":[8,7],"commit":"2802706b48ea2b7f8a9bdc71fedb9c6df89e3fb2b62a858e643a132e130ce3c3","nonce":"a1b2c3d4e5f60718","reveal":null,"state":"5f4a5b18b67c6959f4f9ea30228bb5c80b93558f87d5a88c1ed3d4216315d07a","prev":"c4d3ab9197c54b6e0b8a5ed88e920bf74258f425af1660f525f45b9361a9c3bc","prev_recv":null}
 ```
 
 Receiver's checks (SPEC §8.1): trailer parses, `type` is `move`, `game`/`ply` are the expected
@@ -116,7 +118,7 @@ apply `[8, 7]` to the local replica -> recompute
 Bold words for someone leaving footprints. I'm sweeping toward the center
 to cut off your escape lanes. Move block below.
 ---LEAGUE-v1---
-{"v":1,"type":"move","game":0,"ply":1,"ack":0,"move":[5,3],"commit":"4157706811e7163bf9e6f2a075410a0c753efd4b1efc860fc32e92323c94a977","nonce":"00112233445566778899aabbccddeeff","reveal":null,"state":"320472f419c308e9342ab5471b74648de0b407d675188badb8cc7ee1f77e4606","prev":null}
+{"v":1,"type":"move","game":0,"attempt":0,"ply":1,"ack":0,"move":[5,3],"commit":"4157706811e7163bf9e6f2a075410a0c753efd4b1efc860fc32e92323c94a977","nonce":"00112233445566778899aabbccddeeff","reveal":null,"state":"320472f419c308e9342ab5471b74648de0b407d675188badb8cc7ee1f77e4606","prev":"c4d3ab9197c54b6e0b8a5ed88e920bf74258f425af1660f525f45b9361a9c3bc","prev_recv":"774a32920b919f160cf986faaa3f13b2764e4c8f01edc585d03436b92f0f962b"}
 ```
 
 Receiver's checks (SPEC §8.1): trailer parses, `type` is `move`, `game`/`ply` are the expected
@@ -130,7 +132,7 @@ apply `[5, 3]` to the local replica -> recompute
 Center, you say? Then you won't mind that I'm heading somewhere else
 entirely. Committed below.
 ---LEAGUE-v1---
-{"v":1,"type":"move","game":0,"ply":2,"ack":1,"move":[9,8],"commit":"08d67ee6ead7fcb2f8c4f6dc4d7f248629f0edad04232000f397562b94020c5f","nonce":"deadbeef00c0ffee","reveal":null,"state":"9e6aa3ee46d19c0dc7a9214c2291ee20593e722089c329ffda1d3b1e004e4158","prev":"47268b76e894967df16bd933e49dfc01e55a8a36e42e17812e4de4080cd03dd4"}
+{"v":1,"type":"move","game":0,"attempt":0,"ply":2,"ack":1,"move":[9,8],"commit":"08d67ee6ead7fcb2f8c4f6dc4d7f248629f0edad04232000f397562b94020c5f","nonce":"deadbeef00c0ffee","reveal":null,"state":"9e6aa3ee46d19c0dc7a9214c2291ee20593e722089c329ffda1d3b1e004e4158","prev":"774a32920b919f160cf986faaa3f13b2764e4c8f01edc585d03436b92f0f962b","prev_recv":"1a3ebcb0e89f098175099b64b786bd0ff1e638dfc19eadee085bd9887399bd99"}
 ```
 
 Receiver's checks (SPEC §8.1): trailer parses, `type` is `move`, `game`/`ply` are the expected
@@ -141,18 +143,19 @@ apply `[9, 8]` to the local replica -> recompute
 ## 5. Settlement (SPEC §9)
 
 After the last sub-game each side builds its report from its own log, canonicalizes, hashes, and
-exchanges the hash as a typed trailer. E.g. for an (illustrative, schema-TBD) report body
-`{"report_type":"bonus_game","totals_by_group":{"Team-A":80,"Team-B":60}}` both sides would send:
+exchanges the hash as a typed trailer chained into the transcript. E.g. for an (illustrative,
+schema-TBD) report body `{"report_type":"bonus_game","totals_by_group":{"Team-A":80,"Team-B":60}}`, Team-Aleph sends:
 
 ```
 Series complete on our side - totals derived from the six sub-games.
 Report hash below; we email only on a byte-identical match.
 ---LEAGUE-v1---
-{"v":1,"type":"report_sha","match_id":"2026-08-01-aleph-vs-bet","sha":"e8f42c20d33a961f495da0c8051e5e99c829a63cb1d36355bdb3f0df8b746170"}
+{"v":1,"type":"report_sha","match_id":"2026-08-01-aleph-vs-bet","sha":"e8f42c20d33a961f495da0c8051e5e99c829a63cb1d36355bdb3f0df8b746170","prev":"1a3ebcb0e89f098175099b64b786bd0ff1e638dfc19eadee085bd9887399bd99","prev_recv":"faf3eb283b8e1573ccf9c1e91fc5c770f74e15b176b09dda7b533310fb72cd83"}
 ```
 
 Byte-identical hashes -> both teams email the same report to the card's `report_email` (subject to
-the `stage` interlock — this card says `"demo"`, so the lecturer's inbox is untouchable). Any
+the `stage` interlock — this card says `"demo"`, so the lecturer's inbox is untouchable), and the
+email body MUST be the exact canonical bytes that were hashed — never a re-serialization. Any
 mismatch -> the escalation in SPEC §9 step 4. Nothing is ever emailed without a confirmed match.
 
 ## Notes for implementers (and their LLM assistants)

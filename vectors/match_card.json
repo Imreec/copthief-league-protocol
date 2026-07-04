@@ -2,7 +2,7 @@
   "description": "config_sha256 = sha256(canonical(card['agreement'])) — the 'transport' part is NOT hashed (SPEC §4.1), so tunnel restarts / rescheduling never brick the handshake.",
   "card": {
     "agreement": {
-      "protocol": "league/0.2",
+      "protocol": "league/0.3",
       "match_id": "2026-08-01-aleph-vs-bet",
       "groups": {
         "group_1": "Team-Aleph",
@@ -37,6 +37,6 @@
       "scheduled_utc": "2026-08-01T18:00:00Z"
     }
   },
-  "agreement_canonical": "{\"disclosure\":\"A\",\"grid\":[10,10],\"groups\":{\"group_1\":\"Team-Aleph\",\"group_2\":\"Team-Bet\"},\"match_id\":\"2026-08-01-aleph-vs-bet\",\"max_barriers\":0,\"num_games\":6,\"protocol\":\"league/0.2\",\"report_email\":\"league-reports@example.com\",\"rounds\":25,\"scent_k\":null,\"seed\":\"league-spec-v0.2-example\",\"stage\":\"demo\",\"swap_at\":3,\"timeouts\":{\"max_messages\":200,\"per_ply_seconds\":120,\"per_subgame_seconds\":1800}}",
-  "config_sha256": "87c7b8af4846416f902efdd453c5dcb9bfdd97f41682e48e4687a542ea23716e"
+  "agreement_canonical": "{\"disclosure\":\"A\",\"grid\":[10,10],\"groups\":{\"group_1\":\"Team-Aleph\",\"group_2\":\"Team-Bet\"},\"match_id\":\"2026-08-01-aleph-vs-bet\",\"max_barriers\":0,\"num_games\":6,\"protocol\":\"league/0.3\",\"report_email\":\"league-reports@example.com\",\"rounds\":25,\"scent_k\":null,\"seed\":\"league-spec-v0.2-example\",\"stage\":\"demo\",\"swap_at\":3,\"timeouts\":{\"max_messages\":200,\"per_ply_seconds\":120,\"per_subgame_seconds\":1800}}",
+  "config_sha256": "c4d3ab9197c54b6e0b8a5ed88e920bf74258f425af1660f525f45b9361a9c3bc"
 }

@@ -64,14 +64,14 @@ def ref_state_hash(barriers: list[list[int]], turn: str, move_count: int) -> str
 
 
 def ref_derive_starts(seed: str, index: int, n: int) -> tuple[list[int], list[int], int]:
-    """SPEC §6.4 (v0.2): 4 bytes per cell, min-Chebyshev-distance deterministic re-draw.
+    """SPEC §6.4 (v0.3): 4 bytes per cell, min-Chebyshev deterministic re-draw, bounded.
 
-    Returns (cop, thief, draws) where ``draws`` is the accepted draw counter value.
+    Returns (cop, thief, draws) where ``draws`` is the accepted draw counter value
+    (64 signals the deterministic opposite-corners fallback — never hit by any fixture).
     """
     cells = n * n
     d_min = min(max(-(-n // 3), 2), n - 1)  # ceil(n/3), clamped to [2, n-1]
-    draw = 0
-    while True:
+    for draw in range(64):
         digest = hashlib.sha256(f"{seed}:{index}:{draw}".encode()).digest()
         cop = int.from_bytes(digest[0:4], "big") % cells
         thief = int.from_bytes(digest[4:8], "big") % cells
@@ -79,7 +79,7 @@ def ref_derive_starts(seed: str, index: int, n: int) -> tuple[list[int], list[in
         thief_rc = [thief // n, thief % n]
         if max(abs(cop_rc[0] - thief_rc[0]), abs(cop_rc[1] - thief_rc[1])) >= d_min:
             return cop_rc, thief_rc, draw
-        draw += 1
+    return [0, 0], [n - 1, n - 1], 64  # provably bounded fallback (corners: distance n-1 >= d_min)
 
 
 def ref_share_commit(share: str) -> str:

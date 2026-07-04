@@ -19,7 +19,7 @@ OUT = Path(__file__).parent / "sample_exchange.md"
 
 CARD = {
     "agreement": {
-        "protocol": "league/0.2",
+        "protocol": "league/0.3",
         "match_id": "2026-08-01-aleph-vs-bet",
         "groups": {"group_1": "Team-Aleph", "group_2": "Team-Bet"},
         "grid": [10, 10],
@@ -76,12 +76,15 @@ PROSE = {
 }
 
 
-def trailer_line(ply_no: int, ack: int, move: list[int], nonce: str, prev: str | None) -> str:
+def trailer_line(
+    ply_no: int, ack: int, move: list[int], nonce: str, prev: str, prev_recv: str | None
+) -> str:
     """The exact transmitted trailer bytes for one move (single-line compact JSON)."""
     t = {
         "v": 1,
         "type": "move",
         "game": 0,
+        "attempt": 0,
         "ply": ply_no,
         "ack": ack,
         "move": move,
@@ -92,6 +95,7 @@ def trailer_line(ply_no: int, ack: int, move: list[int], nonce: str, prev: str |
         # so turn is simply the next mover by alternation.
         "state": ref_state_hash([], "cop" if ply_no % 2 == 0 else "thief", ply_no + 1),
         "prev": prev,
+        "prev_recv": prev_recv,
     }
     return json.dumps(t, separators=(",", ":"))
 
@@ -100,16 +104,16 @@ def sha_bytes(line: str) -> str:
     return hashlib.sha256(line.encode()).hexdigest()
 
 
-HELLO_1 = {"v": 1, "type": "hello", "protocol": "league/0.2", "config_sha256": CONFIG_SHA, "group": "Team-Aleph"}
-HELLO_2 = {"v": 1, "type": "hello", "protocol": "league/0.2", "config_sha256": CONFIG_SHA, "group": "Team-Bet"}
+# Hello chain (SPEC 4.3): prev = config_sha256 (root anchor); prev_recv = opponent's hello bytes
+# if already received (Bet replies after seeing Aleph's), else null.
+HELLO_1 = {"v": 1, "type": "hello", "protocol": "league/0.3", "config_sha256": CONFIG_SHA,
+           "group": "Team-Aleph", "prev": CONFIG_SHA, "prev_recv": None}
+HELLO_1_LINE = json.dumps(HELLO_1, separators=(",", ":"))
+HELLO_2 = {"v": 1, "type": "hello", "protocol": "league/0.3", "config_sha256": CONFIG_SHA,
+           "group": "Team-Bet", "prev": CONFIG_SHA, "prev_recv": sha_bytes(HELLO_1_LINE)}
+HELLO_2_LINE = json.dumps(HELLO_2, separators=(",", ":"))
 
 REPORT_STUB = {"report_type": "bonus_game", "totals_by_group": {"Team-A": 80, "Team-B": 60}}
-REPORT_TRAILER = {
-    "v": 1,
-    "type": "report_sha",
-    "match_id": CARD["agreement"]["match_id"],
-    "sha": canonical_hash(REPORT_STUB),
-}
 
 md = f"""# Worked example — one match setup + three plies + settlement (SPEC v0.2)
 
@@ -155,31 +159,35 @@ Hello Team-Bet! Aleph here, confirming we are ready to start series
 on the match Issue. Our trailer carries the protocol version and our
 hash of the match-card agreement - please verify it matches yours.
 ---LEAGUE-v1---
-{json.dumps(HELLO_1, separators=(",", ":"))}
+{HELLO_1_LINE}
 ```
 
-Team-Bet replies symmetrically:
+Team-Bet replies (note its `prev_recv` hashes the exact bytes of Aleph's hello):
 
 ```
 ---LEAGUE-v1---
-{json.dumps(HELLO_2, separators=(",", ":"))}
+{HELLO_2_LINE}
 ```
 
 Both `config_sha256` values match -> the match may begin. If they differ, nothing starts.
 
 ## 4. Three in-game plies (SPEC §5, Mode A)
 
-Each `move` trailer chains to the sender's previous trailer via `prev` = SHA-256 of the exact
-bytes of that sender's last transmitted trailer line (null for a sender's first move of the
-sub-game) — so each side's transcript is tamper-evident.
+Each `move` trailer carries two chain fields (SPEC §5.2): `prev` = SHA-256 of the exact bytes of
+this sender's previous trailer in this (game, attempt) — `config_sha256` for its first — and
+`prev_recv` = SHA-256 of the last opponent trailer received (null only for the thief's opening
+move). The two chains interlock into one DAG: neither side can re-forge its history without
+contradicting the other's later messages.
 
 """
 
 sent_lines: dict[str, str] = {}  # role -> last transmitted trailer line
 for role, ply_no, ack, move, nonce in plies:
     sender = "Team-Bet (thief)" if role == "thief" else "Team-Aleph (cop)"
-    prev = sha_bytes(sent_lines[role]) if role in sent_lines else None
-    line = trailer_line(ply_no, ack, move, nonce, prev)
+    other = "cop" if role == "thief" else "thief"
+    prev = sha_bytes(sent_lines[role]) if role in sent_lines else CONFIG_SHA
+    prev_recv = sha_bytes(sent_lines[other]) if other in sent_lines else None
+    line = trailer_line(ply_no, ack, move, nonce, prev, prev_recv)
     sent_lines[role] = line
     commit_hash = ref_commit(move, nonce)
     state = ref_state_hash([], "cop" if ply_no % 2 == 0 else "thief", ply_no + 1)
@@ -198,11 +206,22 @@ apply `{move}` to the local replica -> recompute
 
 """
 
+REPORT_TRAILER = {
+    "v": 1,
+    "type": "report_sha",
+    "match_id": CARD["agreement"]["match_id"],
+    "sha": canonical_hash(REPORT_STUB),
+    # Chain the settlement claim into the game transcript (SPEC 9.3): prev = the sender's last
+    # transmitted move trailer of the final sub-game; prev_recv = the last one received.
+    "prev": sha_bytes(sent_lines["cop"]),
+    "prev_recv": sha_bytes(sent_lines["thief"]),
+}
+
 md += f"""## 5. Settlement (SPEC §9)
 
 After the last sub-game each side builds its report from its own log, canonicalizes, hashes, and
-exchanges the hash as a typed trailer. E.g. for an (illustrative, schema-TBD) report body
-`{json.dumps(REPORT_STUB, separators=(",", ":"))}` both sides would send:
+exchanges the hash as a typed trailer chained into the transcript. E.g. for an (illustrative,
+schema-TBD) report body `{json.dumps(REPORT_STUB, separators=(",", ":"))}`, Team-Aleph sends:
 
 ```
 Series complete on our side - totals derived from the six sub-games.
@@ -212,7 +231,8 @@ Report hash below; we email only on a byte-identical match.
 ```
 
 Byte-identical hashes -> both teams email the same report to the card's `report_email` (subject to
-the `stage` interlock — this card says `"demo"`, so the lecturer's inbox is untouchable). Any
+the `stage` interlock — this card says `"demo"`, so the lecturer's inbox is untouchable), and the
+email body MUST be the exact canonical bytes that were hashed — never a re-serialization. Any
 mismatch -> the escalation in SPEC §9 step 4. Nothing is ever emailed without a confirmed match.
 
 ## Notes for implementers (and their LLM assistants)

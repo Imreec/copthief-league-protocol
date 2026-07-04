@@ -99,16 +99,17 @@ for seed in ["league-spec-v0.2-example", "0123456789abcdef"]:
                 {"seed": seed, "index": index, "n": n, "cop": cop, "thief": thief, "draws": draws}
             )
 derive_starts = {
-    "description": "v0.2 seed-derived start cells: for draw=0,1,...: digest=sha256(f'{seed}:{index}:{draw}'); "
+    "description": "Seed-derived start cells (SPEC 6.4): for draw=0..63: digest=sha256(f'{seed}:{index}:{draw}'); "
     "cop=int(digest[0:4])%n^2, thief=int(digest[4:8])%n^2; accept iff chebyshev>=d_min where "
-    "d_min=min(max(ceil(n/3),2),n-1); cell i -> [i//n, i%n]. Re-runs: index = game*16 + attempt.",
+    "d_min=min(max(ceil(n/3),2),n-1); no draw accepted -> fallback cop=[0,0], thief=[n-1,n-1]. "
+    "cell i -> [i//n, i%n]. Re-runs: index = game*16 + attempt, attempt <= 15.",
     "vectors": starts_vectors,
 }
 
 # --- match card ------------------------------------------------------------------------------
 CARD = {
     "agreement": {
-        "protocol": "league/0.2",
+        "protocol": "league/0.3",
         "match_id": "2026-08-01-aleph-vs-bet",
         "groups": {"group_1": "Team-Aleph", "group_2": "Team-Bet"},
         "grid": [10, 10],
