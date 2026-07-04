@@ -87,6 +87,8 @@ A match is defined by one small JSON document both teams hold byte-identically. 
   "max_barriers": 0,
   "disclosure": "A",
   "scent_k": null,
+  "stage": "demo",
+  "report_email": "league-reports@example.com",
   "seed": "<joint seed, §4.2>",
   "scheduled_utc": "2026-08-01T18:00:00Z",
   "timeouts": {"per_ply_seconds": 120, "per_subgame_seconds": 1800, "max_messages": 200}
@@ -97,6 +99,12 @@ Notes: `rounds` counts **rounds** (thief ply + cop ply), so a sub-game is at mos
 Role-swap: sub-games `0..swap_at-1` = group_1 cop vs group_2 thief; the rest swap. Game-rule values
 (`grid`, `rounds`, scoring) are placeholders until the official assignment fixes them — the *shape*
 of the card is what this spec pins. Bearer tokens are exchanged out of band, never in the card.
+
+`stage` is a **safety interlock** for order-dependent scoring: implementations MUST NOT send any
+report to the official (lecturer) destination unless `stage` is `"official"`, and no match card may
+be issued with `stage: "official"` until every league team has jointly declared the real season
+open. During the demo season (Appendix B), `report_email` points at a league test mailbox or the
+teams' own inboxes. Implementations MUST take the destination from the card — never hardcode it.
 
 ### 4.2 Joint seed (PROPOSED — trustless coin flip)
 
@@ -266,7 +274,8 @@ by revealing on a lag `k` (match-card `scent_k`):
    hand-declared — so agreement on sub-games implies agreement on totals.
 2. Canonicalize (§2) → `report_hash` (§6.5).
 3. **Two-phase confirm** (EX06-proven): send `REPORT_SHA:<hex64>` to the opponent's cop mailbox;
-   poll for theirs. Email is sent **only** on byte-identical match, by both teams.
+   poll for theirs. Email is sent **only** on byte-identical match, by both teams — to the
+   `report_email` from the match card, subject to the `stage` interlock (§4.1).
 4. On mismatch (PROPOSED escalation, replaces "humans stare at JSONs"):
    a. Exchange full canonical report bytes.
    b. Machine-diff; classify the first diverging field.
@@ -334,6 +343,15 @@ a match (fallback: direct peer play with a manually exchanged match card).
 - **Sparring server.** An always-on conformant opponent any team can play against at will, for
   integration testing without needing a partner team online (the single biggest testing gap in
   EX06). We (ImreEyal) intend to host the first one once v1.0 exists.
+- **Demo league + report sink.** Before the official season, run one or two full fixture rounds as
+  a dress rehearsal: real servers, real tokens, real games, real settlement — identical to the real
+  thing except `stage: "demo"` routes reports to a league test mailbox instead of the lecturer.
+  The sink can run an automated checker on arriving mail (schema validation + byte-identity of the
+  two teams' reports) and publish pass/fail per match, so every team's **full** pipeline — the
+  email leg included — is certified before the first game that counts. Nothing reaches the
+  lecturer's address until every team jointly declares the official season open. With
+  order-dependent scoring this matters doubly: your first *counted* game should never be your
+  first game ever.
 
 Hosting model: any team can run any service; nothing about them is privileged. If the league wants
 them, their APIs get specified in v1.0.

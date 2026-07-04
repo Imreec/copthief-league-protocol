@@ -33,6 +33,8 @@ Team-Bet is the thief (thief moves first, so the thief owns even plies).
   "max_barriers": 0,
   "disclosure": "A",
   "scent_k": null,
+  "stage": "demo",
+  "report_email": "league-reports@example.com",
   "seed": "league-spec-v0.1-example",
   "scheduled_utc": "2026-08-01T18:00:00Z",
   "timeouts": {
@@ -46,7 +48,7 @@ Team-Bet is the thief (thief moves first, so the thief owns even plies).
 Canonical hash of the card (SPEC §2) — both sides must compute the same value:
 
 ```
-config_sha256 = 2c47c5a28c8ac9a0e2ca9acdfb17fab87ccd4ac07329beb5eb05b80991580ad5
+config_sha256 = 568ac8e895f38e67cac1abf563e20baec2f05a9ff09bd28b062fa896757657ac
 ```
 
 ## 2. Start cells from the seed (SPEC §6.4)
@@ -67,14 +69,14 @@ Hello Team-Bet! Aleph here, confirming we are ready to start series
 2026-08-01-aleph-vs-bet as agreed. Our trailer carries the protocol
 version and our hash of the match card - please verify it matches yours.
 ---LEAGUE-v1---
-{"v":1,"hello":{"protocol":"league/0.1","config_sha256":"2c47c5a28c8ac9a0e2ca9acdfb17fab87ccd4ac07329beb5eb05b80991580ad5","group":"Team-Aleph"}}
+{"v":1,"hello":{"protocol":"league/0.1","config_sha256":"568ac8e895f38e67cac1abf563e20baec2f05a9ff09bd28b062fa896757657ac","group":"Team-Aleph"}}
 ```
 
 Team-Bet replies symmetrically:
 
 ```
 ---LEAGUE-v1---
-{"v":1,"hello":{"protocol":"league/0.1","config_sha256":"2c47c5a28c8ac9a0e2ca9acdfb17fab87ccd4ac07329beb5eb05b80991580ad5","group":"Team-Bet"}}
+{"v":1,"hello":{"protocol":"league/0.1","config_sha256":"568ac8e895f38e67cac1abf563e20baec2f05a9ff09bd28b062fa896757657ac","group":"Team-Bet"}}
 ```
 
 Both `config_sha256` values match -> the match may begin. If they differ, nothing starts.

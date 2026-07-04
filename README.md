@@ -45,6 +45,17 @@ aspirational — two independent codebases have already reproduced them.
    your bytes match every other conformant team's bytes.
 4. Implement the wire format (§5), handshake (§4.3), and settlement flow (§9).
 
+## Proposed rollout
+
+1. **Self-certify** — each team passes the test vectors alone, on its own schedule (§10).
+2. **Demo league** — one or two full fixture rounds as a dress rehearsal: real servers, real games,
+   real settlement, but reports go to a league test mailbox (which can auto-check schema and
+   byte-identity), **never to the lecturer**. Nothing touches the official inbox until every team
+   jointly declares the real season open — enforced mechanically by the match card's `stage`
+   interlock (SPEC §4.1).
+3. **Official season** — synchronized fixture rounds (SPEC Appendix B), so order-dependent scoring
+   stays fair and every team's first *counted* game is far from its first game ever.
+
 ## Giving feedback
 
 This is a draft **so that it can be argued with** — especially the PROPOSED parts: the fenced-JSON

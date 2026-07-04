@@ -33,6 +33,8 @@ CARD = {
     "max_barriers": 0,
     "disclosure": "A",
     "scent_k": None,
+    "stage": "demo",
+    "report_email": "league-reports@example.com",
     "seed": "league-spec-v0.1-example",
     "scheduled_utc": "2026-08-01T18:00:00Z",
     "timeouts": {"per_ply_seconds": 120, "per_subgame_seconds": 1800, "max_messages": 200},
