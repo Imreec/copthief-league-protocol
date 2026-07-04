@@ -1,0 +1,239 @@
+{
+  "description": "Seed-derived start cells: sha256(f'{seed}:{index}') bytes 0/1 mod n*n, thief +1 on collision",
+  "vectors": [
+    {
+      "seed": "league-spec-v0.1-example",
+      "index": 0,
+      "n": 5,
+      "cop": [
+        0,
+        4
+      ],
+      "thief": [
+        0,
+        0
+      ]
+    },
+    {
+      "seed": "league-spec-v0.1-example",
+      "index": 1,
+      "n": 5,
+      "cop": [
+        4,
+        2
+      ],
+      "thief": [
+        1,
+        2
+      ]
+    },
+    {
+      "seed": "league-spec-v0.1-example",
+      "index": 2,
+      "n": 5,
+      "cop": [
+        4,
+        1
+      ],
+      "thief": [
+        3,
+        3
+      ]
+    },
+    {
+      "seed": "league-spec-v0.1-example",
+      "index": 0,
+      "n": 8,
+      "cop": [
+        0,
+        4
+      ],
+      "thief": [
+        6,
+        2
+      ]
+    },
+    {
+      "seed": "league-spec-v0.1-example",
+      "index": 1,
+      "n": 8,
+      "cop": [
+        3,
+        6
+      ],
+      "thief": [
+        0,
+        4
+      ]
+    },
+    {
+      "seed": "league-spec-v0.1-example",
+      "index": 2,
+      "n": 8,
+      "cop": [
+        7,
+        1
+      ],
+      "thief": [
+        3,
+        5
+      ]
+    },
+    {
+      "seed": "league-spec-v0.1-example",
+      "index": 0,
+      "n": 10,
+      "cop": [
+        0,
+        4
+      ],
+      "thief": [
+        5,
+        0
+      ]
+    },
+    {
+      "seed": "league-spec-v0.1-example",
+      "index": 1,
+      "n": 10,
+      "cop": [
+        2,
+        2
+      ],
+      "thief": [
+        3,
+        2
+      ]
+    },
+    {
+      "seed": "league-spec-v0.1-example",
+      "index": 2,
+      "n": 10,
+      "cop": [
+        2,
+        1
+      ],
+      "thief": [
+        9,
+        3
+      ]
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 0,
+      "n": 5,
+      "cop": [
+        2,
+        3
+      ],
+      "thief": [
+        2,
+        4
+      ]
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 1,
+      "n": 5,
+      "cop": [
+        0,
+        2
+      ],
+      "thief": [
+        1,
+        2
+      ]
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 2,
+      "n": 5,
+      "cop": [
+        1,
+        4
+      ],
+      "thief": [
+        2,
+        0
+      ]
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 0,
+      "n": 8,
+      "cop": [
+        4,
+        6
+      ],
+      "thief": [
+        1,
+        6
+      ]
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 1,
+      "n": 8,
+      "cop": [
+        6,
+        4
+      ],
+      "thief": [
+        5,
+        0
+      ]
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 2,
+      "n": 8,
+      "cop": [
+        7,
+        3
+      ],
+      "thief": [
+        2,
+        5
+      ]
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 0,
+      "n": 10,
+      "cop": [
+        3,
+        8
+      ],
+      "thief": [
+        1,
+        4
+      ]
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 1,
+      "n": 10,
+      "cop": [
+        5,
+        2
+      ],
+      "thief": [
+        3,
+        2
+      ]
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 2,
+      "n": 10,
+      "cop": [
+        5,
+        9
+      ],
+      "thief": [
+        8,
+        5
+      ]
+    }
+  ]
+}

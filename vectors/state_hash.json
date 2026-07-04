@@ -1,0 +1,47 @@
+{
+  "description": "Common-state hashes: sha256(canonical({'barriers':sorted,'move_count':n,'turn':s}))",
+  "vectors": [
+    {
+      "barriers": [
+        [
+          1,
+          1
+        ]
+      ],
+      "turn": "cop",
+      "move_count": 4,
+      "preimage": "{\"barriers\":[[1,1]],\"move_count\":4,\"turn\":\"cop\"}",
+      "sha256": "137b977dba629e0bfbc1b49b52f899f18d71c07adbef2f11ecb1d84704880385"
+    },
+    {
+      "barriers": [],
+      "turn": "thief",
+      "move_count": 0,
+      "preimage": "{\"barriers\":[],\"move_count\":0,\"turn\":\"thief\"}",
+      "sha256": "dc0563e6a72c38e2a1b6ed4006bdeee51008e5afcf7e5079524d004e4f90a364"
+    },
+    {
+      "barriers": [
+        [
+          2,
+          2
+        ],
+        [
+          0,
+          1
+        ]
+      ],
+      "turn": "thief",
+      "move_count": 13,
+      "preimage": "{\"barriers\":[[0,1],[2,2]],\"move_count\":13,\"turn\":\"thief\"}",
+      "sha256": "c415d14d9a9cb70383a82384306254d1d2e94b837434c311d083268f8e9cc9a3"
+    },
+    {
+      "barriers": [],
+      "turn": "cop",
+      "move_count": 49,
+      "preimage": "{\"barriers\":[],\"move_count\":49,\"turn\":\"cop\"}",
+      "sha256": "82f1a888d564f0ac5ef1a868b64cb3485e6db6d9a7c2ae254951c31607913baa"
+    }
+  ]
+}
