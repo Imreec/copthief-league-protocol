@@ -105,6 +105,9 @@ report to the official (lecturer) destination unless `stage` is `"official"`, an
 be issued with `stage: "official"` until every league team has jointly declared the real season
 open. During the demo season (Appendix B), `report_email` points at a league test mailbox or the
 teams' own inboxes. Implementations MUST take the destination from the card — never hardcode it.
+For the same reason, implementations SHOULD require an explicit human arm step (a flag or prompt)
+before *starting* a `stage: "official"` series: under order-dependent scoring, starting a counted
+game is as consequential as emailing its report.
 
 ### 4.2 Joint seed (PROPOSED — trustless coin flip)
 
@@ -326,20 +329,29 @@ with nothing but a match card. The services below are optional league infrastruc
 the peer topology and the trust model (§1) are unchanged, and an outage of any service never blocks
 a match (fallback: direct peer play with a manually exchanged match card).
 
-- **Lobby / registry.** A small shared service (or even just a repo with JSON files) holding the
-  team roster (group name, repo, MCP URLs, contact), issuing match cards (§4.1), and tracking the
-  schedule. Kills the "URLs exchanged by hand minutes before the game" failure mode. Never holds
-  bearer tokens — those stay pairwise and out of band. If the official scoring turns out to be
+- **Lobby / registry.** Recommended implementation: a **league GitHub repository**, not a hosted
+  service. The roster is one JSON file per team (group name, repo, MCP URLs, contact), maintained
+  by PR; each scheduled match gets an Issue carrying its match card (§4.1); at settlement both
+  teams post their `REPORT_SHA:<hex64>` and links to their committed logs as comments. That yields
+  registration, scheduling, notifications, and a public timestamped coordination trail with zero
+  hosting and no single owner — and it degrades gracefully: any match can still run from a
+  hand-exchanged match card. Kills the "URLs exchanged by hand minutes before the game" failure
+  mode. The lobby never holds bearer tokens — those stay pairwise and out of band. If the official
+  scoring turns out to be
   order-dependent (class remarks hinted at diminishing returns per game played, coupled to how many
   games the *opponent* has played), the fixture table should run **synchronized rounds**,
   football-league style: a deterministic round-robin (circle method over the sorted roster) where
   in round `r` every team plays its `r`-th series — so no pairing is advantaged by scheduling luck,
   and the schedule is derivable by anyone from the roster alone.
-- **Notary / witness.** An append-only log where both sides of a live match POST each ply's
-  `{match_id, game, ply, state}` hash as they play. Since both peers post independently, a desync
-  is detected the moment two entries for the same ply disagree — with neutral, timestamped evidence
-  of exactly where the divergence began (vs. EX06, where desyncs were diagnosed by two humans
-  reading their own logs to each other). Verification-only; it never computes game state.
+- **Notary / witness (optional, deferred).** An append-only log where both sides of a live match
+  POST each ply's `{match_id, game, ply, state}` hash as they play. Since both peers post
+  independently, a desync is detected the moment two entries for the same ply disagree — with
+  neutral, timestamped evidence of exactly where the divergence began. Verification-only; it never
+  computes game state. Unlike the lobby this needs a real hosted service (an Issue thread cannot
+  take per-ply traffic), and it is the most optional item here: the peers' own `state` comparison
+  (§6.3) already detects desync instantly, and the void/re-run rules (§8.3) resolve disputes
+  without third-party evidence — so this exists only if the league decides it wants live
+  witnessing.
 - **Sparring server.** An always-on conformant opponent any team can play against at will, for
   integration testing without needing a partner team online (the single biggest testing gap in
   EX06). We (ImreEyal) intend to host the first one once v1.0 exists.
