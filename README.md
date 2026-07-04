@@ -59,9 +59,10 @@ aspirational — two independent codebases have already reproduced them.
 ## Giving feedback
 
 This is a draft **so that it can be argued with** — especially the PROPOSED parts: the fenced-JSON
-trailer, the match card, the joint-seed coin flip, delayed-reveal scent (Mode B), the
-report-mismatch escalation, and the optional league services (lobby/registry, desync notary,
-sparring server — SPEC Appendix B). Open an issue / message us. The goal is that when the assignment PDF
+trailer, the match card (including the demo/official `stage` interlock), the joint-seed coin flip,
+delayed-reveal scent (Mode B), the report-mismatch escalation, synchronized fixture rounds, the
+demo league, and the optional league services (lobby/registry, desync notary, sparring server,
+report sink — SPEC Appendix B). Open an issue / message us. The goal is that when the assignment PDF
 drops, the league only needs to fill in the rule values and bump to v1.0 — not design a protocol
 under deadline pressure.
 
