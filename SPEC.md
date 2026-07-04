@@ -26,6 +26,18 @@ implement to this spec, pass the test vectors in `vectors/`, and you can play an
 4. **Everything hashable is canonical.** One canonical JSON form (§2) underlies every hash in the
    protocol. Two implementations that agree on the data agree on the bytes.
 
+### 1.1 Terminology
+
+| Term | Meaning |
+|---|---|
+| **series** (match) | the full encounter between two teams: `num_games` sub-games with a role swap, settled by one mutually confirmed report |
+| **sub-game** | one pursuit episode: start cells derived from the seed (§6.4), ends in capture, round-cap survival, or void |
+| **round** | one thief ply followed by one cop ply; a sub-game lasts at most `rounds` rounds = `2*rounds` plies |
+| **ply** | a single agent's move. Plies are numbered from 0 within a sub-game; thief-first ⇒ the thief owns even plies, the cop odd ones |
+| **role swap** | after `swap_at` sub-games the teams exchange cop/thief roles |
+| **void** | a sub-game annulled for technical failure (§8.3), re-run so the series completes its quota |
+| **EX06** | the course's previous assignment, in which a precursor of this protocol was played live between two independent implementations |
+
 ## 2. Canonical JSON (normative)
 
 Every hash in this protocol is `SHA-256` over **canonical JSON bytes** of an object:
@@ -285,7 +297,7 @@ conformant opponent, offline) and a public **sparring server** any team can play
 | 2 | Board size / rounds / scoring table / barrier rules | match card values, §6.4 `n`, report math |
 | 3 | Official report JSON schema + destination email | §6.5, §9 |
 | 4 | Does the assignment text constrain shared league services? | scope of Appendix B — the lecturer's general stance is that anything not explicitly specified is open to teams' own interpretation, so Appendix B assumes such services are fair game |
-| 5 | Tournament structure (round-robin? scheduling windows?) | match card, scheduling, sparring server priority |
+| 5 | Tournament structure (round-robin? scheduling windows? exact diminishing-returns formula?) | match card, fixture rounds (Appendix B), sparring server priority |
 | 6 | Is the commit-reveal requirement per-ply, per-game, or both? | §6.2/§7 |
 
 ## Appendix A — provenance
@@ -308,7 +320,12 @@ a match (fallback: direct peer play with a manually exchanged match card).
 - **Lobby / registry.** A small shared service (or even just a repo with JSON files) holding the
   team roster (group name, repo, MCP URLs, contact), issuing match cards (§4.1), and tracking the
   schedule. Kills the "URLs exchanged by hand minutes before the game" failure mode. Never holds
-  bearer tokens — those stay pairwise and out of band.
+  bearer tokens — those stay pairwise and out of band. If the official scoring turns out to be
+  order-dependent (class remarks hinted at diminishing returns per game played, coupled to how many
+  games the *opponent* has played), the fixture table should run **synchronized rounds**,
+  football-league style: a deterministic round-robin (circle method over the sorted roster) where
+  in round `r` every team plays its `r`-th series — so no pairing is advantaged by scheduling luck,
+  and the schedule is derivable by anyone from the roster alone.
 - **Notary / witness.** An append-only log where both sides of a live match POST each ply's
   `{match_id, game, ply, state}` hash as they play. Since both peers post independently, a desync
   is detected the moment two entries for the same ply disagree — with neutral, timestamped evidence
