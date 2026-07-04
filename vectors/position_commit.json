@@ -1,5 +1,5 @@
 {
-  "description": "SHA-256 position commitments: sha256(canonical({'pos':[r,c],'nonce':s}))",
+  "description": "SHA-256 position commitments: sha256(canonical({'nonce':s,'pos':[r,c]}))",
   "vectors": [
     {
       "pos": [

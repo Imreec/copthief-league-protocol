@@ -1,5 +1,5 @@
 {
-  "description": "Canonical JSON form: sort_keys, separators (',',':'), ensure_ascii, UTF-8",
+  "description": "Canonical JSON form: sort_keys, separators (',',':'), ensure_ascii (astral -> surrogate pairs), UTF-8, floats rejected (see negative.json)",
   "vectors": [
     {
       "object": {
@@ -46,6 +46,14 @@
       },
       "canonical": "{\"report_type\":\"bonus_game\",\"totals_by_group\":{\"Team-A\":80,\"Team-B\":60}}",
       "sha256": "e8f42c20d33a961f495da0c8051e5e99c829a63cb1d36355bdb3f0df8b746170"
+    },
+    {
+      "object": {
+        "astral": "🙂",
+        "note": "surrogate-pair escaping (SPEC §2)"
+      },
+      "canonical": "{\"astral\":\"\\ud83d\\ude42\",\"note\":\"surrogate-pair escaping (SPEC \\u00a72)\"}",
+      "sha256": "6410e22d2a99e8717701f60c4fb05e8bce614937bef9c929f7437cb92474ea79"
     }
   ]
 }

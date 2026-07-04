@@ -1,0 +1,22 @@
+name: verify
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Regenerate vectors and worked example
+        run: |
+          python gen_vectors.py
+          python examples/gen_sample_exchange.py
+      - name: Verify all fixtures (positive + negative)
+        run: python verify_vectors.py
+      - name: Fail on any drift between reference code and committed fixtures
+        run: git diff --exit-code

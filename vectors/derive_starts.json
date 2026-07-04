@@ -1,148 +1,243 @@
 {
-  "description": "Seed-derived start cells: sha256(f'{seed}:{index}') bytes 0/1 mod n*n, thief +1 on collision",
+  "description": "v0.2 seed-derived start cells: for draw=0,1,...: digest=sha256(f'{seed}:{index}:{draw}'); cop=int(digest[0:4])%n^2, thief=int(digest[4:8])%n^2; accept iff chebyshev>=d_min where d_min=min(max(ceil(n/3),2),n-1); cell i -> [i//n, i%n]. Re-runs: index = game*16 + attempt.",
   "vectors": [
     {
-      "seed": "league-spec-v0.1-example",
+      "seed": "league-spec-v0.2-example",
       "index": 0,
       "n": 5,
       "cop": [
+        2,
+        2
+      ],
+      "thief": [
         0,
-        4
+        2
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "league-spec-v0.2-example",
+      "index": 1,
+      "n": 5,
+      "cop": [
+        3,
+        3
+      ],
+      "thief": [
+        1,
+        0
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "league-spec-v0.2-example",
+      "index": 2,
+      "n": 5,
+      "cop": [
+        4,
+        2
       ],
       "thief": [
         0,
         0
-      ]
-    },
-    {
-      "seed": "league-spec-v0.1-example",
-      "index": 1,
-      "n": 5,
-      "cop": [
-        4,
-        2
       ],
-      "thief": [
-        1,
-        2
-      ]
+      "draws": 0
     },
     {
-      "seed": "league-spec-v0.1-example",
-      "index": 2,
+      "seed": "league-spec-v0.2-example",
+      "index": 16,
       "n": 5,
       "cop": [
-        4,
+        2,
         1
       ],
       "thief": [
-        3,
-        3
-      ]
+        0,
+        0
+      ],
+      "draws": 0
     },
     {
-      "seed": "league-spec-v0.1-example",
+      "seed": "league-spec-v0.2-example",
+      "index": 17,
+      "n": 5,
+      "cop": [
+        2,
+        0
+      ],
+      "thief": [
+        0,
+        1
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "league-spec-v0.2-example",
       "index": 0,
       "n": 8,
       "cop": [
-        0,
-        4
+        2,
+        1
       ],
       "thief": [
-        6,
-        2
-      ]
+        7,
+        3
+      ],
+      "draws": 2
     },
     {
-      "seed": "league-spec-v0.1-example",
+      "seed": "league-spec-v0.2-example",
       "index": 1,
       "n": 8,
       "cop": [
-        3,
-        6
+        7,
+        3
       ],
       "thief": [
-        0,
-        4
-      ]
+        2,
+        2
+      ],
+      "draws": 0
     },
     {
-      "seed": "league-spec-v0.1-example",
+      "seed": "league-spec-v0.2-example",
       "index": 2,
       "n": 8,
       "cop": [
-        7,
-        1
+        0,
+        5
       ],
       "thief": [
         3,
         5
-      ]
+      ],
+      "draws": 0
     },
     {
-      "seed": "league-spec-v0.1-example",
-      "index": 0,
-      "n": 10,
+      "seed": "league-spec-v0.2-example",
+      "index": 16,
+      "n": 8,
       "cop": [
-        0,
-        4
+        6,
+        7
       ],
       "thief": [
         5,
-        0
-      ]
+        4
+      ],
+      "draws": 0
     },
     {
-      "seed": "league-spec-v0.1-example",
+      "seed": "league-spec-v0.2-example",
+      "index": 17,
+      "n": 8,
+      "cop": [
+        7,
+        3
+      ],
+      "thief": [
+        0,
+        5
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "league-spec-v0.2-example",
+      "index": 0,
+      "n": 10,
+      "cop": [
+        6,
+        2
+      ],
+      "thief": [
+        7,
+        7
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "league-spec-v0.2-example",
       "index": 1,
       "n": 10,
       "cop": [
-        2,
-        2
-      ],
-      "thief": [
-        3,
-        2
-      ]
-    },
-    {
-      "seed": "league-spec-v0.1-example",
-      "index": 2,
-      "n": 10,
-      "cop": [
-        2,
-        1
-      ],
-      "thief": [
         9,
-        3
-      ]
+        5
+      ],
+      "thief": [
+        4,
+        0
+      ],
+      "draws": 1
+    },
+    {
+      "seed": "league-spec-v0.2-example",
+      "index": 2,
+      "n": 10,
+      "cop": [
+        9,
+        7
+      ],
+      "thief": [
+        2,
+        5
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "league-spec-v0.2-example",
+      "index": 16,
+      "n": 10,
+      "cop": [
+        5,
+        5
+      ],
+      "thief": [
+        1,
+        4
+      ],
+      "draws": 1
+    },
+    {
+      "seed": "league-spec-v0.2-example",
+      "index": 17,
+      "n": 10,
+      "cop": [
+        3,
+        5
+      ],
+      "thief": [
+        0,
+        1
+      ],
+      "draws": 0
     },
     {
       "seed": "0123456789abcdef",
       "index": 0,
       "n": 5,
       "cop": [
-        2,
-        3
+        1,
+        2
       ],
       "thief": [
-        2,
+        3,
         4
-      ]
+      ],
+      "draws": 0
     },
     {
       "seed": "0123456789abcdef",
       "index": 1,
       "n": 5,
       "cop": [
-        0,
-        2
+        2,
+        3
       ],
       "thief": [
-        1,
+        4,
         2
-      ]
+      ],
+      "draws": 0
     },
     {
       "seed": "0123456789abcdef",
@@ -150,25 +245,55 @@
       "n": 5,
       "cop": [
         1,
+        1
+      ],
+      "thief": [
+        3,
+        1
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 16,
+      "n": 5,
+      "cop": [
+        2,
+        4
+      ],
+      "thief": [
+        1,
+        0
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 17,
+      "n": 5,
+      "cop": [
+        0,
         4
       ],
       "thief": [
         2,
-        0
-      ]
+        1
+      ],
+      "draws": 1
     },
     {
       "seed": "0123456789abcdef",
       "index": 0,
       "n": 8,
       "cop": [
-        4,
-        6
+        2,
+        7
       ],
       "thief": [
-        1,
-        6
-      ]
+        3,
+        3
+      ],
+      "draws": 1
     },
     {
       "seed": "0123456789abcdef",
@@ -176,64 +301,125 @@
       "n": 8,
       "cop": [
         6,
-        4
+        0
       ],
       "thief": [
-        5,
-        0
-      ]
+        7,
+        4
+      ],
+      "draws": 0
     },
     {
       "seed": "0123456789abcdef",
       "index": 2,
       "n": 8,
       "cop": [
-        7,
-        3
+        5,
+        0
+      ],
+      "thief": [
+        1,
+        2
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 16,
+      "n": 8,
+      "cop": [
+        6,
+        6
+      ],
+      "thief": [
+        0,
+        7
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 17,
+      "n": 8,
+      "cop": [
+        2,
+        7
       ],
       "thief": [
         2,
-        5
-      ]
+        3
+      ],
+      "draws": 0
     },
     {
       "seed": "0123456789abcdef",
       "index": 0,
       "n": 10,
       "cop": [
-        3,
+        5,
+        7
+      ],
+      "thief": [
+        1,
+        9
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 1,
+      "n": 10,
+      "cop": [
+        8,
         8
       ],
       "thief": [
-        1,
-        4
-      ]
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 1,
-      "n": 10,
-      "cop": [
-        5,
+        7,
         2
       ],
-      "thief": [
-        3,
-        2
-      ]
+      "draws": 0
     },
     {
       "seed": "0123456789abcdef",
       "index": 2,
       "n": 10,
       "cop": [
-        5,
-        9
+        1,
+        7
       ],
       "thief": [
-        8,
+        9,
+        8
+      ],
+      "draws": 1
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 16,
+      "n": 10,
+      "cop": [
+        1,
+        4
+      ],
+      "thief": [
+        5,
         5
-      ]
+      ],
+      "draws": 0
+    },
+    {
+      "seed": "0123456789abcdef",
+      "index": 17,
+      "n": 10,
+      "cop": [
+        8,
+        3
+      ],
+      "thief": [
+        3,
+        9
+      ],
+      "draws": 0
     }
   ]
 }

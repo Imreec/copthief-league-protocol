@@ -1,0 +1,57 @@
+{
+  "description": "Inputs a conformant implementation MUST reject (floats, SPEC §2) and commit-binding pairs whose hashes MUST differ (SPEC §6.2).",
+  "reject_floats": [
+    {
+      "x": 7.5
+    },
+    {
+      "totals": {
+        "a": 2.0
+      }
+    },
+    {
+      "nested": [
+        1,
+        [
+          2,
+          [
+            3.5
+          ]
+        ]
+      ]
+    },
+    {
+      "ok": 1,
+      "bad": [
+        true,
+        0.1
+      ]
+    }
+  ],
+  "binding_pairs": [
+    {
+      "pos_a": [
+        2,
+        3
+      ],
+      "nonce_a": "abc123",
+      "pos_b": [
+        2,
+        3
+      ],
+      "nonce_b": "abc124"
+    },
+    {
+      "pos_a": [
+        2,
+        3
+      ],
+      "nonce_a": "abc123",
+      "pos_b": [
+        3,
+        2
+      ],
+      "nonce_b": "abc123"
+    }
+  ]
+}

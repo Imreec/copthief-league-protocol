@@ -1,4 +1,4 @@
-"""Generate examples/sample_exchange.md — a worked wire exchange with REAL hashes.
+"""Generate examples/sample_exchange.md — a worked wire exchange with REAL hashes (SPEC v0.2).
 
 Every hash in the generated file is computed by the reference constructions in
 ``verify_vectors.py`` (stdlib only). Re-run this script to regenerate the file; if your own
@@ -7,6 +7,7 @@ implementation produces different bytes for the same inputs, it is not conforman
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -17,32 +18,37 @@ from verify_vectors import canonical_hash, ref_commit, ref_derive_starts, ref_st
 OUT = Path(__file__).parent / "sample_exchange.md"
 
 CARD = {
-    "protocol": "league/0.1",
-    "match_id": "2026-08-01-aleph-vs-bet",
-    "groups": {"group_1": "Team-Aleph", "group_2": "Team-Bet"},
-    "urls": {
-        "group_1_cop": "https://aleph.example/cop/mcp",
-        "group_1_thief": "https://aleph.example/thief/mcp",
-        "group_2_cop": "https://bet.example/cop/mcp",
-        "group_2_thief": "https://bet.example/thief/mcp",
+    "agreement": {
+        "protocol": "league/0.2",
+        "match_id": "2026-08-01-aleph-vs-bet",
+        "groups": {"group_1": "Team-Aleph", "group_2": "Team-Bet"},
+        "grid": [10, 10],
+        "rounds": 25,
+        "num_games": 6,
+        "swap_at": 3,
+        "max_barriers": 0,
+        "disclosure": "A",
+        "scent_k": None,
+        "stage": "demo",
+        "report_email": "league-reports@example.com",
+        "seed": "league-spec-v0.2-example",
+        "timeouts": {"per_ply_seconds": 120, "per_subgame_seconds": 1800, "max_messages": 200},
     },
-    "grid": [10, 10],
-    "rounds": 25,
-    "num_games": 6,
-    "swap_at": 3,
-    "max_barriers": 0,
-    "disclosure": "A",
-    "scent_k": None,
-    "stage": "demo",
-    "report_email": "league-reports@example.com",
-    "seed": "league-spec-v0.1-example",
-    "scheduled_utc": "2026-08-01T18:00:00Z",
-    "timeouts": {"per_ply_seconds": 120, "per_subgame_seconds": 1800, "max_messages": 200},
+    "transport": {
+        "urls": {
+            "group_1_cop": "https://aleph.example/cop/mcp",
+            "group_1_thief": "https://aleph.example/thief/mcp",
+            "group_2_cop": "https://bet.example/cop/mcp",
+            "group_2_thief": "https://bet.example/thief/mcp",
+        },
+        "scheduled_utc": "2026-08-01T18:00:00Z",
+    },
 }
-CONFIG_SHA = canonical_hash(CARD)
+CONFIG_SHA = canonical_hash(CARD["agreement"])
 
 N = 10
-cop_start, thief_start = ref_derive_starts(CARD["seed"], 0, N)
+# Sub-game 0, first attempt: index = game*16 + attempt = 0.
+cop_start, thief_start, _draws = ref_derive_starts(CARD["agreement"]["seed"], 0, N)
 
 
 def step(pos: list[int], dr: int, dc: int) -> list[int]:
@@ -50,7 +56,6 @@ def step(pos: list[int], dr: int, dc: int) -> list[int]:
     return [min(max(pos[0] + dr, 0), N - 1), min(max(pos[1] + dc, 0), N - 1)]
 
 
-# Three plies of sub-game 0 (thief-first): thief ply 0, cop ply 1, thief ply 2.
 thief_p0 = step(thief_start, 1, 0)
 cop_p1 = step(cop_start, -1, 1)
 thief_p2 = step(thief_p0, 1, 1)
@@ -61,21 +66,6 @@ plies = [
     ("thief", 2, 1, thief_p2, "deadbeef00c0ffee"),
 ]
 
-def trailer(ply_no: int, ack: int, move: list[int], nonce: str) -> str:
-    t = {
-        "v": 1,
-        "game": 0,
-        "ply": ply_no,
-        "ack": ack,
-        "move": move,
-        "commit": ref_commit(move, nonce),
-        "nonce": nonce,
-        "reveal": None,
-        "state": ref_state_hash([], "cop" if ply_no % 2 == 0 else "thief", ply_no + 1),
-    }
-    return json.dumps(t, separators=(",", ":"))
-
-
 PROSE = {
     0: "I'm on the move. You'll have to do better than waiting in a corner, officer.\n"
        "My move and commitment are below, as per the league protocol.",
@@ -85,12 +75,43 @@ PROSE = {
        "entirely. Committed below.",
 }
 
-HELLO_1 = {"v": 1, "hello": {"protocol": "league/0.1", "config_sha256": CONFIG_SHA, "group": "Team-Aleph"}}
-HELLO_2 = {"v": 1, "hello": {"protocol": "league/0.1", "config_sha256": CONFIG_SHA, "group": "Team-Bet"}}
+
+def trailer_line(ply_no: int, ack: int, move: list[int], nonce: str, prev: str | None) -> str:
+    """The exact transmitted trailer bytes for one move (single-line compact JSON)."""
+    t = {
+        "v": 1,
+        "type": "move",
+        "game": 0,
+        "ply": ply_no,
+        "ack": ack,
+        "move": move,
+        "commit": ref_commit(move, nonce),
+        "nonce": nonce,
+        "reveal": None,
+        # Terminal rule (SPEC 6.3) does not apply here: none of these plies end the game,
+        # so turn is simply the next mover by alternation.
+        "state": ref_state_hash([], "cop" if ply_no % 2 == 0 else "thief", ply_no + 1),
+        "prev": prev,
+    }
+    return json.dumps(t, separators=(",", ":"))
+
+
+def sha_bytes(line: str) -> str:
+    return hashlib.sha256(line.encode()).hexdigest()
+
+
+HELLO_1 = {"v": 1, "type": "hello", "protocol": "league/0.2", "config_sha256": CONFIG_SHA, "group": "Team-Aleph"}
+HELLO_2 = {"v": 1, "type": "hello", "protocol": "league/0.2", "config_sha256": CONFIG_SHA, "group": "Team-Bet"}
 
 REPORT_STUB = {"report_type": "bonus_game", "totals_by_group": {"Team-A": 80, "Team-B": 60}}
+REPORT_TRAILER = {
+    "v": 1,
+    "type": "report_sha",
+    "match_id": CARD["agreement"]["match_id"],
+    "sha": canonical_hash(REPORT_STUB),
+}
 
-md = f"""# Worked example — one match setup + three plies + settlement
+md = f"""# Worked example — one match setup + three plies + settlement (SPEC v0.2)
 
 **Every hash below is real.** This file is generated by `gen_sample_exchange.py`, which uses only
 the reference constructions in `verify_vectors.py`. Re-run the script to regenerate it; reproduce
@@ -105,29 +126,34 @@ Team-Bet is the thief (thief moves first, so the thief owns even plies).
 {json.dumps(CARD, indent=2)}
 ```
 
-Canonical hash of the card (SPEC §2) — both sides must compute the same value:
+Only the `agreement` part is hashed (SPEC §2 canonical form) — `transport` may change (tunnel
+restart, reschedule) without invalidating the handshake:
 
 ```
 config_sha256 = {CONFIG_SHA}
 ```
 
-## 2. Start cells from the seed (SPEC §6.4)
+## 2. Start cells from the seed (SPEC §6.4, v0.2 construction)
 
-`derive_starts("{CARD["seed"]}", index=0, n={N})` gives:
+Sub-game 0, first attempt -> `index = game*16 + attempt = 0`:
+`derive_starts("{CARD["agreement"]["seed"]}", index=0, n={N})` gives:
 
 ```
 cop start   = {cop_start}
 thief start = {thief_start}
 ```
 
+(Chebyshev distance {max(abs(cop_start[0] - thief_start[0]), abs(cop_start[1] - thief_start[1]))} >= d_min 4 on a 10x10 board — no instant-capture starts.)
+
 ## 3. Ply-zero handshake (SPEC §4.3)
 
-Team-Aleph -> Team-Bet's thief mailbox (prose + trailer, one `deliver_message` string):
+Team-Aleph -> Team-Bet's thief mailbox (prose + typed `hello` trailer, one `deliver_message` string):
 
 ```
 Hello Team-Bet! Aleph here, confirming we are ready to start series
-2026-08-01-aleph-vs-bet as agreed. Our trailer carries the protocol
-version and our hash of the match card - please verify it matches yours.
+2026-08-01-aleph-vs-bet as agreed. Current tunnel URLs are as announced
+on the match Issue. Our trailer carries the protocol version and our
+hash of the match-card agreement - please verify it matches yours.
 ---LEAGUE-v1---
 {json.dumps(HELLO_1, separators=(",", ":"))}
 ```
@@ -143,10 +169,18 @@ Both `config_sha256` values match -> the match may begin. If they differ, nothin
 
 ## 4. Three in-game plies (SPEC §5, Mode A)
 
+Each `move` trailer chains to the sender's previous trailer via `prev` = SHA-256 of the exact
+bytes of that sender's last transmitted trailer line (null for a sender's first move of the
+sub-game) — so each side's transcript is tamper-evident.
+
 """
 
+sent_lines: dict[str, str] = {}  # role -> last transmitted trailer line
 for role, ply_no, ack, move, nonce in plies:
     sender = "Team-Bet (thief)" if role == "thief" else "Team-Aleph (cop)"
+    prev = sha_bytes(sent_lines[role]) if role in sent_lines else None
+    line = trailer_line(ply_no, ack, move, nonce, prev)
+    sent_lines[role] = line
     commit_hash = ref_commit(move, nonce)
     state = ref_state_hash([], "cop" if ply_no % 2 == 0 else "thief", ply_no + 1)
     md += f"""### Ply {ply_no} — {sender} moves to `{move}`
@@ -154,39 +188,51 @@ for role, ply_no, ack, move, nonce in plies:
 ```
 {PROSE[ply_no]}
 ---LEAGUE-v1---
-{trailer(ply_no, ack, move, nonce)}
+{line}
 ```
 
-Receiver's checks (SPEC §8.1): trailer parses -> `game`/`ply` are the expected next block ->
-`commit == sha256_canonical({{"nonce":"{nonce}","pos":{json.dumps(move)}}})` = `{commit_hash[:16]}...` ✓ ->
+Receiver's checks (SPEC §8.1): trailer parses, `type` is `move`, `game`/`ply` are the expected
+next block -> `commit == sha256_canonical({{"nonce":"{nonce}","pos":{json.dumps(move)}}})` = `{commit_hash[:16]}...` OK ->
 apply `{move}` to the local replica -> recompute
-`state_hash([], "{"cop" if ply_no % 2 == 0 else "thief"}", {ply_no + 1})` = `{state[:16]}...` and compare with the trailer's `state` ✓.
+`state_hash([], "{"cop" if ply_no % 2 == 0 else "thief"}", {ply_no + 1})` = `{state[:16]}...` and compare with the trailer's `state` OK.
 
 """
 
 md += f"""## 5. Settlement (SPEC §9)
 
 After the last sub-game each side builds its report from its own log, canonicalizes, hashes, and
-exchanges only the hash. E.g. for an (illustrative, schema-TBD) report body
+exchanges the hash as a typed trailer. E.g. for an (illustrative, schema-TBD) report body
 `{json.dumps(REPORT_STUB, separators=(",", ":"))}` both sides would send:
 
 ```
-REPORT_SHA:{canonical_hash(REPORT_STUB)}
+Series complete on our side - totals derived from the six sub-games.
+Report hash below; we email only on a byte-identical match.
+---LEAGUE-v1---
+{json.dumps(REPORT_TRAILER, separators=(",", ":"))}
 ```
 
-Byte-identical hashes -> both teams email the same report. Any mismatch -> the escalation in
-SPEC §9 step 4. Nothing is ever emailed without a confirmed match.
+Byte-identical hashes -> both teams email the same report to the card's `report_email` (subject to
+the `stage` interlock — this card says `"demo"`, so the lecturer's inbox is untouchable). Any
+mismatch -> the escalation in SPEC §9 step 4. Nothing is ever emailed without a confirmed match.
 
 ## Notes for implementers (and their LLM assistants)
 
 - The prose above the fence is interpreted by the receiving agent's LLM; it may bluff (the thief
-  lies at ply 2). The trailer may not: it is constructed programmatically, and the receiver
-  verifies it mechanically without any LLM involvement.
+  lies at ply 2). The trailer may not: it is constructed programmatically, single-line, <= 4096
+  bytes, and the receiver verifies it mechanically without any LLM involvement. On anything
+  unexpected: hold and re-poll — never advance.
 - `move_count` passed to `state_hash` is plies *completed* (ply 0 -> 1, ply 1 -> 2, ...), and
-  `turn` is the role to move *next* — that's why ply 0's state frame is `("cop", 1)`.
+  `turn` is the role to move *next* — that's why ply 0's state frame is `("cop", 1)`. On a
+  game-ending ply there is no next mover and `turn` **stays on the mover** (SPEC §6.3); the
+  terminal fixture in `vectors/state_hash.json` pins that case.
 - In this example barriers are disabled (`max_barriers: 0`), so `barriers` is always `[]` in the
   state frame.
+- If a reply doesn't arrive within `per_ply_seconds/2`, resend your last message with the
+  byte-identical trailer — receivers dedupe by `commit`, and `prev` chains stay intact.
 """
 
 OUT.write_text(md, encoding="utf-8")
-print(f"wrote {OUT.name} ({len(md)} chars); config_sha={CONFIG_SHA[:16]}..., starts cop={cop_start} thief={thief_start}")
+print(
+    f"wrote {OUT.name} ({len(md)} chars); config_sha={CONFIG_SHA[:16]}..., "
+    f"starts cop={cop_start} thief={thief_start}"
+)
