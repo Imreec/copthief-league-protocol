@@ -446,7 +446,9 @@ A team is **league-conformant** when:
 
 This repo's CI regenerates all vectors and the worked example on every push and fails on any drift.
 Planned for v1.0: a record-replay reference transcript (drive your client against a recorded
-conformant opponent, offline) and a public **sparring server** any team can play against at will.
+conformant opponent, offline), a public **sparring server** any team can play against at will, and
+a dockerized quickstart standing up a dummy conformant endpoint for zero-server handshake testing
+(issue #2).
 
 ## 11. Open questions — v1.0 blockers (await the official assignment PDF)
 
