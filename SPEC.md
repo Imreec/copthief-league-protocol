@@ -1,536 +1,240 @@
-# Cop–Thief League Protocol — SPEC v0.3-draft
+# Cop–Thief League Interop Kit — for the official book v3.0.0
 
-**Status:** DRAFT for league review — written *before* the official final-project assignment
-publishes. Everything here is either (a) battle-tested in the EX06 inter-group bonus (played live,
-hash-confirmed byte-identical between two independent implementations), or (b) explicitly marked
-**PROPOSED**. Version **1.0** will be cut only after the official assignment PDF drops; §11 lists
-what it must resolve.
+**Status:** aligned to the official assignment — *Distributed Cops-and-Robbers over a Peer-to-Peer
+Network*, Dr. Yoram Reuven Segal, **book v3.0.0 / code v3.0.0** (University of Haifa, Orchestration
+of AI Agents). This document tracks that release; if the book revises, this follows.
 
-**Goal:** let any two conforming teams play a full cross-team series — connection, game, result
-agreement, identical report emails — with **zero pairwise negotiation**. Conformance is self-serve:
-implement to this spec, pass the test vectors in `vectors/`, and you can play anyone who did the same.
+**This is not the game spec — the book is.** The book fixes the transport (MCP/FastMCP), the game
+(hidden positions, the pheromone scent, capture, scoring), the commit-reveal, the `config/game.json`
+constitution, and the Gmail-API reporting. What this kit adds is the one thing the book does not
+ship: **conformance test vectors** for the byte-level constructions two independent implementations
+must agree on. Plus a small set of clearly-marked **opt-in enhancements** (Appendix A) a pair of
+teams may agree to and sign into their config.
 
-## Changes from v0.2-draft
-
-Second review pass in [issue #1](https://github.com/Imreec/copthief-league-protocol/issues/1)
-(anrbj666 independently verified v0.2 — all vectors, a fresh §6.4 implementation from the spec
-text alone, the terminal frame — then found the holes below):
-
-- **§5.2 — the chain is now evidence, not decoration:** `prev_recv` cross-links every trailer to
-  the exact bytes last received from the opponent, interlocking the two per-sender chains into one
-  DAG — a re-forged history contradicts itself the moment it acknowledges anything later. Chains
-  are rooted in `config_sha256` instead of `null` (no cross-match replay), `move` trailers carry
-  `attempt` (stragglers from a voided attempt are cleanly discarded), and `hello`/`report_sha` are
-  chained too — the settlement claim is bound to the transcript.
-- **§9:** the emailed body MUST be the exact canonical bytes that were hashed — never a
-  re-serialization (an EX06 series was nearly lost to a pretty-printed email; graders compare
-  emails, not hashes). Committed transcripts MUST store the verbatim trailer bytes, sent and
-  received, or the chain cannot be verified from the artifact.
-- **§6.4/§8.3:** re-run attempts capped at 15 (the `game*16 + attempt` index can no longer collide);
-  the re-draw loop capped at 64 draws with a deterministic opposite-corners fallback — termination
-  is now provably bounded, not just almost-sure. Existing fixtures unaffected.
-- Protocol string bumped to `league/0.3`; match-card fixture and worked example regenerated.
-
-## Changes from v0.1-draft
-
-All from the EX06 post-mortem review in
-[issue #1](https://github.com/Imreec/copthief-league-protocol/issues/1) (anrbj666 — thank you):
-
-- **§6.4 rewritten (breaking, new vectors):** start derivation now uses 4 digest bytes per cell (no
-  single-byte bias, works for any board), a minimum Chebyshev start distance with deterministic
-  re-draw (no more one-round instant captures), and a deterministic re-run index (no "by agreement").
-- **§6.3:** terminal-ply `turn` pinned (stays on the mover — verified against the EX06 live log)
-  plus a terminal-ply vector; note on why fatal state-mismatch is safe in this design.
-- **§4.1:** match card split into a hashed `agreement` and an unhashed `transport` (tunnel restarts
-  no longer brick the handshake); `scheduled_utc` moved out of the hashed body.
-- **§5:** every message now carries a typed trailer (`hello` / `move` / `report_sha`); explicit
-  hold-don't-advance rule on unexpected input; single-line + size bound; sender resend rule; `prev`
-  hash-chain field making each side's transcript tamper-evident.
-- **§2:** floats are now explicitly *rejected* by the reference implementation; astral-plane
-  escaping pinned by a vector. New fixtures: match-card hash, joint-seed, terminal state, negative
-  vectors (floats, commit-binding). CI runs the verifier and regenerates everything on every push.
-- Editorial: §6.1 exemption for the one non-canonical-JSON preimage; §6.2 field-order note;
-  trailer parsed-not-hashed clarification; Mode B cards rejected until unblocked; Appendix C
-  (non-normative transport tips, contributed by anrbj666).
+**Why it matters (the one-line version):** the book says "hash the canonical JSON," but two
+clean-room codebases that serialize even slightly differently — an escaped `א` vs a native
+`א`, a `0.1` vs `0.10000000000000001` — will fail each other's audit, and both score a **technical
+loss**. This kit lets you certify, alone and before match day, that your bytes match everyone
+else's. Pass `python verify_vectors.py`, port the checks into your own suite, and you can finish a
+clean game with any team that did the same.
 
 ---
 
-## 1. Design principles
+## 0. Relationship to the book
 
-1. **Peer topology, no trusted third party.** Each team runs its own MCP server and its own
-   orchestrator/LLM. Nothing central executes game logic. Integrity comes from cryptographic
-   commitments and per-ply state hashes, not from a referee.
-2. **Natural language is the semantic channel.** Agents communicate intent, observations, and
-   negotiation in free prose, interpreted by the receiving side's LLM. The machine-verifiable data
-   rides in a small attachment that is inserted and parsed **verbatim** — never generated or
-   paraphrased by an LLM.
-3. **Fail at ply zero, not ply 37.** Version and configuration mismatches are detected in a
-   handshake before the first move. A game that starts is a game both sides can finish.
-4. **Everything hashable is canonical.** One canonical JSON form (§2) underlies every hash in the
-   protocol (single documented exemption: §6.4). Two implementations that agree on the data agree
-   on the bytes. (Note the converse carefully: the wire trailer itself is *parsed*, not hashed —
-   see §5.2.)
+The book is authoritative and self-contained. This kit only *pins bytes* and *proposes optional
+extras*. Pointers into the release (chapter numbers are v3.0.0):
 
-### 1.1 Terminology
-
-| Term | Meaning |
+| The book fixes… | …so this kit does not restate it |
 |---|---|
-| **series** (match) | the full encounter between two teams: `num_games` sub-games with a role swap, settled by one mutually confirmed report |
-| **sub-game** | one pursuit episode: start cells derived from the seed (§6.4), ends in capture, round-cap survival, or void |
-| **round** | one thief ply followed by one cop ply; a sub-game lasts at most `rounds` rounds = `2*rounds` plies |
-| **ply** | a single agent's move. Plies are numbered from 0 within a sub-game; thief-first ⇒ the thief owns even plies, the cop odd ones |
-| **role swap** | after `swap_at` sub-games the teams exchange cop/thief roles |
-| **void** | a sub-game annulled for technical failure (§8.3), re-run so the series completes its quota |
-| **EX06** | the course's previous assignment, in which a precursor of this protocol was played live between two independent implementations |
+| MCP tool-call transport over FastMCP + tunneling (ch.2) | — |
+| Hidden positions / Zero-Knowledge "local truth" (ch.1, ch.5) | — |
+| Stigmergy scent field: emission + decay (ch.4) | pins the math with vectors (§5) |
+| Commit-reveal SHA-256, per-step, revealed at audit (ch.5) | pins the serialization with vectors (§3) |
+| Strategy is pure code; the LLM only writes the free-language hint (ch.6) | — |
+| Fixed scoring + diversity + computational fairness (ch.9, App. F) | — |
+| `config/game.json` as the signed shared "constitution" (ch.3, App. B) | pins the signature/id bytes (§4) |
+| Gmail-API reporting, both teams send identical JSON (ch.9, App. A) | pins report canonicalization + the emailed-bytes rule (§6) |
+| Two GitHub repos + academic README (ch.9, App. C) | — |
 
-## 2. Canonical JSON (normative)
+Nothing here weakens a mandatory rule. Per the book's own principle ("anything not explicitly
+written is open to agreement, but the parameter-table minimums may only be raised, never lowered"),
+this kit lives entirely in the "open to agreement" space and in self-certification.
 
-Every hash in this protocol is `SHA-256` over **canonical JSON bytes** of an object:
+## 1. The interop surface
 
-- Serialize with **sorted keys**, separators `(",", ":")` (no whitespace).
-- **Non-ASCII characters are `\uXXXX`-escaped** (Python `json.dumps` default, `ensure_ascii=True`).
-  Astral-plane characters (emoji etc.) become **surrogate pairs** (`"🙂"` → `🙂`) —
-  pinned by a fixture in `vectors/canonical_json.json`.
-- Encode the resulting string as **UTF-8** (after escaping it is pure ASCII).
-- Numbers: **integers only**. Implementations MUST **reject** any float anywhere in an object to be
-  hashed (float repr differs across languages; EX06 nearly lost a series to a hand-typed `7.5`).
-  The reference implementation raises; `vectors/negative.json` lists objects that MUST be rejected.
-- Booleans/null are JSON literals; strings are JSON-escaped.
+These are the only places where two independent implementations must produce **byte-identical**
+output, or the game cannot start / audit / settle. Each is backed by a vector:
 
-Python reference: `json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()` after a
-recursive no-floats check. Edge-case fixtures: `vectors/canonical_json.json`.
+1. **Canonical JSON** (§2) — the serialization under every hash. `vectors/canonical_json.json`.
+2. **Commit-reveal** (§3) — your revealed log is re-hashed by the *opponent* at audit.
+   `vectors/commit_reveal.json`.
+3. **Agreement signature** (§4) — the pre-game gate; a byte difference means the peers refuse to
+   play. `vectors/terms_signature.json`.
+4. **`game_uid`** (§4) — both peers derive the same shared id with no round-trip.
+   `vectors/game_uid.json`.
+5. **Pheromone field** (§5) — each peer emits its own, but a wrong port breaks your belief map.
+   `vectors/pheromone.json`.
+6. **Report canonicalization** (§6) — both teams must email byte-identical report JSON.
 
-## 3. Topology and transport
+Everything else (your strategy, your GUI, your prompts, your infra) is private and needs no
+cross-team agreement.
 
-- Each team exposes **two MCP servers** (cop, thief) built with FastMCP over **HTTPS**.
-- Auth is transport-layer: `Authorization: Bearer <token>`, rejected **before** any tool dispatch.
-  Tokens are exchanged privately per match (they are *not* in the match card, §4.1).
-- The only public cross-team tool is **`deliver_message(text: str) -> ack`** — a **dumb mailbox**.
-  It records the message and returns an acknowledgment. It MUST NOT run an LLM, apply game logic,
-  or block on a reply in the response path.
-- The loop is **async and client-driven**: on your turn, your orchestrator calls the *opponent's*
-  `deliver_message`; you learn their reply by polling your **own** inbox (how your client reads its
-  own inbox is private — in-process co-location is the proven pattern).
-- The **LLM lives in the orchestrator (client), never in the MCP server.** Servers are secretless.
-- Non-normative transport experience (tunnels, rate caps): Appendix C.
+## 2. Canonical JSON
 
-## 4. Match setup
+Every hash in the protocol is `SHA-256` over the UTF-8 bytes of:
 
-### 4.1 Match card (PROPOSED)
-
-A match is defined by one JSON document both teams hold. It has two parts: a hashed **`agreement`**
-(the rules both sides commit to) and an unhashed **`transport`** (operational facts that may
-legitimately change between issuance and game time — a restarted tunnel MUST NOT brick a match).
-
-```json
-{
-  "agreement": {
-    "protocol": "league/0.3",
-    "match_id": "2026-08-01-aleph-vs-bet",
-    "groups": {"group_1": "Team-Aleph", "group_2": "Team-Bet"},
-    "grid": [10, 10],
-    "rounds": 25,
-    "num_games": 6,
-    "swap_at": 3,
-    "max_barriers": 0,
-    "disclosure": "A",
-    "scent_k": null,
-    "stage": "demo",
-    "report_email": "league-reports@example.com",
-    "seed": "<joint seed, §4.2>",
-    "timeouts": {"per_ply_seconds": 120, "per_subgame_seconds": 1800, "max_messages": 200}
-  },
-  "transport": {
-    "urls": {
-      "group_1_cop": "https://aleph.example/cop/mcp",
-      "group_1_thief": "https://aleph.example/thief/mcp",
-      "group_2_cop": "https://bet.example/cop/mcp",
-      "group_2_thief": "https://bet.example/thief/mcp"
-    },
-    "scheduled_utc": "2026-08-01T18:00:00Z"
-  }
-}
+```python
+json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 ```
 
-- `config_sha256 = SHA-256(canonical_bytes(agreement))` — the `agreement` object **only**. Fixture:
-  `vectors/match_card.json`.
-- `transport` may be updated any time (new tunnel URL, rescheduled time) by posting the new values
-  on the match's lobby Issue (Appendix B) or announcing them in `hello` prose; the agreement hash
-  is unaffected. `scheduled_utc` is ISO-8601 UTC (`YYYY-MM-DDThh:mm:ssZ`) and is coordination
-  metadata only — never enforced by implementations (clock skew exists; give ±2 min grace socially).
-- `rounds` counts **rounds** (thief ply + cop ply): a sub-game is at most `2*rounds` plies.
-  Role-swap: sub-games `0..swap_at-1` = group_1 cop vs group_2 thief; the rest swap.
-- `timeouts.max_messages` is **per sub-game** (all `deliver_message` receipts, prose included).
-- `stage` is a **safety interlock** for order-dependent scoring: implementations MUST NOT send any
-  report to the official (lecturer) destination unless `stage` is `"official"`, and no match card
-  may be issued with `stage: "official"` until every league team has jointly declared the real
-  season open. During the demo season (Appendix B), `report_email` points at a league test mailbox
-  or the teams' own inboxes. Implementations MUST take the destination from the card — never
-  hardcode it. For the same reason, implementations SHOULD require an explicit human arm step (a
-  flag or prompt) before *starting* a `stage: "official"` series: under order-dependent scoring,
-  starting a counted game is as consequential as emailing its report.
-- Game-rule values (`grid`, `rounds`, scoring) are placeholders until the official assignment fixes
-  them — the *shape* of the card is what this spec pins. Bearer tokens are exchanged out of band,
-  never in the card.
+Three details are load-bearing, and each is where a clean-room port silently diverges:
 
-### 4.2 Joint seed (PROPOSED — trustless coin flip)
+- **`ensure_ascii=False` (native UTF-8).** Non-ASCII — Hebrew hints, emoji, non-English map areas —
+  is emitted as raw UTF-8, **not** `\uXXXX`-escaped. This is the single most important fact in the
+  kit, because of §3: the opponent re-hashes your revealed `hint` text at audit. Escape it and every
+  non-ASCII step fails, costing both sides the match. `vectors/canonical_json.json` pins a Hebrew
+  string and an astral-plane emoji.
+- **Floats are permitted, and must be shortest round-trip repr.** The protocol carries floats
+  (`decay_per_step: 0.1`, `emit_intensity: 0.9`, hardware `ram_gb: 31.8`). Python's `json` emits
+  the shortest round-trip form (`0.1`, not `0.10000000000000001`); any conforming implementation
+  must do the same, or the terms signature (§4) fails. The kit does **not** forbid floats (an
+  earlier draft did — that was wrong for this game). It pins the expected canonical strings so you
+  can check your language.
+- **Sorted keys, no whitespace** (`separators=(",", ":")`). Construction order in your code is
+  irrelevant; canonicalization sorts.
 
-Per-sub-game start cells derive from a shared seed (§6.4). So neither team can pick a favorable
-seed, generate it jointly by commit-reveal:
+Reference: `verify_vectors.py:_canonical_str`.
 
-1. Each team picks a private random hex string `r` and publishes
-   `share_commit = SHA-256(canonical_bytes({"seed_share": r}))`.
-2. After both commitments are exchanged, both reveal `r`.
-3. `seed = SHA-256(canonical_bytes({"shares": [r_group_1, r_group_2]}))` (group_1's share first).
+## 3. Commit-reveal conformance
 
-Either side can verify the other's share against its commitment. Fixtures:
-`vectors/joint_seed.json`. A simpler fallback (used in EX06): seed = the SHA-256 report hash of a
-previous agreed game.
-
-### 4.3 Ply-zero handshake
-
-Before any move of sub-game 0, each orchestrator sends one greeting message whose trailer (§5) is:
-
-```json
-{"v": 1, "type": "hello", "protocol": "league/0.3", "config_sha256": "<hex64>", "group": "Team-Aleph", "prev": "<config_sha256>", "prev_recv": null}
-```
-
-- `config_sha256` = canonical hash of the match card's `agreement` (§4.1).
-- Chain fields (§5.2): a hello's `prev` is the `config_sha256` itself (the root anchor); its
-  `prev_recv` is the hash of the opponent's hello bytes if one was already received, else `null`.
-- If the two sides' `protocol` or `config_sha256` differ, the match **MUST NOT start**. Report the
-  mismatch to the humans; nothing is void because nothing began.
-- The greeting prose is a natural place to confirm readiness and announce current `transport`
-  values (fresh tunnel URLs). Tokens should already be configured before the handshake.
-
-## 5. In-game wire format
-
-Every message is **one string** passed to `deliver_message`, with two parts:
+Each step, a peer seals its own turn record and sends **only** the commit; nonces are revealed at
+the end-of-game audit, where both peers re-hash every revealed record. The construction:
 
 ```
-Your scent trail is getting colder toward the north-east, so I'm
-sweeping back along the west wall. Committing my move below.
----LEAGUE-v1---
-{"v":1,"type":"move","game":2,"attempt":0,"ply":14,"ack":13,"move":[3,4],"commit":"<hex64>","nonce":"8f2c01ab","reveal":null,"state":"<hex64>","prev":"<hex64>","prev_recv":"<hex64>"}
+commit = SHA256( canonical_json(payload) + "|" + nonce )
 ```
 
-### 5.1 The prose body (above the fence)
+Note the nonce is **pipe-appended to the canonical string**, not placed inside the hashed object.
+`vectors/commit_reveal.json`.
 
-Free natural language — the *actual* agent-to-agent communication (intent, observation, deception,
-negotiation). The receiving side interprets it with its LLM. It MUST NOT be required for mechanical
-correctness: a conforming implementation can verify and apply the ply from the trailer alone.
+- **Self-verify** needs no cross-team agreement — you re-hash your own payloads. **Audit is
+  cross-team**: your opponent runs `verify(payload, nonce, commit)` over *your* revealed records,
+  canonicalizing them with *their* serializer. If your serializers disagree on any record — and
+  records contain your free-language `hint`, which may be Hebrew — their recompute misses your
+  commit, the audit flags it as tampering, and the sub-game is a technical loss for both. §2's
+  `ensure_ascii=False` is what prevents this.
+- **The payload schema itself is not an interop constraint.** Each peer reveals its own full record
+  and the other just re-hashes it; you do not reconstruct your opponent's payload. So the exact key
+  set (the book's core `{state, move, intent, nonce}` vs. the reference's richer record that also
+  carries `verdict`, `hint`, `step`, `sub_game`, `role`, timing, tokens) does not need to match
+  across teams — only each side's own seal↔reveal must be self-consistent, and your canonical form
+  must be §2. Order enforcement and replay resistance come from `step` (and `sub_game`, `role`)
+  being inside the signed payload, not from any transcript chain.
+- **`state` is a string, self-only.** The reference encodes it as
+  `f"grid={n}x{n};self={[row, col]};barriers={sorted_barriers}"` (Python list repr, note the space
+  after the comma). It carries *your own* position only — never the opponent's (hidden-position
+  model) — so there is no shared board frame both sides must reproduce.
 
-### 5.2 The trailer (below the fence)
+## 4. Agreement signature and `game_uid`
 
-- Fence line: exactly `---LEAGUE-v1---` on its own line. Everything after the **last** fence line
-  must parse as a single JSON object on **one line**, compact (no internal newlines), at most
-  **4096 bytes** (EX06: a line-splitting parser ate multi-line messages until prose was flattened —
-  the bound keeps trailers trivially bufferable).
-- The sender constructs the trailer **programmatically** and appends it verbatim; LLM output MUST
-  NOT be able to alter it.
-- **The trailer is parsed, not hashed** — field order inside it is free; only the *values* it
-  carries (`commit`, `state`, …) are canonical constructions. The one exception is `prev` (below),
-  which hashes the previous trailer's exact transmitted bytes.
-- **Every trailer carries `type`**: `"hello"` (§4.3), `"move"`, or `"report_sha"` (§9). A receiver
-  that gets an unparseable trailer, an unknown `type`, or a message that is valid but not the one
-  it is waiting for MUST **hold and re-poll — never advance** on it. (EX06's deepest bug was a
-  parser mis-classifying a message and advancing; one side skipped a sub-game and the match
-  deadlocked.)
-- `move`-type fields:
+Before play, each peer signs the agreed terms and both derive a shared id — the pre-game gate that
+refuses to start on any mismatch.
 
-| Field | Type | Meaning |
-|---|---|---|
-| `v` | int | trailer schema version (this spec: `1`) |
-| `type` | string | `"move"` |
-| `game` | int | 0-based sub-game index in the series (kills cross-game misattribution) |
-| `attempt` | int | 0-based attempt counter for this sub-game (bumped on each void re-run, §8.3) — a straggler block from a dead attempt is discarded by field mismatch, not by a confusing state explosion |
-| `ply` | int | 0-based ply number of **this** move within the sub-game |
-| `ack` | int | highest opponent `ply` applied so far; `-1` if none |
-| `move` | `[row,col]` \| null | this ply's destination — cleartext in Mode A; `null` in Mode B |
-| `commit` | hex64 | `commit(move_pos, nonce)` for this ply (§6.2) |
-| `nonce` | string \| null | revealed immediately in Mode A (audit); `null` in Mode B |
-| `reveal` | object \| null | Mode B delayed reveal: `{"ply": t-k, "pos": [row,col], "nonce": "..."}` |
-| `state` | hex64 | common-state hash **after** applying this ply (§6.3) |
-| `prev` | hex64 | SHA-256 of the exact UTF-8 bytes of the previous trailer **this sender** transmitted in this `(game, attempt)` (the line after the fence, no trailing newline); for the sender's **first** trailer of the attempt: the match's `config_sha256` (root anchor — a chain can never be replayed into a different match) |
-| `prev_recv` | hex64 \| null | SHA-256 of the exact UTF-8 bytes of the last opponent trailer **received and accepted** in this `(game, attempt)` at composition time; `null` only when nothing has been received yet (the thief's opening move) |
+- **Signature** = the §3 construction over the terms: `SHA256(canonical_json(terms)|nonce)`. Each
+  peer signs the terms with its own nonce; the opponent re-verifies over the terms it received
+  (which must value-equal its own) using the signer's nonce. `vectors/terms_signature.json`. The
+  `terms` are the subset of `config/game.json` both sides must match on (board, scent params,
+  scoring bounds, starts, step cap, setting, axes) — the book's App. F table; the exact extraction
+  is the reference's `terms_from_config`.
+- **`game_uid`** = `UUID( SHA256( canonical(terms) + "|" + "|".join(sorted([g_a, g_b])) )[:16] )`,
+  identical for both peers because it is a pure function of shared inputs (sorted group ids →
+  order-independent). `vectors/game_uid.json`. It names all four submission artifacts
+  (`declaration/config/log/result_<game_id>.json`), keeping files from different matches from ever
+  mixing.
 
-- `prev` + `prev_recv` make the two sides' transcripts **one interlocked DAG**, not two independent
-  chains: your ply-10 hashes my ply-9's exact bytes, and my ply-11 hashes your ply-10's — so
-  neither side can re-forge its own history offline without contradicting every later message of
-  the opponent's that acknowledged it. Earliest divergence between two committed transcripts is
-  provable, and the interleaving order is pinned cryptographically (`ack` asserts it only
-  numerically). Chains restart per `(game, attempt)`, always rooted in `config_sha256`. Resends
-  (§8.2) retransmit identical bytes, so both chains are unaffected. `hello` (§4.3) and
-  `report_sha` (§9) trailers are chained with the same two fields.
-- Unknown fields: receivers MUST ignore unknown keys (forward compatibility within a major `v`).
-- Coordinate frame (normative, as in EX06): **0-based, top-left origin, `[row, col]`, row-major**.
-- Sequencing: `game`/`ply`/`ack` subsume EX06's `SG:` prefix and hold/skip patch. Plies are
-  numbered globally within a sub-game (thief-first ⇒ one role owns the even plies, the other the
-  odd), so the opponent's expected next `ply` is always known: their first ply by role, then
-  `last_applied_opponent_ply + 2`. A receiver holds a future-`ply` block, discards an
-  already-applied one (idempotent by `commit`) or one from a dead `attempt`, and applies only the
-  expected same-`(game, attempt)` block.
+## 5. Pheromone field
 
-## 6. Hash constructions (normative — pinned by `vectors/`)
+The scent (book ch.4) is each peer's own emission, transmitted as `{"r,c": intensity}` and absorbed
+by the opponent — so it is not re-derived cross-team. But a wrong port makes your belief map behave
+unlike the book's, so the kit pins the math as a self-test. `vectors/pheromone.json`.
 
-### 6.1 One rule for all (one exemption)
+- **Radial emission** around a cell: `half = grid_size // 2`, `falloff = intensity / (half + 1)`,
+  and each in-bounds cell gets `round(max(0, intensity - falloff * chebyshev(cell, center)), 3)`.
+  Only cells with value > 0 cross the wire. On the default `grid_size=5`, centre `0.9`, falloff is
+  `0.3` per Chebyshev ring (`0.9 → 0.6 → 0.3`).
+- **Decay per game-step**: every known intensity drops by the constant, clamped at 0 and rounded to
+  3 places: `round(max(0, v - decay), 3)`.
+- **Emission requires the centre to meet `min_center_intensity`** (default `0.5`); the field is
+  merged into the trail by max, and decays each step, producing the fading trail the book's
+  heatmap visualizes.
 
-All constructions are `SHA-256(canonical_bytes(obj))` per §2 — **except** the start-cell derivation
-(§6.4), which hashes the raw UTF-8 string `f"{seed}:{index}:{draw}"` (a keyed counter, not a JSON
-object). That is the protocol's only non-canonical-JSON preimage. The fixtures for §6.2/§6.3 were
-generated by the EX06 implementation that played the live hash-confirmed game; §6.4's fixtures are
-generated by this repo's reference implementation (v0.2 changed the construction).
+## 6. Report canonicalization and settlement
 
-### 6.2 Position commitment — `vectors/position_commit.json`
+Both teams independently build the final result JSON, and both email it — the grader compares the
+**emails**, not just the hashes. Two rules carry over from EX06 and cost real points when ignored:
 
-`commit(pos, nonce) = sha256_canonical({"nonce": nonce, "pos": [row, col]})`
+- **The emailed body must be the exact canonical bytes** (§2) — never a pretty-printed
+  re-serialization. In EX06 two teams' report hashes matched but one team's *email* was a
+  re-serialization, and it nearly scored 0.
+- **Derived, not declared.** Totals and the diversity flag are derived from the per-sub-game
+  results and the game-count declarations by the fixed scoring table (book ch.9), so agreement on
+  sub-games implies agreement on totals.
+- **Stage / draft interlock.** The reference's `email.mode = "draft"` is the safety gate: nothing
+  reaches the lecturer's real inbox until intended. Under the diversity rule (only the *first*
+  meeting with an opponent counts), an accidental early real send can burn your one counted game —
+  so keep drafts until a deliberate human send.
 
-(Shown in canonical — sorted — key order; construction order in code is irrelevant because
-canonicalization sorts.) Binding both ways: changing position **or** nonce changes the hash —
-`vectors/negative.json` pins binding pairs. Nonce is any string chosen by the mover (length free;
-16–32 hex chars typical). Example: pos `[2,3]`, nonce `"abc123"` →
-`3b37bed7b664a8aa96e14072f885fee2cb617bfb57cd42c1fa7430c8d98f2d22`.
+## 7. Conformance
 
-### 6.3 Common-state hash — `vectors/state_hash.json`
+A team is **interop-ready** when:
 
-`state_hash(barriers, turn, move_count) = sha256_canonical({"barriers": sorted [row,col] pairs (deduped), "move_count": N, "turn": "cop"|"thief"})`
+1. **Core vectors pass** — `python verify_vectors.py` reproduces every `[CORE]` fixture, and your
+   own implementation reproduces them too (port the checks into your suite): canonical JSON with
+   `ensure_ascii=False`, the commit construction, the terms signature, `game_uid`, and the
+   pheromone math.
+2. **Cross-team audit is clean** — feed your opponent's revealed log to your verifier and your log
+   to theirs; both audits pass with zero `tamper_forfeit`. This is the real test §1 exists for.
+3. **Report bytes match** — the emailed body equals the canonical bytes that were hashed.
 
-- `move_count` = plies completed (0 before the first ply; +1 per ply).
-- `turn` = the role **to move next**. **Terminal ply (normative):** when a ply *ends* the sub-game
-  (capture or round cap), there is no next mover — `turn` **stays on the mover** of that final ply.
-  This is what the EX06 engines actually did and what produced byte-identical finals live (the
-  terminal fixture in `vectors/state_hash.json` reproduces the EX06 live log's final frame).
-- The sender computes it **after** applying its own ply; the receiver applies the received move to
-  its replica, recomputes, compares. Any mismatch = desync (§8.3), and it is **fatal** (void).
-  *Why fatal is safe here:* EX06 had to downgrade state mismatch to a warning mid-league because
-  retry-induced `move_count` drift and the terminal-`turn` ambiguity produced false mismatches.
-  Both causes are closed in this spec (idempotent receive by `commit` + resend-identical-bytes §8.2;
-  terminal rule above) — so a mismatch now means a real divergence. Do not downgrade it.
+The `[ENH]` vectors (Appendix A) are separate: a pair conforms to an enhancement only if both
+opted in and signed it into `config/game.json`.
 
-### 6.4 Seed → start cells — `vectors/derive_starts.json` (v0.2, breaking)
+CI regenerates all vectors and the worked example on every push and fails on any drift.
 
-For a draw counter `draw = 0, 1, 2, …` on an `n×n` board:
+## Appendix A — agreed enhancements (opt-in, not required by the book)
 
-```
-for draw in 0..63:
-    digest    = SHA-256(utf8(f"{seed}:{index}:{draw}"))       # raw digest bytes
-    cop_cell  = int.from_bytes(digest[0:4],  "big") mod n²
-    thief_cell= int.from_bytes(digest[4:8],  "big") mod n²
-    d_min     = min(max(ceil(n/3), 2), n-1)                   # 5→2, 8→3, 10→4
-    accept iff chebyshev(cop, thief) ≥ d_min
-fallback (no draw in 0..63 accepted): cop = [0, 0], thief = [n-1, n-1]
-cell i → [i // n, i mod n]
-```
+The book's default rule is "no rule unless written," and it invites teams to agree on extras and to
+exploit undefined gaps — provided the agreement is signed into `config/game.json` and does not
+weaken any mandatory minimum. These are ours; a pair uses one only if both sign it in.
 
-- **4 bytes per cell** removes the v0.1 single-byte flaws (modulo bias — cells 0–55 were 1.5× more
-  likely on 10×10 — and the hard ceiling that made cells ≥256 unreachable on n ≥ 17).
-- **`d_min` (minimum Chebyshev start distance)** removes instant-capture starts: in the accepted
-  EX06 series, three sub-games were decided in one round because the derivation put the cop
-  next to the thief. The re-draw is deterministic (both sides walk the same `draw` sequence), and
-  the **64-draw cap with the opposite-corners fallback** makes termination provably bounded — not
-  merely almost-sure — while staying deterministic (corners are at distance `n-1 ≥ d_min`, so the
-  fallback always satisfies the invariant; every current fixture accepts by draw ≤ 2).
-- **`index` (deterministic re-runs):** for sub-game `g`, attempt `a` (first play = 0, first re-run
-  after a void = 1, …): `index = g * 16 + a`, with **`a ≤ 15`** so indices never collide across
-  sub-games (§8.3 hands the match to humans long before that). No "bump by agreement" — re-runs
-  re-derive with zero negotiation.
+- **Transcript interlock DAG (`prev` / `prev_recv`).** The book's commits are independent per step —
+  strong against *editing* one step, but a full log can be re-forged offline (there is no
+  cross-link). Optionally add to each sealed record `prev` = SHA-256 of your previous sent record's
+  exact bytes and `prev_recv` = SHA-256 of the last opponent record you accepted. The two logs
+  interlock into one DAG: a re-forged history contradicts the opponent's later records that
+  acknowledged it, so earliest divergence is provable from the two committed logs. Requires storing
+  verbatim record bytes. (Design credit: anrbj666, issue #1.)
+- **Seeded asymmetric starts + joint-seed coin flip.** The book fixes `cop_start`/`thief_start` in
+  the config. A pair that prefers randomized-but-fair starts can instead derive them from a joint
+  seed generated by commit-reveal so neither side picks a favorable one:
+  `share_commit = SHA256(canonical({"seed_share": r}))`, reveal, `seed = SHA256(canonical({"shares":
+  [r1, r2]}))`; then `derive_starts(seed, index=game*16+attempt, n)` with a minimum-Chebyshev
+  distance (no instant captures) and a deterministic re-draw. `vectors/joint_seed.json`,
+  `vectors/derive_starts.json`.
+- **Synchronized fixture scheduling.** The league is self-organized (book ch.9), and only the first
+  meeting with each opponent counts. To keep scheduling luck out of it, a group of teams can agree a
+  deterministic round-robin (circle method over the sorted roster) so round `r` fixes everyone's
+  `r`-th opponent, derivable by anyone from the roster.
+- **Demo staging beyond `draft`.** Run one or two full fixture rounds as a dress rehearsal with
+  reports routed to a league test mailbox (schema + byte-identity auto-checked) before anyone's
+  first counted game. Complements the reference's `email.mode = "draft"`.
 
-### 6.5 Report hash
+## Appendix B — league services (optional, passive)
 
-`report_hash = SHA-256(canonical report bytes)` — the subject of the two-phase confirm (§9). The
-report schema itself is fixed by the assignment (see §11); the canonicalization is §2, no `version`
-key inside the hashed body.
+None of these run game logic, so the peer topology and trust model are unchanged and any outage
+falls back to direct peer play.
 
-## 7. Disclosure modes
+- **Sparring server.** An always-on conformant opponent any team can test against without needing a
+  partner online — the biggest testing gap in EX06, and the league's adoption engine. We (ImreEyal)
+  intend to host one.
+- **Lobby via a league GitHub repo.** Roster as one JSON file per team (maintained by PR); each
+  scheduled match gets an Issue carrying its `config/game.json` and, at settlement, both teams'
+  report hashes and links to their committed artifacts. Registration + scheduling + a public
+  coordination trail, zero hosting, no single owner, graceful fallback to a hand-exchanged config.
 
-### Mode A — full disclosure + commit audit (EX06-proven, default)
+## Appendix C — provenance, and the relationship to the book
 
-Every ply carries cleartext `move` plus `commit` + `nonce`. Both engines apply the move and stay in
-lockstep; the commitment is a per-ply integrity/audit trail. Capture (`cop == thief`) and the round
-cap are derived independently and identically by both engines — never declared.
+This kit was born (as a full protocol draft, v0.1–v0.3) from the EX06 inter-group bonus, where two
+independent implementations played live over Cloudflare tunnels and settled on a byte-identical
+report hash. Issue #1 (partner team anrbj666) contributed two review passes, including the
+transcript-DAG idea now in Appendix A. When the official book v3.0.0 published, the game's actual
+rules and transport were fixed by the book, so this repo re-scoped from "a candidate standard" to
+"a conformance kit + agreed-enhancements layer on top of the book."
 
-### Mode B — delayed reveal (PROPOSED — the "scent" candidate; not yet playable)
-
-For rules with genuine hidden positions (the final project's scent mechanic), keep the peer topology
-by revealing on a lag `k` (match-card `scent_k`):
-
-- At ply `t` the mover sends `commit` for its current position, `move: null`, and
-  `reveal = {ply: t-k, pos, nonce}` — the verified position it committed `k` plies ago.
-- The receiver verifies the reveal against the stored ply-`t-k` commitment; the lagged trail **is**
-  the scent (older = staler). Freshness/decay presentation is an engine concern, not a wire concern.
-- End-of-game: both sides reveal all outstanding nonces so the full trajectory is auditable and the
-  result (capture claims included) is verifiable before settlement.
-- Open design point for v1.0: how capture is *detected* when current positions are hidden (options:
-  cop declares a capture claim that thief must answer with a reveal; or capture checks run on the
-  lagged trail). **Blocked on the official rules.** Until v1.0 unblocks Mode B, match cards MUST
-  NOT set `disclosure: "B"`, and implementations MUST reject cards that do.
-
-## 8. Turn loop, sequencing, failure
-
-### 8.1 Per-ply loop (mover's client)
-
-1. Poll own inbox → take the opponent's latest block (per §5.2 sequencing rules).
-2. Verify: `game`/`ply` in sequence → commitment (and reveal, Mode B) → apply to local engine →
-   recompute `state_hash` and compare with the block's `state`.
-3. Decide own move (LLM + policy). Build commit/nonce; apply locally; compute new `state`.
-4. Compose prose + trailer; `deliver_message` to the opponent. Wait (poll) for their reply.
-
-### 8.2 Timeouts, budgets, resends (defaults; match card may override)
-
-- `per_ply_seconds` (default 120): max wait for the opponent's next valid block. **Sender resend
-  rule:** if no valid response block arrives within `per_ply_seconds / 2`, resend your last message
-  with the **byte-identical** trailer (receivers dedupe by `commit`; the `prev` chain is unaffected).
-  Never construct a *different* trailer for the same ply.
-- `per_subgame_seconds` (default 1800) and `max_messages` (default 200, **per sub-game**): livelock
-  guards.
-- All timers run on the **waiter's local clock** (no cross-machine clock agreement is needed
-  anywhere in this protocol; `scheduled_utc` is coordination metadata only, §4.1).
-- While waiting, a client MUST bound its own reads and keep checking the wall clock — a silent
-  opponent becomes a timeout, never an infinite hang.
-
-### 8.3 Desync and voiding
-
-- Commitment/reveal verification failure, out-of-sequence block that never resolves, `state`
-  mismatch, or budget exhaustion → the sub-game is **void** (technical loss handling): record
-  evidence (ply, both state hashes, the offending block, your chained transcript), notify
-  the opponent in prose, **re-run** the sub-game — same `game` index `g`, next attempt `a` (`a ≤
-  15`), starts re-derived deterministically via `index = g * 16 + a` (§6.4). Re-run trailers carry
-  the new `attempt`, so any straggler block from the dead attempt is discarded on sight (§5.2)
-  rather than exploding a state comparison.
-- Repeated failure of the same sub-game (default: 2 attempts) → humans decide; the series is not
-  reportable as mutually agreed until resolved.
-
-## 9. Series settlement — identical reports or nothing
-
-1. After the last sub-game, each side independently builds the report from its own log. Totals and
-   bonus/points claims MUST be **derived** from per-sub-game results by the scoring table — never
-   hand-declared — so agreement on sub-games implies agreement on totals.
-2. Canonicalize (§2) → `report_hash` (§6.5).
-3. **Two-phase confirm** (EX06-proven mechanism, now a typed trailer): send a message to the
-   opponent's cop mailbox whose trailer is
-   `{"v":1,"type":"report_sha","match_id":"<id>","sha":"<hex64>","prev":"<hex64>","prev_recv":"<hex64>"}`
-   — `prev` = hash of the exact bytes of your last transmitted `move` trailer of the final
-   sub-game, `prev_recv` = of the last one received, binding the settlement claim into the game
-   transcript. Poll for theirs. Email is sent **only** on byte-identical match, by both teams — to
-   the `report_email` from the match card, subject to the `stage` interlock (§4.1). **The email
-   body MUST be the exact canonical bytes that were hashed — never a re-serialization** (no
-   pretty-printing, no `ensure_ascii` changes: an EX06 series nearly scored 0 because hashes
-   matched but one side's *email* was a re-serialization — graders compare emails, not hashes).
-4. On mismatch (PROPOSED escalation, replaces "humans stare at JSONs"):
-   a. Exchange full canonical report bytes.
-   b. Machine-diff; classify the first diverging field.
-   c. Sub-game result divergence → that sub-game is void → re-run it (§8.3) → rebuild → re-confirm.
-   d. Metadata divergence (names, ordering) → fix to the match card's `agreement` values →
-      re-confirm.
-   e. Nothing is ever emailed without a confirmed match (mismatched reports score 0 for both).
-5. Both teams SHOULD commit their per-ply JSONL transcript alongside the emailed report, and a
-   committed transcript MUST include the **verbatim trailer line** (exact bytes, sent *and*
-   received) for every message — the `prev`/`prev_recv` DAG can only be verified against raw
-   bytes, and a transcript without them is not checkable evidence. The interlocked chains make
-   the pair of committed logs self-authenticating proof that the game happened as reported.
-
-## 10. Conformance
-
-A team is **league-conformant** when:
-
-1. **Vectors pass** — its implementation reproduces every fixture in `vectors/`
-   (`python verify_vectors.py` checks the fixtures against the reference constructions; port the
-   checks into your own test suite against *your* implementation). This includes the **negative**
-   vectors: your canonicalizer must *reject* the float cases.
-2. **Wire discipline** — trailers constructed programmatically, parsed without LLM involvement;
-   prose interpreted by LLM only; hold-don't-advance on unexpected input; maintains the
-   `prev`/`prev_recv` chain and stores the raw bytes of every sent and received trailer (§5.2, §9).
-3. **Handshake discipline** — refuses to start on protocol/config hash mismatch.
-4. **Settlement discipline** — derived totals; never emails without a confirmed `report_sha` match;
-   respects the `stage` interlock.
-
-This repo's CI regenerates all vectors and the worked example on every push and fails on any drift.
-Planned for v1.0: a record-replay reference transcript (drive your client against a recorded
-conformant opponent, offline), a public **sparring server** any team can play against at will, and
-a dockerized quickstart standing up a dummy conformant endpoint for zero-server handshake testing
-(issue #2).
-
-## 11. Open questions — v1.0 blockers (await the official assignment PDF)
-
-| # | Question | Impacts |
-|---|---|---|
-| 1 | Exact scent mechanic (what is observed, decay, who computes it) | §7 Mode B vs. a different observability model |
-| 2 | Board size / rounds / scoring table / barrier rules | match card values, §6.4 `n`, report math |
-| 3 | Official report JSON schema + destination email | §6.5, §9 |
-| 4 | Does the assignment text constrain shared league services? | scope of Appendix B — the lecturer's general stance is that anything not explicitly specified is open to teams' own interpretation, so Appendix B assumes such services are fair game |
-| 5 | Tournament structure (round-robin? scheduling windows? exact diminishing-returns formula?) | match card, fixture rounds (Appendix B), sparring server priority |
-| 6 | Is the commit-reveal requirement per-ply, per-game, or both? | §6.2/§7 |
-
-## Appendix A — provenance
-
-The constructions in §2, §3, §5 (as a pipe-delimited precursor), §6.2/§6.3/§6.5, and §9 were
-implemented independently by two teams in EX06 (course 203.3763, University of Haifa), played live
-over Cloudflare tunnels, and settled with a byte-identical report hash confirmed by both sides
-before emailing. The trailer format (§5), match card (§4.1), joint seed (§4.2), sequencing fields,
-and mismatch escalation (§9 step 4) are draft improvements distilled from that experience — each
-replaces a step that previously required live human debugging. The v0.2 revision incorporates the
-EX06 post-mortem review contributed by the partner team (issue #1).
-
-## Appendix B — league services (PROPOSED, non-normative)
-
-The protocol above requires **no central party** — any two conformant teams can play peer-to-peer
-with nothing but a match card. The services below are optional league infrastructure that make a
-6–8-team season smoother. They are deliberately **passive**: none of them executes game logic, so
-the peer topology and the trust model (§1) are unchanged, and an outage of any service never blocks
-a match (fallback: direct peer play with a manually exchanged match card).
-
-- **Lobby / registry.** Recommended implementation: a **league GitHub repository**, not a hosted
-  service. The roster is one JSON file per team (group name, repo, MCP URLs, contact), maintained
-  by PR; each scheduled match gets an Issue carrying its match card (§4.1); at settlement both
-  teams post their report hash and links to their committed transcripts as comments; `transport`
-  updates (fresh tunnel URLs) are posted as comments too. That yields registration, scheduling,
-  notifications, and a public timestamped coordination trail with zero hosting and no single owner
-  — and it degrades gracefully: any match can still run from a hand-exchanged match card. The
-  lobby never holds bearer tokens — those stay pairwise and out of band. If the official scoring
-  turns out to be order-dependent (class remarks hinted at diminishing returns per game played,
-  coupled to how many games the *opponent* has played), the fixture table should run
-  **synchronized rounds**, football-league style: a deterministic round-robin (circle method over
-  the sorted roster) where in round `r` every team plays its `r`-th series — so no pairing is
-  advantaged by scheduling luck, and the schedule is derivable by anyone from the roster alone.
-- **Notary / witness (optional, deferred).** An append-only log where both sides of a live match
-  POST each ply's `{match_id, game, ply, state}` hash as they play. Since both peers post
-  independently, a desync is detected the moment two entries for the same ply disagree — with
-  neutral, timestamped evidence of exactly where the divergence began. Verification-only; it never
-  computes game state. Unlike the lobby this needs a real hosted service (an Issue thread cannot
-  take per-ply traffic), and it is the most optional item here: the peers' own `state` comparison
-  (§6.3) already detects desync instantly, the `prev` chain (§5.2) makes committed transcripts
-  self-authenticating, and the void/re-run rules (§8.3) resolve disputes without third-party
-  evidence — so this exists only if the league decides it wants live witnessing.
-- **Sparring server.** An always-on conformant opponent any team can play against at will, for
-  integration testing without needing a partner team online (the single biggest testing gap in
-  EX06). We (ImreEyal) intend to host the first one once v1.0 exists.
-- **Demo league + report sink.** Before the official season, run one or two full fixture rounds as
-  a dress rehearsal: real servers, real tokens, real games, real settlement — identical to the real
-  thing except `stage: "demo"` routes reports to a league test mailbox instead of the lecturer.
-  The sink can run an automated checker on arriving mail (schema validation + byte-identity of the
-  two teams' reports) and publish pass/fail per match, so every team's **full** pipeline — the
-  email leg included — is certified before the first game that counts. Nothing reaches the
-  lecturer's address until every team jointly declares the official season open. With
-  order-dependent scoring this matters doubly: your first *counted* game should never be your
-  first game ever.
-
-Hosting model: any team can run any service; nothing about them is privileged. If the league wants
-them, their APIs get specified in v1.0.
-
-## Appendix C — transport field notes (non-normative, contributed)
-
-Operational experience from the EX06 live runs (contributed by anrbj666 in issue #1; ours matched
-where we tried the same things). Not protocol — just hours saved:
-
-- **ngrok free tier is unfit for match traffic:** ~20 connections/min cap trips mid-sub-game; idle
-  streams get dropped; a single free domain round-robining both cop and thief traffic confuses
-  clients. Fine for a smoke test, not for a series.
-- **Cloudflare quick tunnels** (`cloudflared tunnel --url`) worked for full EX06 series but the
-  URL changes on every restart — with the v0.2 `agreement`/`transport` split this no longer breaks
-  the handshake; just re-announce the new URL (lobby Issue comment or hello prose).
-- **A named Cloudflare tunnel** (free, needs an account) keeps a stable hostname across restarts —
-  the proven low-effort setup for a scheduled season. Path-route one hostname to both local
-  servers (`/cop/mcp`, `/thief/mcp`) and keep the tunnel process persistent.
-- Free-tier PaaS (Render et al.) sleeps on idle — wake both sides *before* `scheduled_utc`, and
-  remember the co-location constraint: the key-holding orchestrator must sit next to its mailbox
-  server, so a PaaS mailbox alone cannot host your side of a live match.
+The constructions here were confirmed byte-for-byte against the official reference implementation
+(`github.com/rmisegal/Game-P2P-Cop-Chase`, code v3.0.0): the canonical form, the
+`SHA256(canonical|nonce)` commit, the terms signature, the `game_uid` derivation, and the pheromone
+math. The book (© Dr. Segal) and the reference code (Educational-Use-only) are cited and linked,
+never copied — every vector in this repo is generated from our own synthetic inputs by
+`gen_vectors.py`. Hash outputs are facts; the algorithms are the book's; the words here are ours.

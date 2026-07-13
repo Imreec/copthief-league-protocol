@@ -16,7 +16,7 @@ jobs:
         run: |
           python gen_vectors.py
           python examples/gen_sample_exchange.py
-      - name: Verify all fixtures (positive + negative)
+      - name: Verify all fixtures (core + enhancements)
         run: python verify_vectors.py
       - name: Fail on any drift between reference code and committed fixtures
         run: git diff --exit-code
