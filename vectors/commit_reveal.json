@@ -70,6 +70,6 @@
     "reference_form": "aa6420e2d3a907d6c140856caecbb351b4d5ad98e381549c28268669af378dcc",
     "book_ch5_listing_form": "833e47c675448a9072660b984d8514a5786792372f415caea1b0d4348b301875",
     "book_audit_snippet_form": "8041fe9546f17d67b1c60b881b79daf20f932a2dcbc7ee87fb92c4c1bdfaa9a0",
-    "note": "Same inputs, the release's three published constructions — all three hashes differ. Only reference_form is this kit's CORE form (SPEC 'Commit-reveal'). If your commits equal one of the other two, you implemented from one of the book's illustrative listings — switch to the reference form."
+    "note": "The same sealed record under the release's three published constructions — all three hashes differ. reference_form and book_ch5_listing_form hash the full record; book_audit_snippet_form structurally consumes only nonce|move, so it binds neither state nor intent (position/bluff tampering would go undetected). Only reference_form is this kit's CORE form (SPEC 'Commit-reveal'). If your commits equal one of the other two, you implemented from one of the book's illustrative listings — switch to the reference form."
   }
 }

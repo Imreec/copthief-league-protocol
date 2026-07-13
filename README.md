@@ -21,11 +21,14 @@ both sides. There is no vector in the book to catch this before match day. There
 
 It gets sharper: the release itself publishes **three inconsistent commit constructions** (the
 book's ch.5 listing, its audit-chapter snippet, and the reference implementation each hash
-differently — the book's own clarification page makes listings non-binding, so nothing resolves
-it). Implement from the wrong page in good faith and you fail every audit against a team that
-implemented from another. This kit pins one form (the reference's), documents the contradiction,
-and ships a `divergent_forms` vector that hashes one input under all three — so a failing team can
-see in seconds which construction it accidentally built.
+differently — and the book's own clarification page makes printed listings non-binding, so the
+choice formally falls to the teams). Implement from the wrong page in good faith and you fail
+every audit against a team that implemented from another. This kit pins the reference's form —
+which is also the only one of the three that binds the full record (the audit-snippet form hashes
+just `nonce|move`, leaving `state` and `intent` unbound) — documents the contradiction per the
+book's academic-freedom clause, and ships a `divergent_forms` vector hashing the same sealed
+record under all three, so a failing team can see in seconds which construction it accidentally
+built.
 
 Your competitive grade is a **league rank → 75–100**, and it's driven by how many *distinct*
 opponents you can finish a clean game with (first meeting only; up to 10). Every team that can't

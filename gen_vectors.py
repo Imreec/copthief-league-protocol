@@ -74,9 +74,12 @@ def gen_commit_reveal() -> None:
         "book_audit_snippet_form": hashlib.sha256(
             f"{div_nonce}|{div_payload['move']}".encode()
         ).hexdigest(),
-        "note": "Same inputs, the release's three published constructions — all three hashes "
-                "differ. Only reference_form is this kit's CORE form (SPEC 'Commit-reveal'). If "
-                "your commits equal one of the other two, you implemented from one of the book's "
+        "note": "The same sealed record under the release's three published constructions — all "
+                "three hashes differ. reference_form and book_ch5_listing_form hash the full "
+                "record; book_audit_snippet_form structurally consumes only nonce|move, so it "
+                "binds neither state nor intent (position/bluff tampering would go undetected). "
+                "Only reference_form is this kit's CORE form (SPEC 'Commit-reveal'). If your "
+                "commits equal one of the other two, you implemented from one of the book's "
                 "illustrative listings — switch to the reference form.",
     }
     _write("commit_reveal.json", {

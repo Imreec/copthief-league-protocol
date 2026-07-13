@@ -171,8 +171,9 @@ def run() -> int:
     for i, v in enumerate(cr["vectors"]):
         got = ref_commit(v["payload"], v["nonce"])
         failures += not check(f"commit #{i} ({v.get('note', '')})", got == v["commit"], f"got {got}")
-    # The release's three published commit constructions hashed over ONE identical input — they
-    # must all be pinned and mutually distinct (SPEC 'Commit-reveal': the contradiction, resolved).
+    # The release's three published commit constructions over the same sealed record (the audit-
+    # snippet form consumes only its nonce|move fields) — all pinned and mutually distinct
+    # (SPEC 'Commit-reveal': the contradiction, resolved).
     dv = cr["divergent_forms"]
     got_ref = ref_commit(dv["payload"], dv["nonce"])
     got_ch5 = canonical_hash({**dv["payload"], "nonce": dv["nonce"]})

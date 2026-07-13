@@ -108,10 +108,14 @@ Note the nonce is **pipe-appended to the canonical string**, not placed inside t
 > preimage — so the choice is formally open. But it is an **interop constraint**: the opponent's
 > audit re-hashes your revealed records, so both sides must use the same form or the audit voids
 > the match. This kit pins the **reference form** — it is what the lecturer's own tooling runs and
-> what most teams will build against. If your commits don't verify, the `divergent_forms` entry in
-> `vectors/commit_reveal.json` hashes one identical input under all three constructions, so you can
-> identify which one you implemented. A pair that knowingly prefers a different form must sign it
-> into `config/game.json` and document it.
+> what most teams will build against. It is also the only one of the three that is
+> cryptographically sufficient: the audit-snippet form consumes only `nonce` and `move`, so it
+> binds neither `state` nor `intent` — a record's position or bluff verdict could be rewritten
+> after the fact without changing that hash. If your commits don't verify, the `divergent_forms`
+> entry in `vectors/commit_reveal.json` hashes the same sealed record under all three
+> constructions (the audit-snippet form, by its nature, over just the record's `nonce` and
+> `move`), so you can identify which one you implemented. A pair that knowingly prefers a
+> different form must sign it into `config/game.json` and document it.
 
 - **Self-verify** needs no cross-team agreement — you re-hash your own payloads. **Audit is
   cross-team**: your opponent runs `verify(payload, nonce, commit)` over *your* revealed records,
