@@ -1,59 +1,69 @@
 {
-  "description": "Canonical JSON form: sort_keys, separators (',',':'), ensure_ascii (astral -> surrogate pairs), UTF-8, floats rejected (see negative.json)",
+  "description": "The one canonical form every hash uses: json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(',', ':')), UTF-8. ensure_ascii=FALSE is the load-bearing detail — see SPEC section 'Canonical JSON'.",
+  "serialization": {
+    "sort_keys": true,
+    "ensure_ascii": false,
+    "separators": [
+      ",",
+      ":"
+    ]
+  },
   "vectors": [
     {
       "object": {
         "b": 1,
-        "a": [
+        "a": {
+          "d": 4,
+          "c": 3
+        }
+      },
+      "note": "sorted keys, nested object",
+      "canonical": "{\"a\":{\"c\":3,\"d\":4},\"b\":1}",
+      "sha256": "943d56ce0b02b80a8afcd12d849426226b68f2d8cd2840af8f6f93067f14c360"
+    },
+    {
+      "object": {
+        "hint": "אני ליד הכיכר",
+        "move": "MOVE:N"
+      },
+      "note": "Hebrew hint stays native UTF-8 (ensure_ascii=False)",
+      "canonical": "{\"hint\":\"אני ליד הכיכר\",\"move\":\"MOVE:N\"}",
+      "sha256": "7461690c1167e6a4b44927a507e81aa38f290d9be8f662a1c0ea689d76b8bcc7"
+    },
+    {
+      "object": {
+        "emoji": "🙂",
+        "x": 1
+      },
+      "note": "astral emoji stays native — NOT \\uXXXX surrogate-escaped",
+      "canonical": "{\"emoji\":\"🙂\",\"x\":1}",
+      "sha256": "a16621d5cba0b8a1ce5909e74c0d2679295ae11eec4ccbf5f7e8550ecea3690d"
+    },
+    {
+      "object": {
+        "decay_per_step": 0.1,
+        "emit_intensity": 0.9,
+        "min_center_intensity": 0.5,
+        "ram_gb": 31.8,
+        "vram_gb": 6.0
+      },
+      "note": "floats permitted; must be shortest round-trip repr",
+      "canonical": "{\"decay_per_step\":0.1,\"emit_intensity\":0.9,\"min_center_intensity\":0.5,\"ram_gb\":31.8,\"vram_gb\":6.0}",
+      "sha256": "62469a4afd756d527d881563440dbd82e2bc694cfd97516adacecb40a178483e"
+    },
+    {
+      "object": {
+        "a": true,
+        "b": null,
+        "c": [
+          1,
           2,
-          1
-        ],
-        "nested": {
-          "z": "x",
-          "y": [
-            0
-          ]
-        }
+          3
+        ]
       },
-      "canonical": "{\"a\":[2,1],\"b\":1,\"nested\":{\"y\":[0],\"z\":\"x\"}}",
-      "sha256": "de1a86a57ba9d1b9ed57e4c609c1f465490dd358b29b7c30b314abea83c66c69"
-    },
-    {
-      "object": {
-        "unicode": "שלום",
-        "ascii": "hi"
-      },
-      "canonical": "{\"ascii\":\"hi\",\"unicode\":\"\\u05e9\\u05dc\\u05d5\\u05dd\"}",
-      "sha256": "f06b0930d695ec0f759123ef0feb85efcbbfd3f5516f63ab919baffc10ba724e"
-    },
-    {
-      "object": {
-        "empty_list": [],
-        "empty_obj": {},
-        "null": null,
-        "bool": true
-      },
-      "canonical": "{\"bool\":true,\"empty_list\":[],\"empty_obj\":{},\"null\":null}",
-      "sha256": "28b792d42dcf03bdb1a08267e080855658fc93a530a6a54da3473a4d6f562c69"
-    },
-    {
-      "object": {
-        "report_type": "bonus_game",
-        "totals_by_group": {
-          "Team-A": 80,
-          "Team-B": 60
-        }
-      },
-      "canonical": "{\"report_type\":\"bonus_game\",\"totals_by_group\":{\"Team-A\":80,\"Team-B\":60}}",
-      "sha256": "e8f42c20d33a961f495da0c8051e5e99c829a63cb1d36355bdb3f0df8b746170"
-    },
-    {
-      "object": {
-        "astral": "🙂",
-        "note": "surrogate-pair escaping (SPEC §2)"
-      },
-      "canonical": "{\"astral\":\"\\ud83d\\ude42\",\"note\":\"surrogate-pair escaping (SPEC \\u00a72)\"}",
-      "sha256": "6410e22d2a99e8717701f60c4fb05e8bce614937bef9c929f7437cb92474ea79"
+      "note": "JSON literals + int array",
+      "canonical": "{\"a\":true,\"b\":null,\"c\":[1,2,3]}",
+      "sha256": "6e96c2da7b746f9e47d1bd8ee49e5e385de926c51e3a7f3fe9886ca02a29d351"
     }
   ]
 }

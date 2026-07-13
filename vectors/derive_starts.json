@@ -1,423 +1,59 @@
 {
-  "description": "Seed-derived start cells (SPEC 6.4): for draw=0..63: digest=sha256(f'{seed}:{index}:{draw}'); cop=int(digest[0:4])%n^2, thief=int(digest[4:8])%n^2; accept iff chebyshev>=d_min where d_min=min(max(ceil(n/3),2),n-1); no draw accepted -> fallback cop=[0,0], thief=[n-1,n-1]. cell i -> [i//n, i%n]. Re-runs: index = game*16 + attempt, attempt <= 15.",
+  "description": "ENHANCEMENT (not required by the book): seeded asymmetric starts, a structural tie-breaker if a pair prefers randomized fair starts over the book's fixed configured cop_start/thief_start. 4 digest bytes per cell, minimum-Chebyshev deterministic re-draw, index = game*16 + attempt.",
   "vectors": [
     {
-      "seed": "league-spec-v0.2-example",
+      "seed": "seed-alpha",
       "index": 0,
-      "n": 5,
+      "n": 7,
       "cop": [
-        2,
-        2
-      ],
-      "thief": [
-        0,
-        2
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 1,
-      "n": 5,
-      "cop": [
-        3,
-        3
-      ],
-      "thief": [
-        1,
-        0
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 2,
-      "n": 5,
-      "cop": [
-        4,
-        2
-      ],
-      "thief": [
-        0,
-        0
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 16,
-      "n": 5,
-      "cop": [
-        2,
-        1
-      ],
-      "thief": [
-        0,
-        0
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 17,
-      "n": 5,
-      "cop": [
-        2,
-        0
-      ],
-      "thief": [
         0,
         1
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 0,
-      "n": 8,
-      "cop": [
-        2,
-        1
-      ],
-      "thief": [
-        7,
-        3
-      ],
-      "draws": 2
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 1,
-      "n": 8,
-      "cop": [
-        7,
-        3
-      ],
-      "thief": [
-        2,
-        2
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 2,
-      "n": 8,
-      "cop": [
-        0,
-        5
-      ],
-      "thief": [
-        3,
-        5
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 16,
-      "n": 8,
-      "cop": [
-        6,
-        7
-      ],
-      "thief": [
-        5,
-        4
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 17,
-      "n": 8,
-      "cop": [
-        7,
-        3
-      ],
-      "thief": [
-        0,
-        5
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 0,
-      "n": 10,
-      "cop": [
-        6,
-        2
-      ],
-      "thief": [
-        7,
-        7
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 1,
-      "n": 10,
-      "cop": [
-        9,
-        5
       ],
       "thief": [
         4,
-        0
-      ],
-      "draws": 1
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 2,
-      "n": 10,
-      "cop": [
-        9,
-        7
-      ],
-      "thief": [
-        2,
-        5
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 16,
-      "n": 10,
-      "cop": [
-        5,
-        5
-      ],
-      "thief": [
-        1,
-        4
-      ],
-      "draws": 1
-    },
-    {
-      "seed": "league-spec-v0.2-example",
-      "index": 17,
-      "n": 10,
-      "cop": [
-        3,
-        5
-      ],
-      "thief": [
-        0,
         1
       ],
       "draws": 0
     },
     {
-      "seed": "0123456789abcdef",
-      "index": 0,
-      "n": 5,
-      "cop": [
-        1,
-        2
-      ],
-      "thief": [
-        3,
-        4
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "0123456789abcdef",
+      "seed": "seed-alpha",
       "index": 1,
-      "n": 5,
-      "cop": [
-        2,
-        3
-      ],
-      "thief": [
-        4,
-        2
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 2,
-      "n": 5,
+      "n": 7,
       "cop": [
         1,
-        1
-      ],
-      "thief": [
-        3,
-        1
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 16,
-      "n": 5,
-      "cop": [
-        2,
         4
       ],
       "thief": [
-        1,
-        0
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 17,
-      "n": 5,
-      "cop": [
-        0,
-        4
-      ],
-      "thief": [
-        2,
-        1
-      ],
-      "draws": 1
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 0,
-      "n": 8,
-      "cop": [
-        2,
-        7
-      ],
-      "thief": [
-        3,
-        3
-      ],
-      "draws": 1
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 1,
-      "n": 8,
-      "cop": [
-        6,
-        0
-      ],
-      "thief": [
-        7,
-        4
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 2,
-      "n": 8,
-      "cop": [
         5,
-        0
-      ],
-      "thief": [
-        1,
         2
       ],
-      "draws": 0
+      "draws": 1
     },
     {
-      "seed": "0123456789abcdef",
-      "index": 16,
-      "n": 8,
-      "cop": [
-        6,
-        6
-      ],
-      "thief": [
-        0,
-        7
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 17,
-      "n": 8,
-      "cop": [
-        2,
-        7
-      ],
-      "thief": [
-        2,
-        3
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "0123456789abcdef",
+      "seed": "seed-beta",
       "index": 0,
       "n": 10,
       "cop": [
-        5,
-        7
-      ],
-      "thief": [
-        1,
-        9
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 1,
-      "n": 10,
-      "cop": [
-        8,
-        8
-      ],
-      "thief": [
-        7,
+        0,
         2
       ],
-      "draws": 0
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 2,
-      "n": 10,
-      "cop": [
-        1,
-        7
-      ],
       "thief": [
-        9,
-        8
-      ],
-      "draws": 1
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 16,
-      "n": 10,
-      "cop": [
-        1,
-        4
-      ],
-      "thief": [
-        5,
-        5
-      ],
-      "draws": 0
-    },
-    {
-      "seed": "0123456789abcdef",
-      "index": 17,
-      "n": 10,
-      "cop": [
         8,
         3
       ],
+      "draws": 0
+    },
+    {
+      "seed": "seed-beta",
+      "index": 16,
+      "n": 10,
+      "cop": [
+        5,
+        0
+      ],
       "thief": [
-        3,
-        9
+        6,
+        5
       ],
       "draws": 0
     }

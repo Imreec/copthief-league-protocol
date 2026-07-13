@@ -1,19 +1,19 @@
 {
-  "description": "SPEC §4.2 trustless coin flip: commit_i = sha256(canonical({'seed_share': r_i})); seed = sha256(canonical({'shares': [r_group_1, r_group_2]}))",
+  "description": "ENHANCEMENT (not required by the book): trustless coin flip for a shared seed, if a pair opts into randomized starts instead of the book's fixed configured starts. commit=SHA256(canonical({'seed_share':r})); seed=SHA256(canonical({'shares':[r1,r2]})).",
   "vectors": [
     {
-      "share_group_1": "a3f1c2d4e5b60718293a4b5c6d7e8f90",
-      "share_group_2": "00ff00ff00ff00ff00ff00ff00ff00ff",
-      "commit_group_1": "25e4d453de073e34a0e8211bc008a62129f42ef7f41d4791a4dd579a902dbc02",
-      "commit_group_2": "a891521a7025687518b4d4bddccddeea86a91134bd148d001638cdc6010f2918",
-      "seed": "3c9e73fe2117dd7f3b5211961398032d8f53317c8acb47bed45db2ed3c11d8fb"
+      "share_group_1": "3f9a1c",
+      "share_group_2": "b27e04",
+      "commit_group_1": "89b03cb24ce77567b1392f51f9cb0a88c511d3f204094f749d57bfae25733307",
+      "commit_group_2": "f5bc543ba932ccf7243725e322bfad4370d10d866e0d7188b9583c8d4b32730c",
+      "seed": "8acd85f340798ab7a963b9239288b17e283da55b7e5a7c9fe67a708527a6a0fb"
     },
     {
-      "share_group_1": "deadbeef",
-      "share_group_2": "cafebabe",
-      "commit_group_1": "ad288a2c6dde1c0bc8b3932fd822c44d83b5425ea4e3aef5d34bc2c106f455a5",
-      "commit_group_2": "82a03128535136a585e754ebe55eb971ca5338032e106fdef0386344143fe012",
-      "seed": "2c27b4223342b4ca12af4c8882b687263c28459fce4a6c663adb47b2c29eaa58"
+      "share_group_1": "00",
+      "share_group_2": "ffffffffffffffff",
+      "commit_group_1": "6890302162396f9cb06da4d49776255b3746b1f702fca4a03356b8bb5eb45c1f",
+      "commit_group_2": "95c11392831e02502632e886f1cfa5dcd6a6d8e9dfe27f50f3c9b86159ab542b",
+      "seed": "1fe8f8457492b1082b444e5c958c4d9704b84a91b658ccbe100b7c9ff2b1b817"
     }
   ]
 }

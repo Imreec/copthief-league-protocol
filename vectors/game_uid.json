@@ -1,0 +1,57 @@
+{
+  "description": "Deterministic shared id both peers reproduce with no round-trip. game_uid = UUID(SHA256(canonical(terms)|'|'.join(sorted([g_a,g_b])))[:16]). Group order does not matter (ids are sorted first).",
+  "vectors": [
+    {
+      "terms": {
+        "board_size": 7,
+        "smell_grid_size": 5,
+        "decay_per_step": 0.1,
+        "emit_intensity": 0.9,
+        "min_center_intensity": 0.5,
+        "max_steps": 35,
+        "barriers_max": 14,
+        "setting": "Haifa",
+        "hint_max_words": 15,
+        "thief_start": [
+          3,
+          3
+        ],
+        "cop_start": [
+          0,
+          0
+        ],
+        "num_games": 1
+      },
+      "group_a": "team-aleph",
+      "group_b": "team-bet",
+      "game_uid": "4ef6aeda-3051-18a0-339c-6869f43d77aa",
+      "note": "canonical order"
+    },
+    {
+      "terms": {
+        "board_size": 7,
+        "smell_grid_size": 5,
+        "decay_per_step": 0.1,
+        "emit_intensity": 0.9,
+        "min_center_intensity": 0.5,
+        "max_steps": 35,
+        "barriers_max": 14,
+        "setting": "Haifa",
+        "hint_max_words": 15,
+        "thief_start": [
+          3,
+          3
+        ],
+        "cop_start": [
+          0,
+          0
+        ],
+        "num_games": 1
+      },
+      "group_a": "team-bet",
+      "group_b": "team-aleph",
+      "game_uid": "4ef6aeda-3051-18a0-339c-6869f43d77aa",
+      "note": "groups swapped -> identical uid (sorted)"
+    }
+  ]
+}

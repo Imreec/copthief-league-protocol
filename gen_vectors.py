@@ -1,196 +1,204 @@
-"""Regenerate every fixture under ``vectors/`` from the reference constructions.
+"""Regenerate every fixture under ``vectors/`` from the reference constructions in
+``verify_vectors.py``. CI runs this and fails on any drift (the committed vectors must equal a
+fresh regeneration). Inputs here are synthetic — our own values, not the reference simulator's
+content — so the fixtures pin the *algorithms*, not anyone's copyrighted data.
 
-Deterministic: CI runs this and fails on any diff, so the committed fixtures always match the
-reference implementation in ``verify_vectors.py``. The §6.2/§6.3/canonical values are unchanged
-from v0.1 and byte-identical to what the EX06 implementation produced; §6.4 values are v0.2
-(new construction, see SPEC changelog).
+Run: ``python gen_vectors.py`` then ``python verify_vectors.py``.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
-from verify_vectors import (
-    canonical_bytes,
-    canonical_hash,
-    ref_commit,
-    ref_derive_starts,
-    ref_joint_seed,
-    ref_share_commit,
-    ref_state_hash,
-)
+import verify_vectors as ref
 
 VECTORS = Path(__file__).parent / "vectors"
 
-# --- canonical JSON edge cases -------------------------------------------------------------
-canon_cases = [
-    {"b": 1, "a": [2, 1], "nested": {"z": "x", "y": [0]}},
-    {"unicode": "שלום", "ascii": "hi"},
-    {"empty_list": [], "empty_obj": {}, "null": None, "bool": True},
-    {"report_type": "bonus_game", "totals_by_group": {"Team-A": 80, "Team-B": 60}},
-    {"astral": "🙂", "note": "surrogate-pair escaping (SPEC §2)"},
-]
-canonical_json = {
-    "description": "Canonical JSON form: sort_keys, separators (',',':'), ensure_ascii "
-    "(astral -> surrogate pairs), UTF-8, floats rejected (see negative.json)",
-    "vectors": [
-        {"object": o, "canonical": canonical_bytes(o).decode(), "sha256": canonical_hash(o)}
-        for o in canon_cases
-    ],
-}
 
-# --- position commits ------------------------------------------------------------------------
-commit_cases = [
-    ([2, 3], "abc123"),
-    ([0, 0], "00"),
-    ([9, 9], "deadbeefcafe"),
-    ([4, 7], "f" * 32),
-]
-position_commit = {
-    "description": "SHA-256 position commitments: sha256(canonical({'nonce':s,'pos':[r,c]}))",
-    "vectors": [
-        {
-            "pos": pos,
-            "nonce": nonce,
-            "preimage": canonical_bytes({"nonce": nonce, "pos": pos}).decode(),
-            "sha256": ref_commit(pos, nonce),
-        }
-        for pos, nonce in commit_cases
-    ],
-}
-
-# --- state hashes ----------------------------------------------------------------------------
-state_cases: list[tuple[list[list[int]], str, int, str | None]] = [
-    ([[1, 1]], "cop", 4, None),
-    ([], "thief", 0, None),
-    ([[2, 2], [0, 1]], "thief", 13, "unsorted input -> sorted preimage"),
-    ([], "cop", 49, None),
-    (
-        [],
-        "cop",
-        2,
-        "TERMINAL ply: capture on the cop's 2nd ply — turn stays on the mover (SPEC §6.3); "
-        "reproduces the final frame of an EX06 live sub-game",
-    ),
-]
-state_hash = {
-    "description": "Common-state hashes: sha256(canonical({'barriers':sorted,'move_count':n,'turn':s})). "
-    "Terminal-ply rule: turn stays on the mover of a game-ending ply.",
-    "vectors": [
-        {
-            "barriers": b,
-            "turn": t,
-            "move_count": mc,
-            **({"note": note} if note else {}),
-            "sha256": ref_state_hash(b, t, mc),
-        }
-        for b, t, mc, note in state_cases
-    ],
-}
-
-# --- seed -> starts (v0.2 construction) ------------------------------------------------------
-starts_vectors = []
-for seed in ["league-spec-v0.2-example", "0123456789abcdef"]:
-    for n in [5, 8, 10]:
-        for index in [0, 1, 2, 16, 17]:  # 16/17 = sub-game 1 attempts 0/1 (index = g*16 + a)
-            cop, thief, draws = ref_derive_starts(seed, index, n)
-            starts_vectors.append(
-                {"seed": seed, "index": index, "n": n, "cop": cop, "thief": thief, "draws": draws}
-            )
-derive_starts = {
-    "description": "Seed-derived start cells (SPEC 6.4): for draw=0..63: digest=sha256(f'{seed}:{index}:{draw}'); "
-    "cop=int(digest[0:4])%n^2, thief=int(digest[4:8])%n^2; accept iff chebyshev>=d_min where "
-    "d_min=min(max(ceil(n/3),2),n-1); no draw accepted -> fallback cop=[0,0], thief=[n-1,n-1]. "
-    "cell i -> [i//n, i%n]. Re-runs: index = game*16 + attempt, attempt <= 15.",
-    "vectors": starts_vectors,
-}
-
-# --- match card ------------------------------------------------------------------------------
-CARD = {
-    "agreement": {
-        "protocol": "league/0.3",
-        "match_id": "2026-08-01-aleph-vs-bet",
-        "groups": {"group_1": "Team-Aleph", "group_2": "Team-Bet"},
-        "grid": [10, 10],
-        "rounds": 25,
-        "num_games": 6,
-        "swap_at": 3,
-        "max_barriers": 0,
-        "disclosure": "A",
-        "scent_k": None,
-        "stage": "demo",
-        "report_email": "league-reports@example.com",
-        "seed": "league-spec-v0.2-example",
-        "timeouts": {"per_ply_seconds": 120, "per_subgame_seconds": 1800, "max_messages": 200},
-    },
-    "transport": {
-        "urls": {
-            "group_1_cop": "https://aleph.example/cop/mcp",
-            "group_1_thief": "https://aleph.example/thief/mcp",
-            "group_2_cop": "https://bet.example/cop/mcp",
-            "group_2_thief": "https://bet.example/thief/mcp",
-        },
-        "scheduled_utc": "2026-08-01T18:00:00Z",
-    },
-}
-match_card = {
-    "description": "config_sha256 = sha256(canonical(card['agreement'])) — the 'transport' part is "
-    "NOT hashed (SPEC §4.1), so tunnel restarts / rescheduling never brick the handshake.",
-    "card": CARD,
-    "agreement_canonical": canonical_bytes(CARD["agreement"]).decode(),
-    "config_sha256": canonical_hash(CARD["agreement"]),
-}
-
-# --- joint seed ------------------------------------------------------------------------------
-seed_cases = [
-    ("a3f1c2d4e5b60718293a4b5c6d7e8f90", "00ff00ff00ff00ff00ff00ff00ff00ff"),
-    ("deadbeef", "cafebabe"),
-]
-joint_seed = {
-    "description": "SPEC §4.2 trustless coin flip: commit_i = sha256(canonical({'seed_share': r_i})); "
-    "seed = sha256(canonical({'shares': [r_group_1, r_group_2]}))",
-    "vectors": [
-        {
-            "share_group_1": r1,
-            "share_group_2": r2,
-            "commit_group_1": ref_share_commit(r1),
-            "commit_group_2": ref_share_commit(r2),
-            "seed": ref_joint_seed(r1, r2),
-        }
-        for r1, r2 in seed_cases
-    ],
-}
-
-# --- negative vectors ------------------------------------------------------------------------
-negative = {
-    "description": "Inputs a conformant implementation MUST reject (floats, SPEC §2) and "
-    "commit-binding pairs whose hashes MUST differ (SPEC §6.2).",
-    "reject_floats": [
-        {"x": 7.5},
-        {"totals": {"a": 2.0}},
-        {"nested": [1, [2, [3.5]]]},
-        {"ok": 1, "bad": [True, 0.1]},
-    ],
-    "binding_pairs": [
-        {"pos_a": [2, 3], "nonce_a": "abc123", "pos_b": [2, 3], "nonce_b": "abc124"},
-        {"pos_a": [2, 3], "nonce_a": "abc123", "pos_b": [3, 2], "nonce_b": "abc123"},
-    ],
-}
-
-files = {
-    "canonical_json.json": canonical_json,
-    "position_commit.json": position_commit,
-    "state_hash.json": state_hash,
-    "derive_starts.json": derive_starts,
-    "match_card.json": match_card,
-    "joint_seed.json": joint_seed,
-    "negative.json": negative,
-}
-for name, payload in files.items():
-    (VECTORS / name).write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
-    n_v = len(payload.get("vectors", payload.get("reject_floats", [])))
+def _write(name: str, obj: dict) -> None:
+    text = json.dumps(obj, indent=2, ensure_ascii=False) + "\n"
+    (VECTORS / name).write_text(text, encoding="utf-8")
     print(f"wrote {name}")
-print("done")
+
+
+# --- CORE -------------------------------------------------------------------------------
+
+def gen_canonical_json() -> None:
+    objects = [
+        ({"b": 1, "a": {"d": 4, "c": 3}}, "sorted keys, nested object"),
+        ({"hint": "אני ליד הכיכר", "move": "MOVE:N"}, "Hebrew hint stays native UTF-8 (ensure_ascii=False)"),
+        ({"emoji": "🙂", "x": 1}, "astral emoji stays native — NOT \\uXXXX surrogate-escaped"),
+        ({"decay_per_step": 0.1, "emit_intensity": 0.9, "min_center_intensity": 0.5,
+          "ram_gb": 31.8, "vram_gb": 6.0}, "floats permitted; must be shortest round-trip repr"),
+        ({"a": True, "b": None, "c": [1, 2, 3]}, "JSON literals + int array"),
+    ]
+    _write("canonical_json.json", {
+        "description": "The one canonical form every hash uses: json.dumps(obj, sort_keys=True, "
+                       "ensure_ascii=False, separators=(',', ':')), UTF-8. ensure_ascii=FALSE is "
+                       "the load-bearing detail — see SPEC section 'Canonical JSON'.",
+        "serialization": {"sort_keys": True, "ensure_ascii": False, "separators": [",", ":"]},
+        "vectors": [
+            {"object": o, "note": note, "canonical": ref._canonical_str(o), "sha256": ref.canonical_hash(o)}
+            for o, note in objects
+        ],
+    })
+
+
+def gen_commit_reveal() -> None:
+    cases = [
+        ({"step": 0, "type": "system_spec", "spec": {"os": "Linux", "cpu_cores": 4,
+          "ram_gb": 16.0, "vram_gb": 0.0}, "model": "cli-default", "code_version": "1.0",
+          "group_name": "Example-Team", "sub_game_number": 1},
+         "0f1e2d3c4b5a69788796a5b4c3d2e1f0", "step-0 host-spec record (floats in spec)"),
+        ({"step": 1, "state": "grid=7x7;self=[4, 3];barriers=[]", "position": [4, 3],
+          "move": "MOVE:S", "intent": "truth", "hint": "I keep to the main avenues."},
+         "112233445566778899aabbccddeeff00", "move record, ASCII hint"),
+        ({"step": 2, "state": "grid=7x7;self=[2, 4];barriers=[[1, 1]]", "position": [2, 4],
+          "move": "MOVE:N", "intent": "lie", "hint": "אני ליד הכיכר 🙂"},
+         "deadbeefcafef00dfeedface00c0ffee",
+         "non-ASCII hint — pins ensure_ascii=False; escaping here => opponent's audit re-hash "
+         "mismatches => false tamper_forfeit => both score 0"),
+    ]
+    # The v3.0.0 release publishes three inconsistent commit constructions (book ch.5 listing:
+    # nonce inside the object; book audit snippet: f"{nonce}|{move}"; reference code:
+    # canonical|nonce). The kit pins the reference form; this entry hashes ONE identical input
+    # under all three so a failing team can identify which form it accidentally implemented.
+    div_payload, div_nonce = cases[1][0], cases[1][1]
+    divergent = {
+        "payload": div_payload,
+        "nonce": div_nonce,
+        "reference_form": ref.ref_commit(div_payload, div_nonce),
+        "book_ch5_listing_form": ref.canonical_hash({**div_payload, "nonce": div_nonce}),
+        "book_audit_snippet_form": hashlib.sha256(
+            f"{div_nonce}|{div_payload['move']}".encode()
+        ).hexdigest(),
+        "note": "The same sealed record under the release's three published constructions — all "
+                "three hashes differ. reference_form and book_ch5_listing_form hash the full "
+                "record; book_audit_snippet_form structurally consumes only nonce|move, so it "
+                "binds neither state nor intent (position/bluff tampering would go undetected). "
+                "Only reference_form is this kit's CORE form (SPEC 'Commit-reveal'). If your "
+                "commits equal one of the other two, you implemented from one of the book's "
+                "illustrative listings — switch to the reference form.",
+    }
+    _write("commit_reveal.json", {
+        "description": "Per-step commit-reveal seal. commit = SHA256(canonical_json(payload)|nonce). "
+                       "Self-sealed by each peer; re-hashed by the OPPONENT at audit — so the "
+                       "canonical form must match cross-team even though the payload does not.",
+        "construction": "sha256(utf8(canonical_json(payload) + '|' + nonce))",
+        "vectors": [
+            {"payload": p, "nonce": n, "note": note, "commit": ref.ref_commit(p, n)}
+            for p, n, note in cases
+        ],
+        "divergent_forms": divergent,
+    })
+
+
+def gen_terms_signature() -> None:
+    terms = {
+        "board_size": 7, "smell_grid_size": 5, "decay_per_step": 0.1, "emit_intensity": 0.9,
+        "min_center_intensity": 0.5, "max_steps": 35, "barriers_max": 14, "setting": "Haifa",
+        "hint_max_words": 15, "axis_origin_corner": "top-left", "axis_start_index": 0,
+        "thief_start": [3, 3], "cop_start": [0, 0], "num_games": 1,
+    }
+    nonce = "a1a2a3a4b1b2b3b4c1c2c3c4d1d2d3d4"
+    _write("terms_signature.json", {
+        "description": "Pre-game agreement gate. signature = SHA256(canonical_json(terms)|nonce), "
+                       "the same construction as a commit, over the agreed terms. The opponent "
+                       "re-verifies over the terms it received (which must value-equal its own). "
+                       "The float 0.1 pins shortest round-trip repr — a language that emits "
+                       "'0.10000000000000001' fails the signature and cannot play.",
+        "vectors": [{"terms": terms, "nonce": nonce, "signature": ref.ref_terms_signature(terms, nonce)}],
+    })
+
+
+def gen_game_uid() -> None:
+    terms = {"board_size": 7, "smell_grid_size": 5, "decay_per_step": 0.1, "emit_intensity": 0.9,
+             "min_center_intensity": 0.5, "max_steps": 35, "barriers_max": 14, "setting": "Haifa",
+             "hint_max_words": 15, "thief_start": [3, 3], "cop_start": [0, 0], "num_games": 1}
+    a, b = "team-aleph", "team-bet"
+    _write("game_uid.json", {
+        "description": "Deterministic shared id both peers reproduce with no round-trip. "
+                       "game_uid = UUID(SHA256(canonical(terms)|'|'.join(sorted([g_a,g_b])))[:16]). "
+                       "Group order does not matter (ids are sorted first).",
+        "vectors": [
+            {"terms": terms, "group_a": a, "group_b": b, "game_uid": ref.ref_game_uid(terms, a, b),
+             "note": "canonical order"},
+            {"terms": terms, "group_a": b, "group_b": a, "game_uid": ref.ref_game_uid(terms, b, a),
+             "note": "groups swapped -> identical uid (sorted)"},
+        ],
+    })
+
+
+def gen_pheromone() -> None:
+    emit = [
+        {"center": [3, 3], "intensity": 0.9, "grid_size": 5, "board_size": 7,
+         "note": "full 5x5 field, centre 0.9, falloff 0.3/step"},
+        {"center": [0, 0], "intensity": 0.9, "grid_size": 5, "board_size": 7,
+         "note": "corner emission clipped to board bounds"},
+    ]
+    for e in emit:
+        e["field"] = ref.ref_smell_emit(e["center"], e["intensity"], e["grid_size"], e["board_size"])
+    decay = [
+        {"before": {"3,3": 0.9, "3,4": 0.6, "3,5": 0.3}, "decay": 0.1,
+         "note": "one step of decay by 0.1"},
+        {"before": {"1,1": 0.05}, "decay": 0.1, "note": "clamps to 0.0 at the floor"},
+    ]
+    for d in decay:
+        d["after"] = ref.ref_smell_decay(d["before"], d["decay"])
+    _write("pheromone.json", {
+        "description": "Scent field (book ch.4). Radial emit: half=grid//2, falloff=intensity/"
+                       "(half+1), value=round(max(0,intensity-falloff*chebyshev),3). Decay/step: "
+                       "round(max(0,v-decay),3). Only value>0 crosses the wire as {'r,c': value}. "
+                       "Each peer emits its own and transmits it, so this is a self-test — but a "
+                       "correct port is what makes your belief map behave as the book describes.",
+        "emit": emit, "decay": decay,
+    })
+
+
+# --- ENHANCEMENTS (opt-in, SPEC Appendix A) ----------------------------------------------
+
+def gen_joint_seed() -> None:
+    pairs = [("3f9a1c", "b27e04"), ("00", "ffffffffffffffff")]
+    _write("joint_seed.json", {
+        "description": "ENHANCEMENT (not required by the book): trustless coin flip for a shared "
+                       "seed, if a pair opts into randomized starts instead of the book's fixed "
+                       "configured starts. commit=SHA256(canonical({'seed_share':r})); "
+                       "seed=SHA256(canonical({'shares':[r1,r2]})).",
+        "vectors": [
+            {"share_group_1": s1, "share_group_2": s2,
+             "commit_group_1": ref.ref_share_commit(s1), "commit_group_2": ref.ref_share_commit(s2),
+             "seed": ref.ref_joint_seed(s1, s2)}
+            for s1, s2 in pairs
+        ],
+    })
+
+
+def gen_derive_starts() -> None:
+    cases = [("seed-alpha", 0, 7), ("seed-alpha", 1, 7), ("seed-beta", 0, 10), ("seed-beta", 16, 10)]
+    vectors = []
+    for seed, index, n in cases:
+        cop, thief, draws = ref.ref_derive_starts(seed, index, n)
+        vectors.append({"seed": seed, "index": index, "n": n, "cop": cop, "thief": thief, "draws": draws})
+    _write("derive_starts.json", {
+        "description": "ENHANCEMENT (not required by the book): seeded asymmetric starts, a "
+                       "structural tie-breaker if a pair prefers randomized fair starts over the "
+                       "book's fixed configured cop_start/thief_start. 4 digest bytes per cell, "
+                       "minimum-Chebyshev deterministic re-draw, index = game*16 + attempt.",
+        "vectors": vectors,
+    })
+
+
+def main() -> None:
+    gen_canonical_json()
+    gen_commit_reveal()
+    gen_terms_signature()
+    gen_game_uid()
+    gen_pheromone()
+    gen_joint_seed()
+    gen_derive_starts()
+
+
+if __name__ == "__main__":
+    main()
