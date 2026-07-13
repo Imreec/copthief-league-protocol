@@ -8,6 +8,7 @@ Run: ``python gen_vectors.py`` then ``python verify_vectors.py``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -60,6 +61,24 @@ def gen_commit_reveal() -> None:
          "non-ASCII hint — pins ensure_ascii=False; escaping here => opponent's audit re-hash "
          "mismatches => false tamper_forfeit => both score 0"),
     ]
+    # The v3.0.0 release publishes three inconsistent commit constructions (book ch.5 listing:
+    # nonce inside the object; book audit snippet: f"{nonce}|{move}"; reference code:
+    # canonical|nonce). The kit pins the reference form; this entry hashes ONE identical input
+    # under all three so a failing team can identify which form it accidentally implemented.
+    div_payload, div_nonce = cases[1][0], cases[1][1]
+    divergent = {
+        "payload": div_payload,
+        "nonce": div_nonce,
+        "reference_form": ref.ref_commit(div_payload, div_nonce),
+        "book_ch5_listing_form": ref.canonical_hash({**div_payload, "nonce": div_nonce}),
+        "book_audit_snippet_form": hashlib.sha256(
+            f"{div_nonce}|{div_payload['move']}".encode()
+        ).hexdigest(),
+        "note": "Same inputs, the release's three published constructions — all three hashes "
+                "differ. Only reference_form is this kit's CORE form (SPEC 'Commit-reveal'). If "
+                "your commits equal one of the other two, you implemented from one of the book's "
+                "illustrative listings — switch to the reference form.",
+    }
     _write("commit_reveal.json", {
         "description": "Per-step commit-reveal seal. commit = SHA256(canonical_json(payload)|nonce). "
                        "Self-sealed by each peer; re-hashed by the OPPONENT at audit — so the "
@@ -69,6 +88,7 @@ def gen_commit_reveal() -> None:
             {"payload": p, "nonce": n, "note": note, "commit": ref.ref_commit(p, n)}
             for p, n, note in cases
         ],
+        "divergent_forms": divergent,
     })
 
 

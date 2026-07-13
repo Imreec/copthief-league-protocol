@@ -19,6 +19,14 @@ Hebrew hint like `אני ליד הכיכר` is hashed raw; an implementation tha
 a different hash, the opponent's audit re-hash of your revealed log misses, and the match voids for
 both sides. There is no vector in the book to catch this before match day. There is one here.
 
+It gets sharper: the release itself publishes **three inconsistent commit constructions** (the
+book's ch.5 listing, its audit-chapter snippet, and the reference implementation each hash
+differently — the book's own clarification page makes listings non-binding, so nothing resolves
+it). Implement from the wrong page in good faith and you fail every audit against a team that
+implemented from another. This kit pins one form (the reference's), documents the contradiction,
+and ships a `divergent_forms` vector that hashes one input under all three — so a failing team can
+see in seconds which construction it accidentally built.
+
 Your competitive grade is a **league rank → 75–100**, and it's driven by how many *distinct*
 opponents you can finish a clean game with (first meeting only; up to 10). Every team that can't
 hash-agree with you is a game you can't score. This kit is how a team certifies — alone, on its own

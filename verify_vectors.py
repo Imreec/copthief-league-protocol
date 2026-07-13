@@ -167,9 +167,23 @@ def run() -> int:
         failures += not check(f"canonical #{i} ({v.get('note', '')})", ok, f"got {got!r}")
 
     print("[CORE] commit_reveal.json")
-    for i, v in enumerate(_load("commit_reveal.json")["vectors"]):
+    cr = _load("commit_reveal.json")
+    for i, v in enumerate(cr["vectors"]):
         got = ref_commit(v["payload"], v["nonce"])
         failures += not check(f"commit #{i} ({v.get('note', '')})", got == v["commit"], f"got {got}")
+    # The release's three published commit constructions hashed over ONE identical input — they
+    # must all be pinned and mutually distinct (SPEC 'Commit-reveal': the contradiction, resolved).
+    dv = cr["divergent_forms"]
+    got_ref = ref_commit(dv["payload"], dv["nonce"])
+    got_ch5 = canonical_hash({**dv["payload"], "nonce": dv["nonce"]})
+    got_audit = hashlib.sha256(f"{dv['nonce']}|{dv['payload']['move']}".encode()).hexdigest()
+    ok = (
+        got_ref == dv["reference_form"]
+        and got_ch5 == dv["book_ch5_listing_form"]
+        and got_audit == dv["book_audit_snippet_form"]
+        and len({got_ref, got_ch5, got_audit}) == 3
+    )
+    failures += not check("divergent forms: pinned + mutually distinct", ok)
 
     print("[CORE] terms_signature.json")
     for i, v in enumerate(_load("terms_signature.json")["vectors"]):

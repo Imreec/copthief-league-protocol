@@ -53,5 +53,23 @@
       "note": "non-ASCII hint — pins ensure_ascii=False; escaping here => opponent's audit re-hash mismatches => false tamper_forfeit => both score 0",
       "commit": "2caaeb0a7e656868b85166a9ebe34226bae4fdcb79cb7a0a23759121769d9338"
     }
-  ]
+  ],
+  "divergent_forms": {
+    "payload": {
+      "step": 1,
+      "state": "grid=7x7;self=[4, 3];barriers=[]",
+      "position": [
+        4,
+        3
+      ],
+      "move": "MOVE:S",
+      "intent": "truth",
+      "hint": "I keep to the main avenues."
+    },
+    "nonce": "112233445566778899aabbccddeeff00",
+    "reference_form": "aa6420e2d3a907d6c140856caecbb351b4d5ad98e381549c28268669af378dcc",
+    "book_ch5_listing_form": "833e47c675448a9072660b984d8514a5786792372f415caea1b0d4348b301875",
+    "book_audit_snippet_form": "8041fe9546f17d67b1c60b881b79daf20f932a2dcbc7ee87fb92c4c1bdfaa9a0",
+    "note": "Same inputs, the release's three published constructions — all three hashes differ. Only reference_form is this kit's CORE form (SPEC 'Commit-reveal'). If your commits equal one of the other two, you implemented from one of the book's illustrative listings — switch to the reference form."
+  }
 }

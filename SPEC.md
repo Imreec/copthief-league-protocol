@@ -98,6 +98,21 @@ commit = SHA256( canonical_json(payload) + "|" + nonce )
 Note the nonce is **pipe-appended to the canonical string**, not placed inside the hashed object.
 `vectors/commit_reveal.json`.
 
+> **A contradiction in the book, resolved here** (documented per the book's own academic-freedom
+> clause, which requires naming the contradiction and the choice). The v3.0.0 release publishes
+> three inconsistent commit constructions: the ch.5 listing seals the nonce **inside** the
+> canonical JSON object; the audit-chapter snippet re-hashes `f"{nonce}|{move}"`; and the official
+> reference implementation (`domain/crypto.py`) computes `SHA256(canonical(payload)|nonce)`. The
+> book's clarification page makes printed listings illustrative and non-binding, and the
+> binding-rules layer mandates the *mechanism* (commit-reveal over SHA-256 per step), not the
+> preimage — so the choice is formally open. But it is an **interop constraint**: the opponent's
+> audit re-hashes your revealed records, so both sides must use the same form or the audit voids
+> the match. This kit pins the **reference form** — it is what the lecturer's own tooling runs and
+> what most teams will build against. If your commits don't verify, the `divergent_forms` entry in
+> `vectors/commit_reveal.json` hashes one identical input under all three constructions, so you can
+> identify which one you implemented. A pair that knowingly prefers a different form must sign it
+> into `config/game.json` and document it.
+
 - **Self-verify** needs no cross-team agreement — you re-hash your own payloads. **Audit is
   cross-team**: your opponent runs `verify(payload, nonce, commit)` over *your* revealed records,
   canonicalizing them with *their* serializer. If your serializers disagree on any record — and
@@ -148,6 +163,14 @@ unlike the book's, so the kit pins the math as a self-test. `vectors/pheromone.j
 - **Emission requires the centre to meet `min_center_intensity`** (default `0.5`); the field is
   merged into the trail by max, and decays each step, producing the fading trail the book's
   heatmap visualizes.
+
+> **Book-vs-reference divergence, documented:** the book's ch.4 prose gives *multiplicative* decay
+> (`τ ← max(0, (1−ρ)·τ + Δτ)`, ρ = 0.10) and its emission figure traces a smooth (Gaussian-like)
+> radial surface; the reference implements **subtractive** decay (`v − decay`, clamped, rounded)
+> and **linear** Chebyshev falloff. This kit pins the reference form. Unlike §3 this cannot void a
+> game — scent maps are transmitted, not re-derived cross-team — but the two models produce
+> visibly different trails (exponential vs. linear fade), so a team following the book's prose
+> instead should say so in its README (same academic-freedom clause).
 
 ## 6. Report canonicalization and settlement
 
