@@ -55,7 +55,9 @@ output, or the game cannot start / audit / settle. Each is backed by a vector:
    `vectors/game_uid.json`.
 5. **Pheromone field** (§5) — each peer emits its own, but a wrong port breaks your belief map.
    `vectors/pheromone.json`.
-6. **Report canonicalization** (§6) — both teams must email byte-identical report JSON.
+6. **Report canonicalization + consensus signature** (§6) — both teams must email byte-identical
+   report JSON, and the consensus signature inside it uses a **second (spaced) serialization**.
+   `vectors/report_consensus.json`.
 
 Everything else (your strategy, your GUI, your prompts, your infra) is private and needs no
 cross-team agreement.
@@ -148,9 +150,11 @@ refuses to start on any mismatch.
   is the reference's `terms_from_config`.
 - **`game_uid`** = `UUID( SHA256( canonical(terms) + "|" + "|".join(sorted([g_a, g_b])) )[:16] )`,
   identical for both peers because it is a pure function of shared inputs (sorted group ids →
-  order-independent). `vectors/game_uid.json`. It names all four submission artifacts
-  (`declaration/config/log/result_<game_id>.json`), keeping files from different matches from ever
-  mixing.
+  order-independent). `vectors/game_uid.json`. It names the four submission artifacts —
+  `declaration_<game_id>.json`, `config_<game_id>_g<NN>.json`, `log_<game_id>_g<NN>.json`,
+  `result_<game_id>.json` (the per-mini-game files carry the `_g<NN>` suffix, per the book's
+  App F files table and the reference's own `docs/sample-run/`) — keeping files from different
+  matches from ever mixing.
 
 ## 5. Pheromone field
 
@@ -191,6 +195,19 @@ Both teams independently build the final result JSON, and both email it — the 
   reaches the lecturer's real inbox until intended. Under the diversity rule (only the *first*
   meeting with an opponent counts), an accidental early real send can burn your one counted game —
   so keep drafts until a deliberate human send.
+
+> **The consensus signature uses a second canonical form** (found by Alon's team —
+> alonengel / anrbj666 — and verified against the reference at sha `960499fd`,
+> `report_writer.py`). `consensus_signature` serializes with `sort_keys=True,
+> ensure_ascii=False` and **default (spaced) separators** — unlike every other hash in the
+> release, which uses the compact §2 form. And the signature is computed over the report
+> **before** the `חתימת_קונסנזוס_משותפת` key is inserted (sign-then-insert), so the field is
+> excluded from its own preimage; verification = pop the signature key, re-serialize spaced,
+> re-hash. Two teams that disagree on either detail fail settlement at the exact moment they
+> must agree on the result. `vectors/report_consensus.json` pins both details and includes a
+> compact-form contrast hash. Counting the three commit constructions (§3), this is the
+> release's fourth serialization variant — pinned as-is because it is what the lecturer's own
+> tooling computes.
 
 ## 7. Conformance
 
@@ -265,3 +282,13 @@ The constructions here were confirmed byte-for-byte against the official referen
 math. The book (© Dr. Segal) and the reference code (Educational-Use-only) are cited and linked,
 never copied — every vector in this repo is generated from our own synthetic inputs by
 `gen_vectors.py`. Hash outputs are facts; the algorithms are the book's; the words here are ours.
+
+## Appendix D — deployment notes (observed in live cross-implementation runs)
+
+- **fastmcp peers return HTTP 421 behind tunnels unless the tunnel rewrites the Host header**
+  (issue #4). The MCP streamable-HTTP server's DNS-rebinding protection rejects requests whose
+  `Host` is not the bind address — which is every request arriving through a tunnel. Fix at the
+  tunnel, no code changes: Cloudflare named tunnel → `originRequest.httpHostHeader:
+  127.0.0.1:<port>`; ngrok → `--host-header=rewrite`. Verified by full mini-games against the
+  unmodified reference peer over public URLs in both role pairings (mutual audits Verified OK).
+  Pre-match checklist probe: "does your public URL answer a tool call?" catches it in seconds.
