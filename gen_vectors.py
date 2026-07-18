@@ -157,6 +157,45 @@ def gen_pheromone() -> None:
     })
 
 
+def gen_report_consensus() -> None:
+    sig_key = "חתימת_קונסנזוס_משותפת"
+    reports = [
+        ({"קבוצה_א": "team-aleph", "קבוצה_ב": "team-bet",
+          "תוצאה": {"מנצחת": "team-aleph", "ניקוד": [20, 5]},
+          "game_uid": "f757f50d-d4f4-17e7-06cf-755905739b16",
+          "tokens_total_series": 0, "github_commit": "abc1234"},
+         "Hebrew-keyed report body (floats absent)"),
+        ({"סדרה": [{"משחקון": 1, "ניקוד": [5, 10]}, {"משחקון": 2, "ניקוד": [20, 5]}],
+          "ram_gb": 31.8, "decay_per_step": 0.1, "mutual_agreement": True},
+         "nested list + floats — spaced form still shortest-round-trip floats"),
+    ]
+    vectors = []
+    for report, note in reports:
+        sig = ref.ref_report_consensus_signature(report)
+        vectors.append({
+            "report": report,
+            "note": note,
+            "signature": sig,
+            "signed_report": {**report, sig_key: sig},
+            "compact_form_sha256": ref.canonical_hash(report),
+        })
+    _write("report_consensus.json", {
+        "description": "Settlement consensus signature — the release's SECOND canonical form "
+                       "(reference report_writer.py, verified at sha 960499fd): "
+                       "json.dumps(report, sort_keys=True, ensure_ascii=False) with DEFAULT "
+                       "(spaced) separators, then SHA-256. The signature is computed BEFORE the "
+                       "signature key is inserted (sign-then-insert) — verify by popping the key, "
+                       "re-serializing spaced, re-hashing. compact_form_sha256 shows the §2 "
+                       "compact form does NOT reproduce it: a team signing compact fails "
+                       "settlement at the exact moment both teams must agree. Found by Alon's "
+                       "team (alonengel / anrbj666).",
+        "serialization": {"sort_keys": True, "ensure_ascii": False,
+                          "separators": [", ", ": "], "separators_note": "json.dumps defaults"},
+        "signature_key": sig_key,
+        "vectors": vectors,
+    })
+
+
 # --- ENHANCEMENTS (opt-in, SPEC Appendix A) ----------------------------------------------
 
 def gen_joint_seed() -> None:
@@ -196,6 +235,7 @@ def main() -> None:
     gen_terms_signature()
     gen_game_uid()
     gen_pheromone()
+    gen_report_consensus()
     gen_joint_seed()
     gen_derive_starts()
 

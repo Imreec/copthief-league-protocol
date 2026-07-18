@@ -40,7 +40,7 @@ schedule — that it will interoperate.
 | File | What it is |
 |---|---|
 | [`SPEC.md`](SPEC.md) | The interop surface: canonical JSON, commit-reveal, agreement signature + `game_uid`, pheromone math, report bytes — mapped to the book's chapters, plus opt-in enhancements |
-| [`vectors/`](vectors/) | Machine-generated fixtures — 5 CORE files (book conformance) + 2 ENH files (opt-in), 20+ checks |
+| [`vectors/`](vectors/) | Machine-generated fixtures — 6 CORE files (book conformance) + 2 ENH files (opt-in), 25+ checks |
 | [`verify_vectors.py`](verify_vectors.py) | Stdlib-only reference checker — `python verify_vectors.py` |
 | [`gen_vectors.py`](gen_vectors.py) | Regenerates every fixture from the reference constructions; CI fails on drift |
 | [`examples/`](examples/) | A worked exchange (agreement → sealed steps → audit → settlement), every hash real and regenerable |
@@ -56,7 +56,9 @@ vector is generated from our own synthetic inputs — no reference content is co
 3. **Agreement signature** — `SHA256(canonical_json(terms)|nonce)`; the pre-game gate.
 4. **`game_uid`** — `UUID(SHA256(canonical(terms)|sorted-group-ids)[:16])`.
 5. **Pheromone field** — radial emission + per-step decay (self-test, but breaks your belief map if wrong).
-6. **Report bytes** — the emailed body is the exact canonical bytes that were hashed.
+6. **Report bytes + consensus signature** — the emailed body is the exact canonical bytes that
+   were hashed, and the consensus signature inside the report uses a **second (spaced)
+   serialization** with sign-then-insert ordering (SPEC §6 — found by Alon's team).
 
 Everything else — strategy, GUI, prompts, infra — is private and needs no agreement.
 

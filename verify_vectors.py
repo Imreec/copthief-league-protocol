@@ -116,6 +116,20 @@ def ref_smell_decay(values: dict, decay: float) -> dict:
     return {k: round(max(0.0, v - decay), 3) for k, v in values.items()}
 
 
+def ref_report_consensus_signature(report: dict) -> str:
+    """Settlement consensus signature (reference report_writer.py, verified at sha 960499fd).
+
+    A SECOND canonical form, unlike every other hash in the release: sort_keys=True,
+    ensure_ascii=False, but DEFAULT (spaced) separators — json.dumps' (', ', ': ').
+    The signature is computed over the report BEFORE the Hebrew signature key
+    is inserted (sign-then-insert), so the field is excluded from its own preimage.
+    Verify an emailed report by popping the signature key, re-serializing spaced,
+    and re-hashing. Found by Alon's team (alonengel / anrbj666).
+    """
+    spaced = json.dumps(report, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(spaced.encode("utf-8")).hexdigest()
+
+
 # --- ENHANCEMENT constructions (opt-in; NOT required by the book) -------------------------
 
 
@@ -204,6 +218,19 @@ def run() -> int:
     for i, v in enumerate(ph["decay"]):
         got = ref_smell_decay(v["before"], v["decay"])
         failures += not check(f"smell decay #{i}", got == v["after"], f"got {got}")
+
+    print("[CORE] report_consensus.json")
+    rc = _load("report_consensus.json")
+    sig_key = rc["signature_key"]
+    for i, v in enumerate(rc["vectors"]):
+        got = ref_report_consensus_signature(v["report"])
+        ok = got == v["signature"]
+        # sign-then-insert: popping the signature key from the signed report re-yields the preimage
+        stripped = {k: val for k, val in v["signed_report"].items() if k != sig_key}
+        ok = ok and stripped == v["report"] and v["signed_report"][sig_key] == v["signature"]
+        # the compact (§2) form must NOT reproduce the signature — the spaced form is load-bearing
+        ok = ok and canonical_hash(v["report"]) == v["compact_form_sha256"] != v["signature"]
+        failures += not check(f"consensus signature #{i} ({v.get('note', '')})", ok, f"got {got}")
 
     print("[ENH] joint_seed.json")
     for i, v in enumerate(_load("joint_seed.json")["vectors"]):
