@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from pathlib import Path
 
 import verify_vectors as ref
@@ -196,6 +197,291 @@ def gen_report_consensus() -> None:
     })
 
 
+# --- LOCKED-MODEL DECLARATIONS (SPEC section 7) -------------------------------------------
+#
+# Registered docs. Each is an input here, not an output: the fixture stores the doc AND its
+# hash, and verify_vectors.py re-derives the hash from the stored doc.
+
+BOOK_KERNEL_ROWS = [list(row) for row in ref.BOOK_KERNEL]
+
+
+def _doc_scent_subtractive() -> dict:
+    return ref.ref_lock_doc(
+        "scent_model", "subtractive_chebyshev_v1",
+        {
+            "field_size": 5, "emit_intensity": 0.9, "min_center_intensity": 0.5,
+            "distance": "chebyshev", "falloff": "linear",
+            "falloff_step": "emit_intensity / (field_size // 2 + 1)",
+            "decay": "subtractive", "decay_per_step": 0.1,
+            "update": "tau' = round(max(0, tau - decay_per_step), 3)",
+            "rounding_decimals": 3, "clamp": [0.0, None],
+            "cadence": "per_full_turn", "order": "deposit_then_decay",
+            "receiver_side_decay": True, "initial_field": "empty",
+            "transmitted": True,
+        },
+        {
+            "note": "emit at the centre of a 7x7 board, then one decay",
+            "emit_center": [3, 3],
+            "emit_field": ref.ref_smell_emit([3, 3], 0.9, 5, 7),
+            "after_one_decay": ref.ref_smell_decay(ref.ref_smell_emit([3, 3], 0.9, 5, 7), 0.1),
+        },
+    )
+
+
+def _doc_scent_book() -> dict:
+    return ref.ref_lock_doc(
+        "scent_model", "multiplicative_book_v1",
+        {
+            "field_size": 5, "center_intensity": 0.9, "decay_rho": 0.1,
+            "kernel": BOOK_KERNEL_ROWS,
+            "kernel_source": "book v3.0.0 figure 4 — printed values, verbatim lookup",
+            "decay": "multiplicative",
+            "update": "tau' = clamp((1 - rho) * tau + kernel_delta, 0, center_intensity)",
+            "evaluation_order": "(1 - rho) * tau + delta, then clamp",
+            "rounding_decimals": None, "clamp": [0.0, 0.9],
+            "cadence": "per_full_turn", "order": "decay_then_deposit",
+            "receiver_side_decay": False, "initial_field": "empty",
+            "transmitted": False,
+        },
+        {
+            "note": "the clamp case: a saturated cell decays, then takes an adjacent deposit",
+            "tau": 0.9, "delta": 0.62,
+            "raw": (1 - 0.1) * 0.9 + 0.62,
+            "clamped": ref.ref_book_update(0.9, 0.62, 0.1, 0.9),
+        },
+    )
+
+
+def _doc_wire_reference() -> dict:
+    return ref.ref_lock_doc(
+        "wire_shape", "reference-v3",
+        {
+            "tools": ["negotiate", "receive_turn", "submit_audit", "receive_control"],
+            "messages_per_half_turn": 1,
+            "smell_grid_on_wire": True,
+            "move_revealed": "at_audit",
+            "replicated_engines": False,
+            "phases": "all four of book ch.5, with Reveal deferred to the audit boundary",
+            "rival_position_computable_live": False,
+        },
+        {
+            "note": "one turn message per half-turn; the move is sealed, the field is sent",
+            "turn_message_keys": ["step", "commit", "hint", "smell_grid", "barrier_placed"],
+        },
+    )
+
+
+def _doc_wire_bookletter() -> dict:
+    return ref.ref_lock_doc(
+        "wire_shape", "bookletter-v3",
+        {
+            "messages_per_half_turn": 2,
+            "message_kinds": ["commit", "reveal"],
+            "smell_grid_on_wire": False,
+            "move_revealed": "per_half_turn",
+            "replicated_engines": True,
+            "commit_order": "police_first",
+            "withheld_until_audit": ["nonce", "verdict"],
+            "sealed_payload_fields": ["step", "role", "sub_game", "state_digest", "action",
+                                      "hint", "verdict"],
+            "audit_message_keys": ["end_state_digest", "group_id", "nonces", "verdicts"],
+            "rival_position_computable_live": True,
+            "unpinned_preimages": ["state_digest", "end_state_digest", "config_sha256",
+                                   "terms_signature"],
+        },
+        {
+            "note": "contributed by anrbj666 (Alon Engel, Renat Karimov), kit issue #6; the "
+                    "commit layer reproduces under the section-3 construction over the full "
+                    "7-field payload, the four preimages above are not yet pinned",
+            "commit_construction": "SHA256(canonical(payload) + '|' + nonce)",
+        },
+    )
+
+
+def _doc_info_mode(name: str, exact: bool) -> dict:
+    return ref.ref_lock_doc(
+        "info_mode", name,
+        {
+            "rival_position_in_observation": exact,
+            "sources": (["own_state", "rival_position", "rival_scent", "hints"] if exact
+                        else ["own_state", "rival_scent", "hints"]),
+            "enforcement": ("structural under wire_shape reference-v3 (the rival's position "
+                            "never crosses the wire); an honor term under bookletter-v3, where "
+                            "the wire carries it and only the brain's restraint withholds it"),
+            "artifact_provable": {
+                "mismatch": True,
+                "violation": False,
+                "why": "a mismatch is provable from the two negotiate records; a violation is "
+                       "not, because a decision record does not disclose which information "
+                       "produced it",
+            },
+        },
+        {
+            "note": "the observation space the brain is entitled to read",
+            "observation_keys": (["self", "barriers", "rival_position", "smell_grid", "hint"]
+                                 if exact else ["self", "barriers", "smell_grid", "hint"]),
+        },
+    )
+
+
+def gen_locked_model() -> None:
+    docs = [_doc_scent_subtractive(), _doc_scent_book(), _doc_wire_reference(),
+            _doc_wire_bookletter(), _doc_info_mode("belief", exact=False),
+            _doc_info_mode("exact", exact=True)]
+    registered = [{"doc": d, "declared_as": f"{d['family']}_sha256",
+                   "sha256": ref.ref_lock_hash(d)} for d in docs]
+    by_name = {d["doc"]["name"]: d["sha256"] for d in registered}
+    # The refusal rule is behavioural, not byte-level, so it gets its own truth table.
+    a, b = by_name["subtractive_chebyshev_v1"], by_name["multiplicative_book_v1"]
+    decisions = [
+        (a, a, "both declare, same model"),
+        (a, b, "both declare, different models"),
+        (a, None, "we declare, they are silent (e.g. the unmodified reference peer)"),
+        (None, b, "they declare, we are silent"),
+        (None, None, "neither declares"),
+    ]
+    _write("locked_model.json", {
+        "description": "Locked-model declarations — ONE doc schema serving THREE named-parameter "
+                       "families (scent_model, wire_shape, info_mode). A peer publishes a doc, "
+                       "hashes it with the section-2 compact canonical form, and declares only "
+                       "the hash at negotiate time under '<family>_sha256'. The schema exists so "
+                       "that two teams' hashes are COMPARABLE: a bare hash over an ad-hoc dict "
+                       "makes two correct implementations of the same model refuse each other. "
+                       "Refusal fires ONLY when both peers declare a family and disagree — "
+                       "omission is never refusal. See SPEC section 7.",
+        "doc_schema": {"keys": list(ref.LOCK_DOC_KEYS), "families": list(ref.LOCK_FAMILIES),
+                       "hash": "sha256(canonical_json(doc))",
+                       "declared_key": "<family>_sha256"},
+        "registered": registered,
+        "declaration_example": {
+            "note": "what actually crosses the wire in the negotiate extras — hashes only",
+            "scent_model_sha256": by_name["multiplicative_book_v1"],
+            "wire_shape_sha256": by_name["reference-v3"],
+            "info_mode_sha256": by_name["belief"],
+        },
+        "refusal_rule": [
+            {"ours": o, "theirs": t, "note": note, "decision": ref.ref_lock_decision(o, t)}
+            for o, t, note in decisions
+        ],
+    })
+
+
+# --- book-v3 scent model, PROPOSED (SPEC section 5.1) -------------------------------------
+
+
+def _closed_form_probe() -> dict:
+    """Evidence for why the kernel is pinned verbatim rather than as a formula."""
+    peak, probes = 0.9, {"round": 1.3180, "trunc": 1.3440}
+    out = {}
+    for mode, sigma2 in probes.items():
+        rows = []
+        for i in range(5):
+            row = []
+            for j in range(5):
+                d2 = (i - 2) ** 2 + (j - 2) ** 2
+                v = peak * math.exp(-d2 / (2 * sigma2))
+                row.append(round(v, 2) if mode == "round" else math.floor(v * 100) / 100)
+            rows.append(row)
+        out[mode] = {"sigma_squared": sigma2, "reproduces_printed_kernel": rows == BOOK_KERNEL_ROWS,
+                     "quantized": rows}
+    out["windows"] = {"round": [1.3178, 1.3327], "trunc": [1.3436, 1.3538]}
+    out["note"] = (
+        "Figure 4 IS an exact radial Gaussian at printed precision — but only inside a narrow "
+        "sigma window the book never prints, and the window that works under round-to-2dp is "
+        "DISJOINT from the one that works under truncation. A team deriving the kernel from its "
+        "own fit lands outside the other team's window and gets a different field, silently. "
+        "The printed 25 values are the only thing two implementations can both reach, so the "
+        "kernel is pinned verbatim. (Reconciles the open question between our earlier reading — "
+        "'the values match no clean formula' — and anrbj666's 'exact Gaussian': theirs is "
+        "right about the shape, ours about the reproducibility. Both conclusions point here.)"
+    )
+    return out
+
+
+def _ordering_probe() -> dict:
+    """The model does no rounding, so algebraically-equal orderings are NOT byte-equal."""
+    rho, cases = 0.1, []
+    for tau, delta in ((0.05, 0.04), (0.05, 0.14), (0.1, 0.14)):
+        pinned, alt = (1 - rho) * tau + delta, tau - rho * tau + delta
+        cases.append({"tau": tau, "delta": delta, "pinned_order": pinned,
+                      "alternative_order": alt, "equal": pinned == alt})
+    return {
+        "pinned": "(1 - rho) * tau + delta",
+        "alternative": "tau - rho * tau + delta",
+        "cases": cases,
+        "note": "Algebraically identical, not identical in IEEE-754 doubles. Because this model "
+                "rounds nothing and each side RECOMPUTES the rival's field rather than "
+                "receiving it, a byte-comparison of two recomputed fields can differ on the "
+                "last bit purely from evaluation order. Pin the order as written, or compare "
+                "fields with a tolerance — do not do neither.",
+    }
+
+
+def gen_scent_book_v3() -> None:
+    rho, center, board = 0.1, 0.9, 7
+    emit = []
+    for c, note in (([3, 3], "kernel deposited on an empty field, board centre"),
+                    ([0, 0], "corner emission clipped to board bounds")):
+        emit.append({"center": c, "note": note,
+                     "field": ref.ref_book_full_turn({}, c, rho, center, board)})
+    # Scalar traces: one cell's history, which is where the model's arithmetic is legible.
+    pure = {"note": "book ch.4 worked example: a fresh centre trace after one full turn of "
+                    "pure decay, no new deposit (the book prints ~0.81)",
+            "tau": 0.9, "delta": 0.0, "after": ref.ref_book_update(0.9, 0.0, rho, center)}
+    clamp = {"note": "the upper clamp earns its keep: the printed formula's max(0, .) alone "
+                     "would leave 1.43, above the book's declared [0, 0.9] range for tau",
+             "tau": 0.9, "delta": 0.62, "raw": (1 - rho) * 0.9 + 0.62,
+             "after": ref.ref_book_update(0.9, 0.62, rho, center)}
+    chain, tau = [], 0.0
+    for delta in (0.62, 0.20, 0.20):
+        tau = ref.ref_book_update(tau, delta, rho, center)
+        chain.append({"delta": delta, "tau": tau})
+    forked = ref.ref_book_update(chain[1]["tau"], 0.14, rho, center)
+    scalar_chain = {
+        "note": "three full turns of one cell, from an EMPTY start: an orthogonal deposit, then "
+                "two turns at kernel distance 2. The fork shows the same predecessor under a "
+                "0.14 deposit instead of 0.20. Values contributed by anrbj666 (Alon Engel, "
+                "Renat Karimov) and re-derived here from the book's figure 4 alone.",
+        "steps": chain, "fork_at_turn_3_with_delta_0_14": forked,
+    }
+    walk, field = [], {}
+    for turn, pos in enumerate(([3, 3], [3, 4], [2, 4]), start=1):
+        field = ref.ref_book_full_turn(field, pos, rho, center, board)
+        walk.append({"turn": turn, "center": pos, "field": field})
+    ref_field = ref.ref_smell_emit([3, 3], 0.9, 5, 7)
+    book_field = ref.ref_book_full_turn({}, [3, 3], rho, center, board)
+    _write("scent_book_v3.json", {
+        "description": "PROPOSED — the book's ch.4 scent model as a named registration, "
+                       "'multiplicative_book_v1', beside the reference's "
+                       "'subtractive_chebyshev_v1' (section 5, CORE). Multiplicative decay "
+                       "against a verbatim 5x5 figure-4 kernel, once per FULL turn, from an "
+                       "empty start, with NO rounding. PROPOSED until a second independent "
+                       "implementation reproduces these fixtures — the kit's own bar. Spec "
+                       "facts contributed by anrbj666 (Alon Engel, Renat Karimov); every value "
+                       "below is re-derived here from book v3.0.0 ch.4 and App. F.",
+        "status": "PROPOSED",
+        "model": _doc_scent_book(),
+        "kernel": BOOK_KERNEL_ROWS,
+        "closed_form_probe": _closed_form_probe(),
+        "ordering_probe": _ordering_probe(),
+        "emit": emit,
+        "scalar_traces": {"pure_decay": pure, "clamp": clamp, "chain": scalar_chain},
+        "field_walk": {
+            "note": "three full turns of a moving agent's own trail on a 7x7 board, empty start",
+            "board_size": board, "rho": rho, "center_intensity": center, "turns": walk,
+        },
+        "divergence_vs_reference": {
+            "note": "one agent at [3,3] on an empty 7x7, after one turn, under each model — "
+                    "the fields differ in shape AND support, so a team can see at a glance "
+                    "which model it built. Neither is wrong; they are different registrations.",
+            "center": [3, 3],
+            "subtractive_chebyshev_v1": ref_field,
+            "multiplicative_book_v1": book_field,
+            "identical": ref_field == book_field,
+        },
+    })
+
+
 # --- ENHANCEMENTS (opt-in, SPEC Appendix A) ----------------------------------------------
 
 def gen_joint_seed() -> None:
@@ -236,6 +522,8 @@ def main() -> None:
     gen_game_uid()
     gen_pheromone()
     gen_report_consensus()
+    gen_locked_model()
+    gen_scent_book_v3()
     gen_joint_seed()
     gen_derive_starts()
 

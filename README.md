@@ -39,8 +39,8 @@ schedule — that it will interoperate.
 
 | File | What it is |
 |---|---|
-| [`SPEC.md`](SPEC.md) | The interop surface: canonical JSON, commit-reveal, agreement signature + `game_uid`, pheromone math, report bytes — mapped to the book's chapters, plus opt-in enhancements |
-| [`vectors/`](vectors/) | Machine-generated fixtures — 6 CORE files (book conformance) + 2 ENH files (opt-in), 25+ checks |
+| [`SPEC.md`](SPEC.md) | The interop surface: canonical JSON, commit-reveal, agreement signature + `game_uid`, pheromone math, report bytes, locked-model declarations — mapped to the book's chapters, plus opt-in enhancements |
+| [`vectors/`](vectors/) | Machine-generated fixtures — 7 CORE files (book conformance) + 1 PROPOSED + 2 ENH files (opt-in), 55 checks |
 | [`verify_vectors.py`](verify_vectors.py) | Stdlib-only reference checker — `python verify_vectors.py` |
 | [`gen_vectors.py`](gen_vectors.py) | Regenerates every fixture from the reference constructions; CI fails on drift |
 | [`examples/`](examples/) | A worked exchange (agreement → sealed steps → audit → settlement), every hash real and regenerable |
@@ -59,6 +59,9 @@ vector is generated from our own synthetic inputs — no reference content is co
 6. **Report bytes + consensus signature** — the emailed body is the exact canonical bytes that
    were hashed, and the consensus signature inside the report uses a **second (spaced)
    serialization** with sign-then-insert ordering (SPEC §6 — found by Alon's team).
+7. **Locked-model declarations** — one doc schema (`family`/`name`/`params`/`example`) serving
+   scent models, wire shapes and information modes, hashed and declared at negotiate time.
+   Refusal fires only when **both** peers declare and disagree; silence never refuses (SPEC §7).
 
 Everything else — strategy, GUI, prompts, infra — is private and needs no agreement.
 
