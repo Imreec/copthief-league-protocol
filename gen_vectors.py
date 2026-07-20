@@ -451,15 +451,19 @@ def gen_scent_book_v3() -> None:
     ref_field = ref.ref_smell_emit([3, 3], 0.9, 5, 7)
     book_field = ref.ref_book_full_turn({}, [3, 3], rho, center, board)
     _write("scent_book_v3.json", {
-        "description": "PROPOSED — the book's ch.4 scent model as a named registration, "
+        "description": "PROMOTED — the book's ch.4 scent model as a named registration, "
                        "'multiplicative_book_v1', beside the reference's "
                        "'subtractive_chebyshev_v1' (section 5, CORE). Multiplicative decay "
                        "against a verbatim 5x5 figure-4 kernel, once per FULL turn, from an "
-                       "empty start, with NO rounding. PROPOSED until a second independent "
-                       "implementation reproduces these fixtures — the kit's own bar. Spec "
-                       "facts contributed by anrbj666 (Alon Engel, Renat Karimov); every value "
-                       "below is re-derived here from book v3.0.0 ch.4 and App. F.",
-        "status": "PROPOSED",
+                       "empty start, with NO rounding. Promoted 2026-07-20 per the kit's own "
+                       "bar: byte-exact clean-room reproduction by a second independent "
+                       "implementation that predates these vectors (anrbj666, issue #6 — "
+                       "kernel, 2/2 emits, 3/3 walk turns, both scalar traces, every "
+                       "ordering-probe case with zero tolerance; their update natively "
+                       "computes the pinned algebraic form). Spec facts contributed by "
+                       "anrbj666 (Alon Engel, Renat Karimov); every value below is re-derived "
+                       "here from book v3.0.0 ch.4 and App. F.",
+        "status": "PROMOTED",
         "model": _doc_scent_book(),
         "kernel": BOOK_KERNEL_ROWS,
         "closed_form_probe": _closed_form_probe(),

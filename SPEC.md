@@ -184,10 +184,13 @@ unlike the book's, so the kit pins the math as a self-test. `vectors/pheromone.j
 > — scent maps are transmitted, not re-derived cross-team — but the two produce visibly different
 > trails, so a pair that wants the book's physics locks it explicitly and both sides declare it.
 
-### 5.1 `multiplicative_book_v1` — the book's own model (PROPOSED)
+### 5.1 `multiplicative_book_v1` — the book's own model (PROMOTED)
 
 The book's ch.4 model, registered as a named alternative. `vectors/scent_book_v3.json`. Status is
-**PROPOSED** until a second independent implementation reproduces the fixtures. The spec facts were
+**PROMOTED** (2026-07-20): the kit's bar — a second independent implementation reproducing the
+fixtures — was met by **anrbj666**'s clean-room reproduction (issue #6): byte-exact on the kernel,
+both emit cases, all three walk turns, both scalar traces, and every ordering-probe case with
+zero tolerance, from an implementation built from the book alone, predating these vectors. The spec facts were
 contributed by **anrbj666 (Alon Engel, Renat Karimov)**, whose implementation follows the book
 rather than the reference; every value in the fixture is re-derived here from book v3.0.0 ch.4 and
 the App. F binding table.
@@ -304,7 +307,7 @@ position never crosses the wire; under `bookletter-v3`, which puts it on the wir
 are an **honor term**. Declaring the mode is still worth doing — it makes the intent explicit and a
 mismatch catchable before the game — but a pair should know which of the two it is relying on.
 
-> **Status.** The scent registrations are backed by fixtures (§5 CORE, §5.1 PROPOSED). The wire
+> **Status.** The scent registrations are backed by fixtures (§5 CORE, §5.1 PROMOTED 2026-07-20). The wire
 > shapes are registered per issue #6 with **asymmetric status**: `reference-v3` matches the
 > reference implementation and the book's Dec-POMDP observation space; `bookletter-v3` is a
 > **documented deviation** from the book's formal model that a pair may lock by explicit mutual
