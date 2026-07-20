@@ -130,6 +130,125 @@ def ref_report_consensus_signature(report: dict) -> str:
     return hashlib.sha256(spaced.encode("utf-8")).hexdigest()
 
 
+# --- LOCKED-MODEL DECLARATIONS (SPEC section 7) -------------------------------------------
+#
+# One document schema serving three named-parameter families. A peer that wants to bind a
+# choice publishes a doc, hashes it, and declares the hash at negotiate time as
+# "<family>_sha256". The doc itself never crosses the wire — only the hash — so the schema
+# exists to make two teams' hashes COMPARABLE. Two correct implementations of the same model
+# that hash different field sets refuse each other for no reason; that is the failure this
+# section removes.
+
+LOCK_FAMILIES = ("scent_model", "wire_shape", "info_mode")
+LOCK_DOC_KEYS = ("family", "name", "params", "example")
+
+
+def ref_lock_doc(family: str, name: str, params: dict, example: dict) -> dict:
+    """A locked-model doc: exactly four keys, canonicalized by the section-2 form.
+
+    Keeping the key set closed is the whole point — `params` and `example` carry everything
+    model-specific, so the envelope is identical across families and versions.
+    """
+    if family not in LOCK_FAMILIES:
+        raise ValueError(f"unknown family {family!r}; expected one of {LOCK_FAMILIES}")
+    return {"family": family, "name": name, "params": params, "example": example}
+
+
+def ref_lock_hash(doc: dict) -> str:
+    """The declared value: SHA-256 over the compact canonical doc (section 2).
+
+    Same construction Alon's team already ships as `scent_model_sha256` — a bare hash over a
+    compact-canonical spec dict. The kit adds only the field set underneath it.
+    """
+    if tuple(sorted(doc)) != tuple(sorted(LOCK_DOC_KEYS)):
+        raise ValueError(f"lock doc must have exactly {LOCK_DOC_KEYS}, got {tuple(sorted(doc))}")
+    return canonical_hash(doc)
+
+
+def ref_lock_decision(ours: str | None, theirs: str | None) -> str:
+    """The refusal rule: refuse ONLY when both peers declare a family and disagree.
+
+    Omission is never refusal. A peer that declares nothing (the unmodified reference peer
+    declares nothing at all) stays playable — a lock that fail-fasts on a missing declaration
+    cannot play the lecturer's own tooling, which is a self-inflicted forfeit, not a safeguard.
+    """
+    if ours is None or theirs is None:
+        return "play"
+    return "play" if ours == theirs else "refuse"
+
+
+# --- book-v3 scent model (PROPOSED; SPEC section 5.1) -------------------------------------
+#
+# The book's ch.4 model, as distinct from the reference's (section 5). Printed figure 4 is a
+# 5x5 emission kernel; the update is multiplicative and runs once per FULL turn.
+
+BOOK_KERNEL = (
+    (0.04, 0.14, 0.20, 0.14, 0.04),
+    (0.14, 0.42, 0.62, 0.42, 0.14),
+    (0.20, 0.62, 0.90, 0.62, 0.20),
+    (0.14, 0.42, 0.62, 0.42, 0.14),
+    (0.04, 0.14, 0.20, 0.14, 0.04),
+)
+
+
+def ref_book_kernel_delta(dr: int, dc: int) -> float:
+    """The deposit at offset (dr, dc) from the emitting agent — a VERBATIM table lookup.
+
+    Not a closed form on purpose. The printed values are reproducible by a radial Gaussian,
+    but only inside a narrow sigma window that the book never prints, and the window differs
+    by quantization rule (see `closed_form_probe` in vectors/scent_book_v3.json). Two teams
+    each fitting their own Gaussian get different fields; the printed table is the only thing
+    both can land on.
+    """
+    if abs(dr) > 2 or abs(dc) > 2:
+        return 0.0
+    return BOOK_KERNEL[dr + 2][dc + 2]
+
+
+def ref_book_update(tau: float, delta: float, rho: float, center_intensity: float) -> float:
+    """One cell, one full turn: tau' = clamp((1 - rho) * tau + delta, 0, center_intensity).
+
+    Evaluation order is load-bearing and pinned exactly as written. The model does NO
+    rounding, so the algebraically-equivalent `tau - rho * tau + delta` differs from this in
+    the last bit for many inputs (75 of 534 probed) — enough to break a byte-comparison of two
+    recomputed fields. Compute it in this order, or compare fields with a tolerance.
+
+    The upper clamp is NOT in the book's printed formula, which shows only `max(0, ...)`; it
+    comes from the book's own declaration that tau is a continuous value in [0, 0.9]. Without
+    it a cell that decays and is re-deposited on exceeds the centre intensity (the 1.43 case).
+    """
+    return min(max(0.0, (1 - rho) * tau + delta), center_intensity)
+
+
+def ref_book_full_turn(field: dict, center, rho: float, center_intensity: float,
+                       board_size: int) -> dict:
+    """One FULL turn of one agent's own trail: decay everything, deposit the kernel, clamp.
+
+    Cadence is the book's: the update runs once per full turn, after both agents have moved —
+    not once per half-turn step. Decay and deposit are a single expression, so decay applies
+    to the pre-existing field only (decay-then-deposit). The reference model does the reverse
+    (deposit, then decay before sending), which is one of the two models' real divergences.
+
+    Each side recomputes the rival's field from revealed actions; nothing is received, so
+    there is no receiver-side decay pass.
+    """
+    cells = set(field) | {
+        f"{center[0] + dr},{center[1] + dc}"
+        for dr in range(-2, 3) for dc in range(-2, 3)
+        if 0 <= center[0] + dr < board_size and 0 <= center[1] + dc < board_size
+    }
+    out: dict[str, float] = {}
+    # Sorted by (row, col): set iteration order varies between runs, and while key order cannot
+    # change a hash (canonicalization sorts), it would make the committed fixture drift in CI.
+    for key in sorted(cells, key=lambda k: tuple(int(x) for x in k.split(","))):
+        r, c = (int(x) for x in key.split(","))
+        value = ref_book_update(field.get(key, 0.0), ref_book_kernel_delta(r - center[0], c - center[1]),
+                                rho, center_intensity)
+        if value > 0.0:
+            out[key] = value
+    return out
+
+
 # --- ENHANCEMENT constructions (opt-in; NOT required by the book) -------------------------
 
 
@@ -231,6 +350,77 @@ def run() -> int:
         # the compact (§2) form must NOT reproduce the signature — the spaced form is load-bearing
         ok = ok and canonical_hash(v["report"]) == v["compact_form_sha256"] != v["signature"]
         failures += not check(f"consensus signature #{i} ({v.get('note', '')})", ok, f"got {got}")
+
+    print("[CORE] locked_model.json")
+    lm = _load("locked_model.json")
+    schema_keys = tuple(lm["doc_schema"]["keys"])
+    for entry in lm["registered"]:
+        doc = entry["doc"]
+        ok = (
+            tuple(sorted(doc)) == tuple(sorted(schema_keys))
+            and doc["family"] in lm["doc_schema"]["families"]
+            and entry["declared_as"] == f"{doc['family']}_sha256"
+            and ref_lock_hash(doc) == entry["sha256"]
+        )
+        failures += not check(f"lock doc {doc['family']}/{doc['name']}", ok)
+    # Distinct registrations must hash distinctly, or a lock cannot tell them apart.
+    hashes = [e["sha256"] for e in lm["registered"]]
+    failures += not check("registrations mutually distinct", len(set(hashes)) == len(hashes))
+    for i, v in enumerate(lm["refusal_rule"]):
+        got = ref_lock_decision(v["ours"], v["theirs"])
+        failures += not check(f"refusal rule #{i} ({v['note']})", got == v["decision"], f"got {got}")
+    # Omission must never refuse — the property that keeps no-doc peers playable.
+    silent = [v for v in lm["refusal_rule"] if v["ours"] is None or v["theirs"] is None]
+    failures += not check("omission is never refusal",
+                          bool(silent) and all(v["decision"] == "play" for v in silent))
+
+    print("[PROPOSED] scent_book_v3.json")
+    sb = _load("scent_book_v3.json")
+    rho = sb["field_walk"]["rho"]
+    peak = sb["field_walk"]["center_intensity"]
+    board = sb["field_walk"]["board_size"]
+    failures += not check("kernel matches book figure 4 verbatim",
+                          sb["kernel"] == [list(r) for r in BOOK_KERNEL])
+    failures += not check("model doc hashes as registered",
+                          ref_lock_hash(sb["model"]) == next(
+                              e["sha256"] for e in lm["registered"]
+                              if e["doc"]["name"] == sb["model"]["name"]))
+    for i, v in enumerate(sb["emit"]):
+        got = ref_book_full_turn({}, v["center"], rho, peak, board)
+        failures += not check(f"book emit #{i} ({v['note']})", got == v["field"], f"got {got}")
+    for name in ("pure_decay", "clamp"):
+        v = sb["scalar_traces"][name]
+        got = ref_book_update(v["tau"], v["delta"], rho, peak)
+        failures += not check(f"scalar trace {name}", got == v["after"], f"got {got!r}")
+    tau = 0.0
+    for i, s in enumerate(sb["scalar_traces"]["chain"]["steps"]):
+        tau = ref_book_update(tau, s["delta"], rho, peak)
+        failures += not check(f"chain turn {i + 1}", tau == s["tau"], f"got {tau!r}")
+    fork = ref_book_update(sb["scalar_traces"]["chain"]["steps"][1]["tau"], 0.14, rho, peak)
+    failures += not check("chain fork (delta 0.14)",
+                          fork == sb["scalar_traces"]["chain"]["fork_at_turn_3_with_delta_0_14"])
+    field: dict = {}
+    for v in sb["field_walk"]["turns"]:
+        field = ref_book_full_turn(field, v["center"], rho, peak, board)
+        failures += not check(f"field walk turn {v['turn']}", field == v["field"])
+    # The two named scent models must NOT agree — that is why they are two registrations.
+    dv = sb["divergence_vs_reference"]
+    ref_field = ref_smell_emit(dv["center"], 0.9, 5, board)
+    book_field = ref_book_full_turn({}, dv["center"], rho, peak, board)
+    ok = (ref_field == dv["subtractive_chebyshev_v1"] and book_field == dv["multiplicative_book_v1"]
+          and ref_field != book_field and dv["identical"] is False)
+    failures += not check("named models pinned + observably different", ok)
+    # The kernel is pinned verbatim BECAUSE a fitted Gaussian is not safely reproducible.
+    probe = sb["closed_form_probe"]
+    ok = (probe["round"]["reproduces_printed_kernel"] and probe["trunc"]["reproduces_printed_kernel"]
+          and probe["windows"]["round"][1] < probe["windows"]["trunc"][0])
+    failures += not check("closed-form probe: both quantizations fit, windows disjoint", ok)
+    op = sb["ordering_probe"]
+    ok = any(not c["equal"] for c in op["cases"]) and all(
+        ((1 - rho) * c["tau"] + c["delta"] == c["pinned_order"])
+        and (c["tau"] - rho * c["tau"] + c["delta"] == c["alternative_order"])
+        for c in op["cases"])
+    failures += not check("ordering probe: evaluation order is load-bearing", ok)
 
     print("[ENH] joint_seed.json")
     for i, v in enumerate(_load("joint_seed.json")["vectors"]):

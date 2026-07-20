@@ -58,6 +58,9 @@ output, or the game cannot start / audit / settle. Each is backed by a vector:
 6. **Report canonicalization + consensus signature** (§6) — both teams must email byte-identical
    report JSON, and the consensus signature inside it uses a **second (spaced) serialization**.
    `vectors/report_consensus.json`.
+7. **Locked-model declarations** (§7) — where the signed terms cannot carry a choice, a pair
+   declares the hash of a described model. The doc schema must match or the hashes are not
+   comparable. `vectors/locked_model.json`.
 
 Everything else (your strategy, your GUI, your prompts, your infra) is private and needs no
 cross-team agreement.
@@ -175,10 +178,55 @@ unlike the book's, so the kit pins the math as a self-test. `vectors/pheromone.j
 > **Book-vs-reference divergence, documented:** the book's ch.4 prose gives *multiplicative* decay
 > (`τ ← max(0, (1−ρ)·τ + Δτ)`, ρ = 0.10) and its emission figure traces a smooth (Gaussian-like)
 > radial surface; the reference implements **subtractive** decay (`v − decay`, clamped, rounded)
-> and **linear** Chebyshev falloff. This kit pins the reference form. Unlike §3 this cannot void a
-> game — scent maps are transmitted, not re-derived cross-team — but the two models produce
-> visibly different trails (exponential vs. linear fade), so a team following the book's prose
-> instead should say so in its README (same academic-freedom clause).
+> and **linear** Chebyshev falloff. Both are now **named registrations** (§7) rather than one
+> pinned form and one footnote: this section is `subtractive_chebyshev_v1`, the book's model is
+> `multiplicative_book_v1` (§5.1). Unlike §3 this cannot void a game *under this section's wire*
+> — scent maps are transmitted, not re-derived cross-team — but the two produce visibly different
+> trails, so a pair that wants the book's physics locks it explicitly and both sides declare it.
+
+### 5.1 `multiplicative_book_v1` — the book's own model (PROPOSED)
+
+The book's ch.4 model, registered as a named alternative. `vectors/scent_book_v3.json`. Status is
+**PROPOSED** until a second independent implementation reproduces the fixtures. The spec facts were
+contributed by **anrbj666 (Alon Engel, Renat Karimov)**, whose implementation follows the book
+rather than the reference; every value in the fixture is re-derived here from book v3.0.0 ch.4 and
+the App. F binding table.
+
+- **Update**, once per cell per **full turn** — after *both* agents have moved, which is the book's
+  own cadence (ch.4: the systemic decay runs "at the end of every full turn"), not once per
+  half-turn step:
+  `τ′ = clamp((1 − ρ)·τ + Δτ, 0, center_intensity)`, with ρ = 0.10 and `center_intensity` = 0.9.
+- **`Δτ` is a verbatim 5×5 lookup** — the printed figure-4 kernel, centre `0.90`, orthogonal `0.62`,
+  diagonal `0.42`, then `0.20 / 0.14 / 0.04`. See the note below on why it is not a formula.
+- **The upper clamp is not in the printed formula.** The book prints only `max(0, ·)`, but also
+  declares τ to be a continuous value in `[0, 0.9]`; without the upper bound a saturated cell that
+  decays and is deposited on again reaches `0.9·0.9 + 0.62 = 1.43`, outside the book's own range.
+  The fixture pins that case.
+- **No rounding**, an empty starting field, decay-then-deposit within the single expression, and
+  **no receiver-side pass** — each side recomputes the rival's field from revealed actions rather
+  than receiving it. The reference model differs on every one of those four: it rounds to 3 places,
+  deposits before decaying, and decays a received copy on receipt.
+- **App. F fixes all three parameters** (`קבוע`): centre intensity `0.9`, decay rate `0.10`, field
+  size `5×5`. So what a scent registration selects is the *model form*, never the numbers — a doc
+  that alters one of those three is refused by the binding table, not by the lock.
+
+> **Why the kernel is pinned verbatim, and an open question settled.** Figure 4 *is* an exact radial
+> Gaussian at printed precision — but only for σ² inside a narrow window the book never prints, and
+> the window that reproduces the table under round-to-2dp (`[1.3178, 1.3327]`) is **disjoint** from
+> the one that works under truncation (`[1.3436, 1.3538]`). Two teams that each "use a Gaussian"
+> in good faith can therefore produce different fields, silently. The 25 printed values are the only
+> thing both can reach, so the kit pins them and treats the closed form as commentary.
+> `closed_form_probe` in the fixture carries both quantizations and both windows. (This reconciles
+> a genuine disagreement between the two teams building this registration: anrbj666 read the figure
+> as an exact Gaussian and were right about the shape; we read it as matching no clean formula and
+> were right about the reproducibility. The pinning follows from theirs *and* ours.)
+
+> **Evaluation order is load-bearing here in a way it is not elsewhere in the kit.** Because this
+> model rounds nothing *and* each side recomputes the other's field instead of receiving it, two
+> implementations that agree on every parameter can still disagree in the last bit: `(1−ρ)·τ + Δτ`
+> and `τ − ρ·τ + Δτ` are the same algebra and different IEEE-754 doubles (75 of 534 probed inputs).
+> A byte-comparison of two recomputed fields will then false-flag. Pin the order as written, or
+> compare fields with a tolerance — `ordering_probe` in the fixture shows the divergence.
 
 ## 6. Report canonicalization and settlement
 
@@ -209,20 +257,78 @@ Both teams independently build the final result JSON, and both email it — the 
 > release's fourth serialization variant — pinned as-is because it is what the lecturer's own
 > tooling computes.
 
-## 7. Conformance
+## 7. Locked-model declarations
+
+The book leaves several choices to inter-team agreement but freezes the signed terms as a flat
+14-key set — so a pair cannot record a choice by adding a key to `config/game.json` without
+breaking the terms signature (§4). Teams have independently converged on the same workaround:
+publish a description of the choice, hash it, and declare **only the hash** in the negotiate
+extras. This section pins the document underneath that hash. `vectors/locked_model.json`.
+
+**Without a pinned schema the mechanism backfires.** A bare hash over an ad-hoc dict means two
+teams that implement the *same* model from the *same* spec still declare different hashes — they
+serialized different field sets — and refuse each other for no reason at all. The hash is only as
+useful as the agreement on what goes into it.
+
+**One schema, three families.** A locked-model doc has exactly four keys:
+
+```json
+{"family": "scent_model", "name": "multiplicative_book_v1", "params": {...}, "example": {...}}
+```
+
+`family` ∈ `scent_model` | `wire_shape` | `info_mode`; `name` is the registered name; `params`
+carries the model-specific values; `example` carries a worked case. Everything variable lives in
+the last two, so the envelope never changes as families are added.
+
+- **Hash:** `sha256(canonical_json(doc))` — the compact §2 form, the same construction anrbj666's
+  team already ships for `scent_model_sha256`. Adopting the schema changes the *bytes hashed*,
+  not the mechanism.
+- **Declaration:** the doc never crosses the wire; only `"<family>_sha256"` does, in the negotiate
+  extras. The kit registers six docs: two scent models (§5, §5.1), two wire shapes, two info modes.
+- **Refusal rule: refuse only when BOTH peers declare a family and the hashes differ.** Omission is
+  never refusal — in either direction. A lock that fail-fasts on a *missing* declaration cannot
+  start a game against the unmodified reference peer, which declares nothing at all; that is a
+  self-inflicted forfeit, not a safeguard. The fixture pins the rule as a five-row truth table
+  because it is behaviour, not bytes, and it is the part implementations get wrong.
+- **A declaration binds a choice; it does not widen what may be chosen.** App. F's fixed values and
+  minimums are unaffected — a doc that lowers a minimum is refused by the binding table regardless
+  of what the peers agreed.
+
+**`info_mode` needs one honest annotation.** The mode (`belief` — the rival's position is outside
+the observation space — versus `exact`) is a negotiated term like the others, but its enforceability
+is asymmetric, and the registration says so. A **mismatch** is provable from the two negotiate
+records. A **violation** — a brain consuming exact positions while declaring `belief` — is *not*
+provable from any artifact, because a decision record does not disclose which information produced
+it. Under wire shape `reference-v3` the belief mode is enforced **structurally**, since the rival's
+position never crosses the wire; under `bookletter-v3`, which puts it on the wire, the same words
+are an **honor term**. Declaring the mode is still worth doing — it makes the intent explicit and a
+mismatch catchable before the game — but a pair should know which of the two it is relying on.
+
+> **Status.** The scent registrations are backed by fixtures (§5 CORE, §5.1 PROPOSED). The wire
+> shapes are registered per issue #6 with **asymmetric status**: `reference-v3` matches the
+> reference implementation and the book's Dec-POMDP observation space; `bookletter-v3` is a
+> **documented deviation** from the book's formal model that a pair may lock by explicit mutual
+> sign-off. Its commit layer reproduces under §3 over the full 7-field payload, but four preimages
+> — `state_digest`, `end_state_digest`, `config_sha256`, and whether a signed 14-key
+> `terms_signature` accompanies it — are not yet pinned, so its `params` record them as
+> `unpinned_preimages` and its hash will change when they are settled. That is the intended
+> behaviour: a lock should not claim to bind what it does not.
+
+## 8. Conformance
 
 A team is **interop-ready** when:
 
 1. **Core vectors pass** — `python verify_vectors.py` reproduces every `[CORE]` fixture, and your
    own implementation reproduces them too (port the checks into your suite): canonical JSON with
-   `ensure_ascii=False`, the commit construction, the terms signature, `game_uid`, and the
-   pheromone math.
+   `ensure_ascii=False`, the commit construction, the terms signature, `game_uid`, the pheromone
+   math, and — if you declare any locked model — the doc schema and the refusal rule.
 2. **Cross-team audit is clean** — feed your opponent's revealed log to your verifier and your log
    to theirs; both audits pass with zero `tamper_forfeit`. This is the real test §1 exists for.
 3. **Report bytes match** — the emailed body equals the canonical bytes that were hashed.
 
 The `[ENH]` vectors (Appendix A) are separate: a pair conforms to an enhancement only if both
-opted in and signed it into `config/game.json`.
+opted in and signed it into `config/game.json`. `[PROPOSED]` fixtures (§5.1) are a third tier —
+published so a second implementation can reproduce them, and promoted only once one has.
 
 CI regenerates all vectors and the worked example on every push and fails on any drift.
 

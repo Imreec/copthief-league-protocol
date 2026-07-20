@@ -1,0 +1,364 @@
+{
+  "description": "Locked-model declarations — ONE doc schema serving THREE named-parameter families (scent_model, wire_shape, info_mode). A peer publishes a doc, hashes it with the section-2 compact canonical form, and declares only the hash at negotiate time under '<family>_sha256'. The schema exists so that two teams' hashes are COMPARABLE: a bare hash over an ad-hoc dict makes two correct implementations of the same model refuse each other. Refusal fires ONLY when both peers declare a family and disagree — omission is never refusal. See SPEC section 7.",
+  "doc_schema": {
+    "keys": [
+      "family",
+      "name",
+      "params",
+      "example"
+    ],
+    "families": [
+      "scent_model",
+      "wire_shape",
+      "info_mode"
+    ],
+    "hash": "sha256(canonical_json(doc))",
+    "declared_key": "<family>_sha256"
+  },
+  "registered": [
+    {
+      "doc": {
+        "family": "scent_model",
+        "name": "subtractive_chebyshev_v1",
+        "params": {
+          "field_size": 5,
+          "emit_intensity": 0.9,
+          "min_center_intensity": 0.5,
+          "distance": "chebyshev",
+          "falloff": "linear",
+          "falloff_step": "emit_intensity / (field_size // 2 + 1)",
+          "decay": "subtractive",
+          "decay_per_step": 0.1,
+          "update": "tau' = round(max(0, tau - decay_per_step), 3)",
+          "rounding_decimals": 3,
+          "clamp": [
+            0.0,
+            null
+          ],
+          "cadence": "per_full_turn",
+          "order": "deposit_then_decay",
+          "receiver_side_decay": true,
+          "initial_field": "empty",
+          "transmitted": true
+        },
+        "example": {
+          "note": "emit at the centre of a 7x7 board, then one decay",
+          "emit_center": [
+            3,
+            3
+          ],
+          "emit_field": {
+            "1,1": 0.3,
+            "1,2": 0.3,
+            "1,3": 0.3,
+            "1,4": 0.3,
+            "1,5": 0.3,
+            "2,1": 0.3,
+            "2,2": 0.6,
+            "2,3": 0.6,
+            "2,4": 0.6,
+            "2,5": 0.3,
+            "3,1": 0.3,
+            "3,2": 0.6,
+            "3,3": 0.9,
+            "3,4": 0.6,
+            "3,5": 0.3,
+            "4,1": 0.3,
+            "4,2": 0.6,
+            "4,3": 0.6,
+            "4,4": 0.6,
+            "4,5": 0.3,
+            "5,1": 0.3,
+            "5,2": 0.3,
+            "5,3": 0.3,
+            "5,4": 0.3,
+            "5,5": 0.3
+          },
+          "after_one_decay": {
+            "1,1": 0.2,
+            "1,2": 0.2,
+            "1,3": 0.2,
+            "1,4": 0.2,
+            "1,5": 0.2,
+            "2,1": 0.2,
+            "2,2": 0.5,
+            "2,3": 0.5,
+            "2,4": 0.5,
+            "2,5": 0.2,
+            "3,1": 0.2,
+            "3,2": 0.5,
+            "3,3": 0.8,
+            "3,4": 0.5,
+            "3,5": 0.2,
+            "4,1": 0.2,
+            "4,2": 0.5,
+            "4,3": 0.5,
+            "4,4": 0.5,
+            "4,5": 0.2,
+            "5,1": 0.2,
+            "5,2": 0.2,
+            "5,3": 0.2,
+            "5,4": 0.2,
+            "5,5": 0.2
+          }
+        }
+      },
+      "declared_as": "scent_model_sha256",
+      "sha256": "81ebee59640e80eae8ca9ee5f86abd26e7edf5cdbb27d15925cb6ee45ca6ddf4"
+    },
+    {
+      "doc": {
+        "family": "scent_model",
+        "name": "multiplicative_book_v1",
+        "params": {
+          "field_size": 5,
+          "center_intensity": 0.9,
+          "decay_rho": 0.1,
+          "kernel": [
+            [
+              0.04,
+              0.14,
+              0.2,
+              0.14,
+              0.04
+            ],
+            [
+              0.14,
+              0.42,
+              0.62,
+              0.42,
+              0.14
+            ],
+            [
+              0.2,
+              0.62,
+              0.9,
+              0.62,
+              0.2
+            ],
+            [
+              0.14,
+              0.42,
+              0.62,
+              0.42,
+              0.14
+            ],
+            [
+              0.04,
+              0.14,
+              0.2,
+              0.14,
+              0.04
+            ]
+          ],
+          "kernel_source": "book v3.0.0 figure 4 — printed values, verbatim lookup",
+          "decay": "multiplicative",
+          "update": "tau' = clamp((1 - rho) * tau + kernel_delta, 0, center_intensity)",
+          "evaluation_order": "(1 - rho) * tau + delta, then clamp",
+          "rounding_decimals": null,
+          "clamp": [
+            0.0,
+            0.9
+          ],
+          "cadence": "per_full_turn",
+          "order": "decay_then_deposit",
+          "receiver_side_decay": false,
+          "initial_field": "empty",
+          "transmitted": false
+        },
+        "example": {
+          "note": "the clamp case: a saturated cell decays, then takes an adjacent deposit",
+          "tau": 0.9,
+          "delta": 0.62,
+          "raw": 1.4300000000000002,
+          "clamped": 0.9
+        }
+      },
+      "declared_as": "scent_model_sha256",
+      "sha256": "934c220d5bf62acaa3297c6c9d723ea954c220260b02292ca17f6d5daef9f4d9"
+    },
+    {
+      "doc": {
+        "family": "wire_shape",
+        "name": "reference-v3",
+        "params": {
+          "tools": [
+            "negotiate",
+            "receive_turn",
+            "submit_audit",
+            "receive_control"
+          ],
+          "messages_per_half_turn": 1,
+          "smell_grid_on_wire": true,
+          "move_revealed": "at_audit",
+          "replicated_engines": false,
+          "phases": "all four of book ch.5, with Reveal deferred to the audit boundary",
+          "rival_position_computable_live": false
+        },
+        "example": {
+          "note": "one turn message per half-turn; the move is sealed, the field is sent",
+          "turn_message_keys": [
+            "step",
+            "commit",
+            "hint",
+            "smell_grid",
+            "barrier_placed"
+          ]
+        }
+      },
+      "declared_as": "wire_shape_sha256",
+      "sha256": "229ae6487a418c3fcb6da9be404de2f2533c288ebc228811bff6dedc4164d6f7"
+    },
+    {
+      "doc": {
+        "family": "wire_shape",
+        "name": "bookletter-v3",
+        "params": {
+          "messages_per_half_turn": 2,
+          "message_kinds": [
+            "commit",
+            "reveal"
+          ],
+          "smell_grid_on_wire": false,
+          "move_revealed": "per_half_turn",
+          "replicated_engines": true,
+          "commit_order": "police_first",
+          "withheld_until_audit": [
+            "nonce",
+            "verdict"
+          ],
+          "sealed_payload_fields": [
+            "step",
+            "role",
+            "sub_game",
+            "state_digest",
+            "action",
+            "hint",
+            "verdict"
+          ],
+          "audit_message_keys": [
+            "end_state_digest",
+            "group_id",
+            "nonces",
+            "verdicts"
+          ],
+          "rival_position_computable_live": true,
+          "unpinned_preimages": [
+            "state_digest",
+            "end_state_digest",
+            "config_sha256",
+            "terms_signature"
+          ]
+        },
+        "example": {
+          "note": "contributed by anrbj666 (Alon Engel, Renat Karimov), kit issue #6; the commit layer reproduces under the section-3 construction over the full 7-field payload, the four preimages above are not yet pinned",
+          "commit_construction": "SHA256(canonical(payload) + '|' + nonce)"
+        }
+      },
+      "declared_as": "wire_shape_sha256",
+      "sha256": "f3fc1d424c461a02a1db9490306318c46043501bc1da1bfcb1b56ff9bc76f376"
+    },
+    {
+      "doc": {
+        "family": "info_mode",
+        "name": "belief",
+        "params": {
+          "rival_position_in_observation": false,
+          "sources": [
+            "own_state",
+            "rival_scent",
+            "hints"
+          ],
+          "enforcement": "structural under wire_shape reference-v3 (the rival's position never crosses the wire); an honor term under bookletter-v3, where the wire carries it and only the brain's restraint withholds it",
+          "artifact_provable": {
+            "mismatch": true,
+            "violation": false,
+            "why": "a mismatch is provable from the two negotiate records; a violation is not, because a decision record does not disclose which information produced it"
+          }
+        },
+        "example": {
+          "note": "the observation space the brain is entitled to read",
+          "observation_keys": [
+            "self",
+            "barriers",
+            "smell_grid",
+            "hint"
+          ]
+        }
+      },
+      "declared_as": "info_mode_sha256",
+      "sha256": "020947daeeb3f73494af9b04201326791742c7184085456e3517d21981ee1202"
+    },
+    {
+      "doc": {
+        "family": "info_mode",
+        "name": "exact",
+        "params": {
+          "rival_position_in_observation": true,
+          "sources": [
+            "own_state",
+            "rival_position",
+            "rival_scent",
+            "hints"
+          ],
+          "enforcement": "structural under wire_shape reference-v3 (the rival's position never crosses the wire); an honor term under bookletter-v3, where the wire carries it and only the brain's restraint withholds it",
+          "artifact_provable": {
+            "mismatch": true,
+            "violation": false,
+            "why": "a mismatch is provable from the two negotiate records; a violation is not, because a decision record does not disclose which information produced it"
+          }
+        },
+        "example": {
+          "note": "the observation space the brain is entitled to read",
+          "observation_keys": [
+            "self",
+            "barriers",
+            "rival_position",
+            "smell_grid",
+            "hint"
+          ]
+        }
+      },
+      "declared_as": "info_mode_sha256",
+      "sha256": "be93ca76794f1bf638572f532bba32e08131737397febf377395abe7333c5489"
+    }
+  ],
+  "declaration_example": {
+    "note": "what actually crosses the wire in the negotiate extras — hashes only",
+    "scent_model_sha256": "934c220d5bf62acaa3297c6c9d723ea954c220260b02292ca17f6d5daef9f4d9",
+    "wire_shape_sha256": "229ae6487a418c3fcb6da9be404de2f2533c288ebc228811bff6dedc4164d6f7",
+    "info_mode_sha256": "020947daeeb3f73494af9b04201326791742c7184085456e3517d21981ee1202"
+  },
+  "refusal_rule": [
+    {
+      "ours": "81ebee59640e80eae8ca9ee5f86abd26e7edf5cdbb27d15925cb6ee45ca6ddf4",
+      "theirs": "81ebee59640e80eae8ca9ee5f86abd26e7edf5cdbb27d15925cb6ee45ca6ddf4",
+      "note": "both declare, same model",
+      "decision": "play"
+    },
+    {
+      "ours": "81ebee59640e80eae8ca9ee5f86abd26e7edf5cdbb27d15925cb6ee45ca6ddf4",
+      "theirs": "934c220d5bf62acaa3297c6c9d723ea954c220260b02292ca17f6d5daef9f4d9",
+      "note": "both declare, different models",
+      "decision": "refuse"
+    },
+    {
+      "ours": "81ebee59640e80eae8ca9ee5f86abd26e7edf5cdbb27d15925cb6ee45ca6ddf4",
+      "theirs": null,
+      "note": "we declare, they are silent (e.g. the unmodified reference peer)",
+      "decision": "play"
+    },
+    {
+      "ours": null,
+      "theirs": "934c220d5bf62acaa3297c6c9d723ea954c220260b02292ca17f6d5daef9f4d9",
+      "note": "they declare, we are silent",
+      "decision": "play"
+    },
+    {
+      "ours": null,
+      "theirs": null,
+      "note": "neither declares",
+      "decision": "play"
+    }
+  ]
+}
