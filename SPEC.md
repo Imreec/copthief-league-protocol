@@ -317,6 +317,55 @@ mismatch catchable before the game — but a pair should know which of the two i
 > `unpinned_preimages` and its hash will change when they are settled. That is the intended
 > behaviour: a lock should not claim to bind what it does not.
 
+### 7.1 Implementer's note — at-least-once delivery
+
+Both registered wire shapes ride an HTTP transport that is **at-least-once, not
+exactly-once**. A push that is delivered but whose acknowledgement is lost is retried by a
+correctly-written client, so **the same message arrives twice**. Two of a peer's pushes can
+also be in flight at once, so a retry can arrive after a later message.
+
+This is not an edge case reserved for bad networks. A client that retries an in-game push on
+the turn budget — the behaviour that stops a network flap from costing you the game — is a
+duplicate sender **by design**.
+
+A receiver has three available answers, and two of them cost points:
+
+| Receiver behaviour | Outcome on a redelivery |
+|---|---|
+| refuse the repeated step as a protocol violation | a flaky tunnel becomes a technical loss; under App. E rule 35 the missing or contradictory report that follows zeroes **both** teams |
+| apply the message again | belief, scent field and history are updated twice from one real move — no error is raised, and the divergence surfaces later as an audit or physics disagreement between two honest peers |
+| absorb it | the game state is identical to a single delivery; play continues |
+
+**Recommended receiver contract** — implemented independently by two teams as of 2026-07-22,
+and adopted as a numbered decision in their joint wire-shape ADR:
+
+1. **Deduplicate on the `commit`, not on `(kind, step)`.** The commit is the one field a
+   redelivery cannot vary. Keying on it collapses a retry while keeping a *second, different*
+   commit for an already-played step distinguishable — that case is tampering evidence and
+   must stay loud. A `(kind, step)` key collapses both, silently.
+2. **Buffer a bounded number of out-of-order arrivals** and replay them in order; treat
+   anything past the bound as a violation. Let the window be the flood rule — a second
+   threshold beside it is unreachable.
+3. **Never let tolerated traffic renew a turn deadline.** One clock per *expected* message, so
+   a stall attempt burns the sender's budget rather than the receiver's. Note that the deadline
+   must also be evaluated on laps where a message *did* arrive: a receiver that only checks its
+   clock on an empty poll never checks it under a flood.
+
+**Transport tolerance, no rules tolerance.** None of the above relaxes the commit-reveal
+guarantees. Equivocation still collapses the game.
+
+**Behaviour of the reference implementation.** Teams building from the reference should know
+that its turn handler (`peer/turn_handler.py`, `TurnHandler.process`) does not carry a
+step-continuity check: an inbound message is appended to history and applied unconditionally,
+so a redelivery is processed a second time (belief diffusion, smell observation, field
+absorption, decay). The book does not specify duplicate handling, so this is an unspecified
+area rather than a deviation — but it is worth patching before a counted series, because the
+resulting state divergence is silent and is most likely to be discovered as a disagreement in
+the audit, when it can no longer be attributed.
+
+*Reported by the copthief league teams (Imreec, anrbj666), 2026-07-22, from a live
+duplicate-delivery drill over a public tunnel and a reading of the reference source.*
+
 ## 8. Conformance
 
 A team is **interop-ready** when:
