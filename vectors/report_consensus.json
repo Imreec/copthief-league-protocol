@@ -1,5 +1,6 @@
 {
   "description": "Settlement consensus signature — the release's SECOND canonical form (reference report_writer.py, verified at sha 960499fd): json.dumps(report, sort_keys=True, ensure_ascii=False) with DEFAULT (spaced) separators, then SHA-256. The signature is computed BEFORE the signature key is inserted (sign-then-insert) — verify by popping the key, re-serializing spaced, re-hashing. compact_form_sha256 shows the §2 compact form does NOT reproduce it: a team signing compact fails settlement at the exact moment both teams must agree. Found by Alon's team (alonengel / anrbj666).",
+  "status": "CORE",
   "serialization": {
     "sort_keys": true,
     "ensure_ascii": false,

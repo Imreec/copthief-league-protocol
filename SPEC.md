@@ -187,8 +187,9 @@ unlike the book's, so the kit pins the math as a self-test. `vectors/pheromone.j
 ### 5.1 `multiplicative_book_v1` — the book's own model (PROMOTED)
 
 The book's ch.4 model, registered as a named alternative. `vectors/scent_book_v3.json`. Status is
-**PROMOTED** (2026-07-20): the kit's bar — a second independent implementation reproducing the
-fixtures — was met by **anrbj666**'s clean-room reproduction (issue #6): byte-exact on the kernel,
+**PROMOTED** (2026-07-20): the kit's bar ([`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)) — a second
+independent implementation reproducing the fixtures — was met by **anrbj666**'s clean-room
+reproduction (issue #6): byte-exact on the kernel,
 both emit cases, all three walk turns, both scalar traces, and every ordering-probe case with
 zero tolerance, from an implementation built from the book alone, predating these vectors. The spec facts were
 contributed by **anrbj666 (Alon Engel, Renat Karimov)**, whose implementation follows the book
@@ -378,9 +379,13 @@ A team is **interop-ready** when:
    to theirs; both audits pass with zero `tamper_forfeit`. This is the real test §1 exists for.
 3. **Report bytes match** — the emailed body equals the canonical bytes that were hashed.
 
-The `[ENH]` vectors (Appendix A) are separate: a pair conforms to an enhancement only if both
-opted in and signed it into `config/game.json`. `[PROPOSED]` fixtures (§5.1) are a third tier —
-published so a second implementation can reproduce them, and promoted only once one has.
+Each fixture declares its own tier — `CORE`, `PROMOTED`, `PROPOSED` or `ENH` — and
+`verify_vectors.py` prints it. What those tiers claim, and what it takes to move a fixture between
+them, is defined once in **[`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)**; the roster is generated at
+[`vectors/INDEX.md`](vectors/INDEX.md). In short: `CORE` is the interop floor and everything else is
+opt-in, `[ENH]` binds only a pair that signed it into `config/game.json`, and `PROPOSED` becomes
+`PROMOTED` when a **second independent implementation reproduces it** and the evidence is cited in
+this repo.
 
 CI regenerates all vectors and the worked example on every push and fails on any drift.
 

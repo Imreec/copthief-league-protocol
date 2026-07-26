@@ -1,5 +1,6 @@
 {
   "description": "Deterministic shared id both peers reproduce with no round-trip. game_uid = UUID(SHA256(canonical(terms)|'|'.join(sorted([g_a,g_b])))[:16]). Group order does not matter (ids are sorted first).",
+  "status": "CORE",
   "vectors": [
     {
       "terms": {

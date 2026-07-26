@@ -40,10 +40,12 @@ schedule — that it will interoperate.
 | File | What it is |
 |---|---|
 | [`SPEC.md`](SPEC.md) | The interop surface: canonical JSON, commit-reveal, agreement signature + `game_uid`, pheromone math, report bytes, locked-model declarations — mapped to the book's chapters, plus opt-in enhancements |
-| [`vectors/`](vectors/) | Machine-generated fixtures — 7 CORE files (book conformance) + 1 PROPOSED + 2 ENH files (opt-in), 55 checks |
-| [`verify_vectors.py`](verify_vectors.py) | Stdlib-only reference checker — `python verify_vectors.py` |
+| [`vectors/`](vectors/) | Machine-generated fixtures, one file per construction — each declares its own tier; roster at [`vectors/INDEX.md`](vectors/INDEX.md) |
+| [`verify_vectors.py`](verify_vectors.py) | Stdlib-only reference checker — `python verify_vectors.py`; prints the roster and the totals it ran |
 | [`gen_vectors.py`](gen_vectors.py) | Regenerates every fixture from the reference constructions; CI fails on drift |
 | [`examples/`](examples/) | A worked exchange (agreement → sealed steps → audit → settlement), every hash real and regenerable |
+| [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) | What `CORE` / `PROMOTED` / `PROPOSED` / `ENH` claim, and what it takes to promote one |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to report a conformance failure, file a reproduction, or propose a construction |
 
 The constructions were confirmed byte-for-byte against the official reference implementation. Every
 vector is generated from our own synthetic inputs — no reference content is copied.

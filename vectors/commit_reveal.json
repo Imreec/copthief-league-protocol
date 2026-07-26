@@ -1,5 +1,6 @@
 {
   "description": "Per-step commit-reveal seal. commit = SHA256(canonical_json(payload)|nonce). Self-sealed by each peer; re-hashed by the OPPONENT at audit — so the canonical form must match cross-team even though the payload does not.",
+  "status": "CORE",
   "construction": "sha256(utf8(canonical_json(payload) + '|' + nonce))",
   "vectors": [
     {

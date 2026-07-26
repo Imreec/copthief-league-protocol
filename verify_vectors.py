@@ -177,7 +177,7 @@ def ref_lock_decision(ours: str | None, theirs: str | None) -> str:
     return "play" if ours == theirs else "refuse"
 
 
-# --- book-v3 scent model (PROPOSED; SPEC section 5.1) -------------------------------------
+# --- book-v3 scent model (SPEC section 5.1; tier declared in gen_vectors.TIERS) -----------
 #
 # The book's ch.4 model, as distinct from the reference's (section 5). Printed figure 4 is a
 # 5x5 emission kernel; the update is multiplicative and runs once per FULL turn.
@@ -281,7 +281,16 @@ def ref_derive_starts(seed: str, index: int, n: int) -> tuple[list[int], list[in
 # --- fixture checks -----------------------------------------------------------------------
 
 
+_CHECKS = 0
+_ROSTER: list[tuple[str, str]] = []  # (fixture, tier), in the order checked
+
+# Display order for the run summary; a tier absent from the roster is simply not printed.
+_TIER_ORDER = ("CORE", "PROMOTED", "PROPOSED", "ENH")
+
+
 def check(name: str, ok: bool, detail: str = "") -> bool:
+    global _CHECKS
+    _CHECKS += 1
     print(f"  {'PASS' if ok else 'FAIL'}  {name}{('  ' + detail) if detail and not ok else ''}")
     return ok
 
@@ -290,17 +299,36 @@ def _load(name: str) -> dict:
     return json.loads((VECTORS / name).read_text(encoding="utf-8"))
 
 
+def _section(name: str) -> dict:
+    """Load a fixture and print its banner, taking the tier from the fixture's own ``status``.
+
+    The tier is declared once, in ``gen_vectors.py``'s TIERS registry, and read back here — so
+    this file cannot fall out of step with what the fixture says it is. It did once:
+    ``multiplicative_book_v1`` was promoted in the fixture on 2026-07-20 while this checker went
+    on printing ``[PROPOSED]`` beside it until 2026-07-26. What the tiers mean and what a
+    promotion requires: docs/GOVERNANCE.md.
+    """
+    data = _load(name)
+    tier = data.get("status")
+    if tier is None:
+        raise SystemExit(
+            f"{name}: fixture declares no `status`. Regenerate with `python gen_vectors.py` — "
+            f"the tier comes from that file's TIERS registry, never from a literal here."
+        )
+    _ROSTER.append((name, tier))
+    print(f"[{tier}] {name}")
+    return data
+
+
 def run() -> int:
     failures = 0
 
-    print("[CORE] canonical_json.json")
-    for i, v in enumerate(_load("canonical_json.json")["vectors"]):
+    for i, v in enumerate(_section("canonical_json.json")["vectors"]):
         got = _canonical_str(v["object"])
         ok = got == v["canonical"] and canonical_hash(v["object"]) == v["sha256"]
         failures += not check(f"canonical #{i} ({v.get('note', '')})", ok, f"got {got!r}")
 
-    print("[CORE] commit_reveal.json")
-    cr = _load("commit_reveal.json")
+    cr = _section("commit_reveal.json")
     for i, v in enumerate(cr["vectors"]):
         got = ref_commit(v["payload"], v["nonce"])
         failures += not check(f"commit #{i} ({v.get('note', '')})", got == v["commit"], f"got {got}")
@@ -319,18 +347,15 @@ def run() -> int:
     )
     failures += not check("divergent forms: pinned + mutually distinct", ok)
 
-    print("[CORE] terms_signature.json")
-    for i, v in enumerate(_load("terms_signature.json")["vectors"]):
+    for i, v in enumerate(_section("terms_signature.json")["vectors"]):
         got = ref_terms_signature(v["terms"], v["nonce"])
         failures += not check(f"terms signature #{i}", got == v["signature"], f"got {got}")
 
-    print("[CORE] game_uid.json")
-    for i, v in enumerate(_load("game_uid.json")["vectors"]):
+    for i, v in enumerate(_section("game_uid.json")["vectors"]):
         got = ref_game_uid(v["terms"], v["group_a"], v["group_b"])
         failures += not check(f"game_uid #{i}", got == v["game_uid"], f"got {got}")
 
-    print("[CORE] pheromone.json")
-    ph = _load("pheromone.json")
+    ph = _section("pheromone.json")
     for i, v in enumerate(ph["emit"]):
         got = ref_smell_emit(v["center"], v["intensity"], v["grid_size"], v["board_size"])
         failures += not check(f"smell emit #{i}", got == v["field"], f"got {got}")
@@ -338,8 +363,7 @@ def run() -> int:
         got = ref_smell_decay(v["before"], v["decay"])
         failures += not check(f"smell decay #{i}", got == v["after"], f"got {got}")
 
-    print("[CORE] report_consensus.json")
-    rc = _load("report_consensus.json")
+    rc = _section("report_consensus.json")
     sig_key = rc["signature_key"]
     for i, v in enumerate(rc["vectors"]):
         got = ref_report_consensus_signature(v["report"])
@@ -351,8 +375,7 @@ def run() -> int:
         ok = ok and canonical_hash(v["report"]) == v["compact_form_sha256"] != v["signature"]
         failures += not check(f"consensus signature #{i} ({v.get('note', '')})", ok, f"got {got}")
 
-    print("[CORE] locked_model.json")
-    lm = _load("locked_model.json")
+    lm = _section("locked_model.json")
     schema_keys = tuple(lm["doc_schema"]["keys"])
     for entry in lm["registered"]:
         doc = entry["doc"]
@@ -374,8 +397,7 @@ def run() -> int:
     failures += not check("omission is never refusal",
                           bool(silent) and all(v["decision"] == "play" for v in silent))
 
-    print("[PROPOSED] scent_book_v3.json")
-    sb = _load("scent_book_v3.json")
+    sb = _section("scent_book_v3.json")
     rho = sb["field_walk"]["rho"]
     peak = sb["field_walk"]["center_intensity"]
     board = sb["field_walk"]["board_size"]
@@ -422,8 +444,7 @@ def run() -> int:
         for c in op["cases"])
     failures += not check("ordering probe: evaluation order is load-bearing", ok)
 
-    print("[ENH] joint_seed.json")
-    for i, v in enumerate(_load("joint_seed.json")["vectors"]):
+    for i, v in enumerate(_section("joint_seed.json")["vectors"]):
         ok = (
             ref_share_commit(v["share_group_1"]) == v["commit_group_1"]
             and ref_share_commit(v["share_group_2"]) == v["commit_group_2"]
@@ -431,13 +452,17 @@ def run() -> int:
         )
         failures += not check(f"joint seed #{i}", ok)
 
-    print("[ENH] derive_starts.json")
-    for i, v in enumerate(_load("derive_starts.json")["vectors"]):
+    for i, v in enumerate(_section("derive_starts.json")["vectors"]):
         cop, thief, draws = ref_derive_starts(v["seed"], v["index"], v["n"])
         ok = cop == v["cop"] and thief == v["thief"] and draws == v["draws"]
         failures += not check(f"starts #{i} n={v['n']} index={v['index']}", ok, f"got {cop},{thief},{draws}")
 
-    print(f"\n{'ALL VECTORS PASS' if failures == 0 else f'{failures} FAILURE(S)'}")
+    # The roster and totals are derived from what actually ran, so no document has to carry a
+    # count that can go stale. Prose links vectors/INDEX.md and quotes this line instead.
+    counts = {tier: sum(1 for _, t in _ROSTER if t == tier) for tier in _TIER_ORDER}
+    composition = ", ".join(f"{n} {tier}" for tier, n in counts.items() if n)
+    print(f"\n{_CHECKS} checks across {len(_ROSTER)} fixtures — {composition}")
+    print("ALL VECTORS PASS" if failures == 0 else f"{failures} FAILURE(S)")
     return 1 if failures else 0
 
 
