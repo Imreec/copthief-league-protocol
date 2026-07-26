@@ -90,6 +90,19 @@ def ref_game_uid(terms: dict, group_a: str, group_b: str) -> str:
     return str(uuid.UUID(bytes=hashlib.sha256(seed.encode()).digest()[:16]))
 
 
+def ref_game_id(group_a: str, group_b: str) -> str:
+    """The human-readable match id that names all four submission artifacts.
+
+    game_id = "-vs-".join(sorted([group_a, group_b]))
+
+    SORTED — the same pair term that goes into ``ref_game_uid``. Both peers therefore derive one
+    identical string with no round-trip and no convention to settle. A peer that names *itself*
+    first instead ("<us>-vs-<them>") produces a different id on each side, so one match yields two
+    sets of artifact filenames and the two teams' reports cannot be joined by ``game_id`` at all.
+    """
+    return "-vs-".join(sorted([group_a, group_b]))
+
+
 def ref_smell_emit(center, intensity, grid_size, board_size):
     """Radial scent emission around a cell (book ch.4; reference domain/smell.py).
 
@@ -175,6 +188,100 @@ def ref_lock_decision(ours: str | None, theirs: str | None) -> str:
     if ours is None or theirs is None:
         return "play"
     return "play" if ours == theirs else "refuse"
+
+
+# --- PAIRING DECLARATION (SPEC section 7.2) ----------------------------------------------
+#
+# Two fields ride the negotiate extras BESIDE `terms`, never inside it: the terms are a flat
+# signed set, so adding a key there breaks the signature (section 4). They answer the one
+# question the signed terms cannot: "are you the peer I think I am talking to, in the game I
+# think we are playing?" Identical terms give identical game_uids, so by the time an artifact
+# exists a mispairing is already invisible — the handshake is the only place it can be seen.
+
+def ref_pairing_decision(ours: dict, theirs: dict) -> str:
+    """Accept, or refuse with a reason, on the two declared pairing fields.
+
+    ``ours`` / ``theirs`` are the declared extras: ``{"sub_game_number": int, "role": str}``,
+    either key possibly absent. Returns "play", "refuse:sub_game" or "refuse:role".
+
+    Three rules, in the order they bite:
+
+    1. **Sub-game mismatch refuses.** One game cannot carry two indices. Two peers that disagree
+       here settle the same game under different numbers and their two reports contradict.
+    2. **Role collision refuses.** The two sides of a game are complementary; two of the same
+       side can only deadlock, and the deadlock costs a whole turn budget to discover.
+    3. **Omission never refuses** — in either direction, and a value that cannot be compared is
+       treated as silence. This is the same rule section 7 uses for locked models, for the same
+       reason: the unmodified reference peer declares neither field, so a guard that fail-fasts
+       on silence forfeits that game to itself. Refusing over a peer's type or spelling choice
+       would likewise turn a cosmetic wire difference into a lost game.
+    """
+    ours_sg, theirs_sg = ours.get("sub_game_number"), theirs.get("sub_game_number")
+    if isinstance(ours_sg, int) and isinstance(theirs_sg, int) and ours_sg != theirs_sg:
+        return "refuse:sub_game"
+    ours_role, theirs_role = ours.get("role"), theirs.get("role")
+    if isinstance(ours_role, str) and isinstance(theirs_role, str) and ours_role == theirs_role:
+        return "refuse:role"
+    return "play"
+
+
+# --- AT-LEAST-ONCE DELIVERY (SPEC section 7.1) -------------------------------------------
+#
+# Both registered wire shapes ride HTTP, which is at-least-once. A push whose ack is lost is
+# retried by a correct client, so the same message arrives twice — by design, not only on bad
+# networks. The receiver's answer is behaviour, not bytes, which is why this is pinned as a
+# decision function with a truth table rather than as a hash.
+
+def ref_delivery_decision(state: dict, arrival: dict) -> str:
+    """What a receiver must do with an inbound turn message.
+
+    ``state``  = {"played": {step: commit}, "buffered": [steps], "window": int, "next": step}
+    ``arrival``= {"step": int, "commit": str}
+
+    Returns one of:
+
+    * ``"absorb"``    — a redelivery of something already played. State is unchanged; this is the
+      only answer that costs nothing. Note the key: **the commit, not (kind, step)**. A commit is
+      the one field a redelivery cannot vary, so keying on it collapses a retry while keeping a
+      *second, different* commit for a played step distinguishable — and that case is tampering
+      evidence, which must stay loud. A (kind, step) key collapses both, silently.
+    * ``"equivocation"`` — a different commit for a step already played. Two commitments for one
+      step is exactly what commit-reveal exists to catch. Transport tolerance does not extend
+      here: the rules layer is not tolerant.
+    * ``"apply"``     — the next expected step; apply it and drain anything buffered behind it.
+    * ``"buffer"``    — an out-of-order arrival inside the reorder window; hold and replay in
+      step order.
+    * ``"violation"`` — past the window bound. Let the window be the flood rule; a second
+      threshold beside it is unreachable and only adds a way to disagree.
+
+    A receiver with **no** reorder window (``window`` 0) turns an ordinary retry race into a
+    protocol violation, which under App. E rule 35 is a self-inflicted technical loss that zeroes
+    both teams. Zero tolerance is not a tightening here.
+    """
+    played, step, commit = state["played"], arrival["step"], arrival["commit"]
+    if str(step) in played or step in played:
+        seen = played.get(str(step), played.get(step))
+        return "absorb" if seen == commit else "equivocation"
+    if step == state["next"]:
+        return "apply"
+    if step - state["next"] <= state["window"]:
+        return "buffer"
+    return "violation"
+
+
+def ref_deadline_decision(deadline_at: float, now: float, arrived: bool, tolerated: bool) -> str:
+    """Whether a turn deadline has expired — evaluated on EVERY lap, not only on empty polls.
+
+    Returns "expired" or "waiting".
+
+    One clock per *expected* message. A redelivered or early push proves the opponent is alive
+    but does not discharge what it owes, so it renews nothing: ``tolerated`` traffic never moves
+    ``deadline_at``. And the deadline is judged here even on a lap where a message *did* arrive —
+    a receiver that only checks its clock on an empty poll never checks it under a flood, so a
+    stall attempt would burn the receiver's budget instead of the sender's.
+    """
+    del arrived, tolerated  # neither can renew or defer the deadline; that is the contract
+    return "expired" if now >= deadline_at else "waiting"
 
 
 # --- book-v3 scent model (SPEC section 5.1; tier declared in gen_vectors.TIERS) -----------
@@ -351,9 +458,26 @@ def run() -> int:
         got = ref_terms_signature(v["terms"], v["nonce"])
         failures += not check(f"terms signature #{i}", got == v["signature"], f"got {got}")
 
-    for i, v in enumerate(_section("game_uid.json")["vectors"]):
+    gu = _section("game_uid.json")
+    for i, v in enumerate(gu["vectors"]):
         got = ref_game_uid(v["terms"], v["group_a"], v["group_b"])
         failures += not check(f"game_uid #{i}", got == v["game_uid"], f"got {got}")
+        got_id = ref_game_id(v["group_a"], v["group_b"])
+        failures += not check(f"game_id #{i} ({v['note']})", got_id == v["game_id"], f"got {got_id}")
+    # Both ids must be order-independent, or the two peers name one match two different ways.
+    uids = {v["game_uid"] for v in gu["vectors"]}
+    ids = {v["game_id"] for v in gu["vectors"]}
+    failures += not check("swapping the group order changes neither id",
+                          len(uids) == 1 and len(ids) == 1)
+    # The four artifact filenames derive from game_id (book App. F table 20).
+    fn = gu["artifact_filenames"]
+    gid = gu["vectors"][0]["game_id"]
+    failures += not check(
+        "artifact filenames derive from game_id",
+        fn["declaration"] == f"declaration_{gid}.json"
+        and fn["result"] == f"result_{gid}.json"
+        and fn["config"] == f"config_{gid}_g<NN>.json"
+        and fn["log"] == f"log_{gid}_g<NN>.json")
 
     ph = _section("pheromone.json")
     for i, v in enumerate(ph["emit"]):
@@ -389,6 +513,22 @@ def run() -> int:
     # Distinct registrations must hash distinctly, or a lock cannot tell them apart.
     hashes = [e["sha256"] for e in lm["registered"]]
     failures += not check("registrations mutually distinct", len(set(hashes)) == len(hashes))
+    # Every registration states its own tier, on the same terms as the fixtures (GOVERNANCE.md).
+    failures += not check(
+        "every registration declares a status and its evidence",
+        all(e.get("status") in _TIER_ORDER and e.get("evidence") for e in lm["registered"]))
+    # The promotion evidence is itself a check: the hashes a second implementation put on the wire
+    # must equal the docs registered here, or the claim in `evidence` is not true of this tree.
+    observed = lm["live_reproduction"]["observed_declarations_matching_registrations"]
+    by_name = {e["doc"]["name"]: e for e in lm["registered"]}
+    failures += not check(
+        "the live-declared hashes equal the registered docs",
+        observed["scent_model_sha256"] == by_name["multiplicative_book_v1"]["sha256"]
+        and observed["wire_shape_sha256"] == by_name["reference-v3"]["sha256"])
+    failures += not check(
+        "the two registrations that evidence names are the promoted ones",
+        by_name["multiplicative_book_v1"]["status"] == "PROMOTED"
+        and by_name["reference-v3"]["status"] == "PROMOTED")
     for i, v in enumerate(lm["refusal_rule"]):
         got = ref_lock_decision(v["ours"], v["theirs"])
         failures += not check(f"refusal rule #{i} ({v['note']})", got == v["decision"], f"got {got}")
@@ -396,6 +536,46 @@ def run() -> int:
     silent = [v for v in lm["refusal_rule"] if v["ours"] is None or v["theirs"] is None]
     failures += not check("omission is never refusal",
                           bool(silent) and all(v["decision"] == "play" for v in silent))
+
+    pd = _section("pairing_declaration.json")
+    for i, v in enumerate(pd["refusal_rule"]):
+        got = ref_pairing_decision(v["ours"], v["theirs"])
+        failures += not check(f"pairing #{i} ({v['note']})", got == v["decision"], f"got {got}")
+    # Omission must never refuse — the property that keeps the unmodified reference peer, which
+    # declares neither field, playable. Asserted as a property over every case rather than by
+    # filtering for the silent ones: a peer that declared nothing is playable against ANY
+    # declaration, in either direction.
+    failures += not check(
+        "omission is never refusal, in either direction",
+        all(ref_pairing_decision(v["ours"], {}) == "play"
+            and ref_pairing_decision({}, v["theirs"]) == "play"
+            for v in pd["refusal_rule"]))
+    # Both fields must be independently capable of refusing, or one of them is decoration.
+    reasons = {v["decision"] for v in pd["refusal_rule"]}
+    failures += not check("both fields can refuse, and refusals name which",
+                          {"refuse:sub_game", "refuse:role"} <= reasons)
+
+    dc = _section("delivery_contract.json")
+    for i, v in enumerate(dc["arrivals"]):
+        got = ref_delivery_decision(dc["state"], v["arrival"])
+        failures += not check(f"delivery #{i} ({v['note'][:60]})", got == v["decision"], f"got {got}")
+    # The load-bearing distinction: same commit absorbs, a DIFFERENT commit for a played step is
+    # equivocation. A receiver keyed on (kind, step) collapses both and loses the evidence.
+    by_dec = {v["decision"] for v in dc["arrivals"]}
+    failures += not check("redelivery absorbs but equivocation stays loud",
+                          {"absorb", "equivocation"} <= by_dec)
+    nw = dc["no_reorder_window"]
+    got = ref_delivery_decision(nw["state"], nw["arrival"])
+    failures += not check("no reorder window turns a retry race into a violation",
+                          got == nw["decision"] == "violation", f"got {got}")
+    for i, v in enumerate(dc["deadline_rule"]):
+        got = ref_deadline_decision(v["deadline_at"], v["now"], v["arrived"], v["tolerated"])
+        failures += not check(f"deadline #{i} ({v['note'][:60]})", got == v["decision"], f"got {got}")
+    # Tolerated traffic must not buy the sender time: same clock, same verdict either way.
+    failures += not check(
+        "tolerated traffic never renews the deadline",
+        ref_deadline_decision(100.0, 99.0, True, True) == ref_deadline_decision(100.0, 99.0, False, False)
+        and ref_deadline_decision(100.0, 100.0, True, True) == "expired")
 
     sb = _section("scent_book_v3.json")
     rho = sb["field_walk"]["rho"]

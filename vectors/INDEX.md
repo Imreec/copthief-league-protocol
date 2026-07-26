@@ -17,6 +17,8 @@ the totals it actually ran.
 | [`pheromone.json`](pheromone.json) | `CORE` | §5 | `subtractive_chebyshev_v1` emission and decay |
 | [`report_consensus.json`](report_consensus.json) | `CORE` | §6 | the settlement signature's second (spaced) form, sign-then-insert |
 | [`locked_model.json`](locked_model.json) | `CORE` | §7 | the locked-model doc schema and the refusal truth table |
+| [`pairing_declaration.json`](pairing_declaration.json) | `PROMOTED` | §7.2 | `sub_game_number` + `role` in the negotiate extras, and when they refuse |
+| [`delivery_contract.json`](delivery_contract.json) | `PROMOTED` | §7.1 | the at-least-once receiver contract, as a decision table |
 | [`scent_book_v3.json`](scent_book_v3.json) | `PROMOTED` | §5.1 | `multiplicative_book_v1` — the book's own scent model |
 | [`joint_seed.json`](joint_seed.json) | `ENH` | App. A | the joint-seed coin flip (opt-in) |
 | [`derive_starts.json`](derive_starts.json) | `ENH` | App. A | seeded asymmetric starts (opt-in) |

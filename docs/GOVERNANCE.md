@@ -126,7 +126,22 @@ itself. The registry exists so that cannot recur.
 
 | Fixture / section | Promoted | Evidence |
 |---|---|---|
-| `multiplicative_book_v1` — [`vectors/scent_book_v3.json`](../vectors/scent_book_v3.json), SPEC §5.1 | 2026-07-20 | Clean-room reproduction by **anrbj666** (Alon Engel, Renat Karimov), issue #6: byte-exact on the kernel, both emit cases, all three walk turns, both scalar traces and every ordering-probe case with zero tolerance — from an implementation built from the book alone, predating these vectors. |
+| `multiplicative_book_v1` — [`vectors/scent_book_v3.json`](../vectors/scent_book_v3.json), SPEC §5.1 | 2026-07-20 | Clean-room reproduction by **anrbj666** (Alon Engel, Renat Karimov), issue #6: byte-exact on the kernel, both emit cases, all three walk turns, both scalar traces and every ordering-probe case with zero tolerance — from an implementation built from the book alone, predating these vectors. Reconfirmed on the wire: their peer declared this exact doc hash throughout the run below. |
+| At-least-once receiver contract — [`vectors/delivery_contract.json`](../vectors/delivery_contract.json), SPEC §7.1 | 2026-07-26 | Implemented independently by two teams (2026-07-22, from a live duplicate-delivery drill and a reading of the reference source), then exercised by both across the run below with mutual audits clean in both directions. |
+| Pairing declaration — [`vectors/pairing_declaration.json`](../vectors/pairing_declaration.json), SPEC §7.2 | 2026-07-26 | Both `sub_game_number` and `role` were declared **and asserted** by two independent implementations across the run below; the opponent's inbound greetings carry both fields top-level, alternating correctly with the role swap. |
+| `wire_shape: reference-v3` — [`vectors/locked_model.json`](../vectors/locked_model.json), SPEC §7 | 2026-07-26 | Two independent implementations played the whole run below on this shape, and the opponent declared a `wire_shape_sha256` **byte-identical to the registered doc**. The checker asserts that equality, so this row is verified rather than asserted. |
+
+**The run** all four rows cite: the first fully autonomous cross-team series, **2026-07-25** —
+six sub-games under one wire `game_uid`, roles alternating, mutual audits clean both ways,
+imreeyal vs anrbj666. Per the rule above, the run is cited and not the path: its logs live in a
+private implementation repository.
+
+Not promoted from the same run, and why: **`info_mode`** travelled as a bare string rather than a
+doc hash, so the `belief` / `exact` registrations were not reproduced — only the intent was.
+**`hardware_spec_sha256`** was observed on the wire as a fourth family and is deliberately not
+registered; the doc underneath it is unknown to us, and registering a family whose field set we
+have not seen would reintroduce the ad-hoc-dict problem §7 exists to remove. **`bookletter-v3`**
+keeps four unpinned preimages and stays `PROPOSED`.
 
 ---
 

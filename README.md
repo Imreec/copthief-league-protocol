@@ -56,7 +56,9 @@ vector is generated from our own synthetic inputs — no reference content is co
 2. **Commit-reveal** — `SHA256(canonical_json(payload)|nonce)`; the opponent re-hashes your
    revealed log at audit.
 3. **Agreement signature** — `SHA256(canonical_json(terms)|nonce)`; the pre-game gate.
-4. **`game_uid`** — `UUID(SHA256(canonical(terms)|sorted-group-ids)[:16])`.
+4. **`game_uid` and `game_id`** — `UUID(SHA256(canonical(terms)|sorted-group-ids)[:16])` and
+   `"-vs-".join(sorted(group_ids))`. Both sort the pair, so neither peer has to be told which order
+   to use; a peer that names itself first gives one match two different `game_id`s.
 5. **Pheromone field** — radial emission + per-step decay (self-test, but breaks your belief map if wrong).
 6. **Report bytes + consensus signature** — the emailed body is the exact canonical bytes that
    were hashed, and the consensus signature inside the report uses a **second (spaced)
@@ -64,6 +66,11 @@ vector is generated from our own synthetic inputs — no reference content is co
 7. **Locked-model declarations** — one doc schema (`family`/`name`/`params`/`example`) serving
    scent models, wire shapes and information modes, hashed and declared at negotiate time.
    Refusal fires only when **both** peers declare and disagree; silence never refuses (SPEC §7).
+
+Three more are **behaviour** rather than bytes, pinned as truth tables because answering them
+differently costs a game just as surely as a bad hash — and unlike a hash, you cannot catch these
+by comparing a digest with a partner: the locked-model refusal rule (§7), the at-least-once
+receiver contract (§7.1) and the pairing declaration `sub_game_number` + `role` (§7.2).
 
 Everything else — strategy, GUI, prompts, infra — is private and needs no agreement.
 
