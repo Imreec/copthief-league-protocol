@@ -1,5 +1,5 @@
 {
-  "description": "Deterministic shared id both peers reproduce with no round-trip. game_uid = UUID(SHA256(canonical(terms)|'|'.join(sorted([g_a,g_b])))[:16]). Group order does not matter (ids are sorted first).",
+  "description": "The two deterministic match ids both peers reproduce with no round-trip. game_uid = UUID(SHA256(canonical(terms)|'|'.join(sorted([g_a,g_b])))[:16]) names the match cryptographically; game_id = '-vs-'.join(sorted([g_a,g_b])) names its four artifact files. BOTH sort the pair, so group order does not matter and neither side has to be told which name to use. A peer that names itself first produces a different game_id on each side, and one match then yields two sets of filenames that cannot be joined.",
   "status": "CORE",
   "vectors": [
     {
@@ -26,6 +26,7 @@
       "group_a": "team-aleph",
       "group_b": "team-bet",
       "game_uid": "4ef6aeda-3051-18a0-339c-6869f43d77aa",
+      "game_id": "team-aleph-vs-team-bet",
       "note": "canonical order"
     },
     {
@@ -52,7 +53,15 @@
       "group_a": "team-bet",
       "group_b": "team-aleph",
       "game_uid": "4ef6aeda-3051-18a0-339c-6869f43d77aa",
-      "note": "groups swapped -> identical uid (sorted)"
+      "game_id": "team-aleph-vs-team-bet",
+      "note": "groups swapped -> identical uid AND identical game_id (both sorted)"
     }
-  ]
+  ],
+  "artifact_filenames": {
+    "note": "the book's App. F table 20 grammar, derived from the game_id above. Per-sub-game files carry a zero-padded _g<NN>; all four carry the same game_uid inside, which is what joins them to the sealed logs.",
+    "declaration": "declaration_team-aleph-vs-team-bet.json",
+    "config": "config_team-aleph-vs-team-bet_g<NN>.json",
+    "log": "log_team-aleph-vs-team-bet_g<NN>.json",
+    "result": "result_team-aleph-vs-team-bet.json"
+  }
 }

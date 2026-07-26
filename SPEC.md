@@ -51,8 +51,8 @@ output, or the game cannot start / audit / settle. Each is backed by a vector:
    `vectors/commit_reveal.json`.
 3. **Agreement signature** (§4) — the pre-game gate; a byte difference means the peers refuse to
    play. `vectors/terms_signature.json`.
-4. **`game_uid`** (§4) — both peers derive the same shared id with no round-trip.
-   `vectors/game_uid.json`.
+4. **`game_uid` and `game_id`** (§4) — both peers derive the same two shared ids with no
+   round-trip, because both sort the group pair. `vectors/game_uid.json`.
 5. **Pheromone field** (§5) — each peer emits its own, but a wrong port breaks your belief map.
    `vectors/pheromone.json`.
 6. **Report canonicalization + consensus signature** (§6) — both teams must email byte-identical
@@ -61,6 +61,12 @@ output, or the game cannot start / audit / settle. Each is backed by a vector:
 7. **Locked-model declarations** (§7) — where the signed terms cannot carry a choice, a pair
    declares the hash of a described model. The doc schema must match or the hashes are not
    comparable. `vectors/locked_model.json`.
+
+Three more places are **behaviour** rather than bytes — a conforming peer answers the same way, and
+answering differently costs a game just as surely as a hash mismatch. Each is pinned as a truth
+table, not a digest: the locked-model refusal rule (§7, `vectors/locked_model.json`), the
+at-least-once receiver contract (§7.1, `vectors/delivery_contract.json`) and the pairing
+declaration (§7.2, `vectors/pairing_declaration.json`).
 
 Everything else (your strategy, your GUI, your prompts, your infra) is private and needs no
 cross-team agreement.
@@ -140,7 +146,7 @@ Note the nonce is **pipe-appended to the canonical string**, not placed inside t
   after the comma). It carries *your own* position only — never the opponent's (hidden-position
   model) — so there is no shared board frame both sides must reproduce.
 
-## 4. Agreement signature and `game_uid`
+## 4. Agreement signature, `game_uid` and `game_id`
 
 Before play, each peer signs the agreed terms and both derive a shared id — the pre-game gate that
 refuses to start on any mismatch.
@@ -153,11 +159,25 @@ refuses to start on any mismatch.
   is the reference's `terms_from_config`.
 - **`game_uid`** = `UUID( SHA256( canonical(terms) + "|" + "|".join(sorted([g_a, g_b])) )[:16] )`,
   identical for both peers because it is a pure function of shared inputs (sorted group ids →
-  order-independent). `vectors/game_uid.json`. It names the four submission artifacts —
+  order-independent). `vectors/game_uid.json`.
+- **`game_id`** = `"-vs-".join(sorted([g_a, g_b]))` — **sorted**, the same pair term that goes
+  inside `game_uid`. It names the four submission artifacts:
   `declaration_<game_id>.json`, `config_<game_id>_g<NN>.json`, `log_<game_id>_g<NN>.json`,
-  `result_<game_id>.json` (the per-mini-game files carry the `_g<NN>` suffix, per the book's
-  App F files table and the reference's own `docs/sample-run/`) — keeping files from different
-  matches from ever mixing.
+  `result_<game_id>.json` (per-sub-game files carry the zero-padded `_g<NN>` suffix, per the
+  book's App. F files table and the reference's own `docs/sample-run/`), keeping files from
+  different matches from ever mixing.
+
+> **Sort the pair; do not name yourself first.** The reference derives both ids from
+> `sorted([g_a, g_b])`, so neither peer has to be told which order to use and there is no
+> convention for a pairing to settle. A peer that instead builds `"<us>-vs-<them>"` produces a
+> *different* `game_id` on each side of the same match: two sets of artifact filenames, and two
+> final reports that cannot be joined by `game_id` at all. Observed live — both sides of the
+> 2026-07-25 cross-team series named themselves first, and the two result artifacts disagreed on
+> the id while agreeing on every game value. It cost nothing that time because the `game_uid`
+> still joined them; it is load-bearing the moment a uid is wrong (see the warning in §6).
+>
+> `vectors/game_uid.json` pins both ids, a swapped-group case proving each is order-independent,
+> and the four filenames derived from them.
 
 ## 5. Pheromone field
 
@@ -243,6 +263,16 @@ Both teams independently build the final result JSON, and both email it — the 
 - **Derived, not declared.** Totals and the diversity flag are derived from the per-sub-game
   results and the game-count declarations by the fixed scoring table (book ch.9), so agreement on
   sub-games implies agreement on totals.
+- **The report's `game_uid` must be the one the handshake derived — never a freshly minted id.**
+  The uid is a pure function of the signed terms and both group ids (§4), so every sub-game of one
+  pairing carries it by construction, and it is what joins your report to the sealed logs and to
+  your opponent's report. Mint a new one at settlement and your report cannot be joined to your own
+  evidence *by its own key*, while the opponent's report — carrying the wire uid — says something
+  different about the same match. Two counted reports naming one match by two uids is the
+  contradiction App. E rule 35 zeroes **both** teams for. Keep a fresh id for internal attempt
+  bookkeeping if you want one; the emitted uid is the wire's. Observed live on 2026-07-25: one
+  side's report carried a minted uid that appeared nowhere in either side's logs, while every
+  game value in the two reports agreed exactly.
 - **Stage / draft interlock.** The reference's `email.mode = "draft"` is the safety gate: nothing
   reaches the lecturer's real inbox until intended. Under the diversity rule (only the *first*
   meeting with an opponent counts), an accidental early real send can burn your one counted game —
@@ -308,17 +338,43 @@ position never crosses the wire; under `bookletter-v3`, which puts it on the wir
 are an **honor term**. Declaring the mode is still worth doing — it makes the intent explicit and a
 mismatch catchable before the game — but a pair should know which of the two it is relying on.
 
-> **Status.** The scent registrations are backed by fixtures (§5 CORE, §5.1 PROMOTED 2026-07-20). The wire
-> shapes are registered per issue #6 with **asymmetric status**: `reference-v3` matches the
-> reference implementation and the book's Dec-POMDP observation space; `bookletter-v3` is a
-> **documented deviation** from the book's formal model that a pair may lock by explicit mutual
-> sign-off. Its commit layer reproduces under §3 over the full 7-field payload, but four preimages
-> — `state_digest`, `end_state_digest`, `config_sha256`, and whether a signed 14-key
-> `terms_signature` accompanies it — are not yet pinned, so its `params` record them as
-> `unpinned_preimages` and its hash will change when they are settled. That is the intended
-> behaviour: a lock should not claim to bind what it does not.
+**Every registration now carries its own `status` and the evidence for it**, on the terms in
+[`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — read them off `vectors/locked_model.json` rather than
+from prose. In summary: `subtractive_chebyshev_v1` is `CORE`; `multiplicative_book_v1` and
+`reference-v3` are `PROMOTED`; `bookletter-v3`, `belief` and `exact` are `PROPOSED`.
 
-### 7.1 Implementer's note — at-least-once delivery
+`bookletter-v3` is a **documented deviation** from the book's formal model that a pair may lock by
+explicit mutual sign-off. Its commit layer reproduces under §3 over the full 7-field payload, but
+four preimages — `state_digest`, `end_state_digest`, `config_sha256`, and whether a signed 14-key
+`terms_signature` accompanies it — are not yet pinned, so its `params` record them as
+`unpinned_preimages` and its hash will change when they are settled. That is the intended
+behaviour: a lock should not claim to bind what it does not.
+
+> **The mechanism itself has now been exercised end-to-end, and that is the stronger claim.**
+> Across the six-sub-game cross-team series of 2026-07-25, a second independent implementation
+> declared `scent_model_sha256` and `wire_shape_sha256` **byte-identical to this kit's registered
+> docs** — which is the entire point of pinning the schema, since a bare hash over an ad-hoc dict
+> would have differed while describing the same model. The lock also demonstrably *refused*: an
+> earlier attempt that evening aborted on a scent-model mismatch before a single game was played.
+> `vectors/locked_model.json` carries the observed hashes in `live_reproduction`, and the checker
+> asserts they still equal the registered docs — so the evidence for the promotion is itself a
+> check rather than a sentence.
+>
+> Two honest limits from the same run. **`info_mode` travelled as a bare string** (`"belief"`), not
+> as a doc hash, so the `belief` / `exact` registrations are *not* reproduced — only the intent
+> was; a pair that wants the mode comparable must first agree whether it travels as a string or a
+> hash. And a **fourth family, `hardware_spec_sha256`, was observed on the wire and is deliberately
+> not registered here**: the doc underneath it is unknown to us, and registering a family whose
+> field set we have not seen would reintroduce exactly the ad-hoc-dict problem this section exists
+> to remove.
+
+### 7.1 At-least-once delivery — the receiver contract (PROMOTED)
+
+Status is **PROMOTED** (2026-07-26). It was implemented independently by two teams on 2026-07-22
+and then exercised by both across a full **six-sub-game cross-team series over public tunnels on
+2026-07-25**, with mutual audits clean in both directions. `vectors/delivery_contract.json` pins
+the contract as a decision table — this is behaviour, not bytes, so it is checked the way §7's
+refusal rule is.
 
 Both registered wire shapes ride an HTTP transport that is **at-least-once, not
 exactly-once**. A push that is delivered but whose acknowledgement is lost is retried by a
@@ -367,17 +423,68 @@ the audit, when it can no longer be attributed.
 *Reported by the copthief league teams (Imreec, anrbj666), 2026-07-22, from a live
 duplicate-delivery drill over a public tunnel and a reading of the reference source.*
 
+### 7.2 Pairing declaration — `sub_game_number` and `role` (PROMOTED)
+
+Two fields ride the negotiate extras **beside `terms`, never inside it** — the terms are a flat
+signed set, so adding a key there breaks the signature (§4). They answer the one question the
+signed terms cannot: *am I talking to the peer I think I am, in the game I think we are playing?*
+
+```json
+{"terms": {…}, "nonce": "…", "signature": "…", "role": "police", "sub_game_number": 3}
+```
+
+- **`sub_game_number`** — the index of the sub-game *this* peer believes it is playing, taken from
+  its sealed step-0 record rather than re-read from a config default. A re-read default is exactly
+  what desynchronises.
+- **`role`** — `police` or `thief`, the side this peer plays in that sub-game.
+
+**Why the handshake is the only place this can be caught.** Identical terms give identical
+`game_uid`s, and the uid is what joins the artifacts. So by the time an artifact exists, a
+mispairing is already invisible: two peers that disagree about which sub-game they are in will
+both seal, both settle, and both write consistent-looking files under the same uid.
+
+**Refusal rule** — `vectors/pairing_declaration.json` pins it as a truth table:
+
+| Case | Decision |
+|---|---|
+| same sub-game, complementary roles | play |
+| sub-game numbers differ | **refuse** — one game cannot carry two indices |
+| both declare the same role | **refuse** — two of the same side can only deadlock |
+| either side omits either field | play |
+| a declared value cannot be compared (wrong type) | play — treated as silence |
+
+**Omission never refuses**, in either direction — the same rule §7 uses for locked models, for the
+same reason: the unmodified reference peer declares neither field, so a guard that fail-fasts on
+silence forfeits that game to itself. A value that cannot be compared is silence too; refusing over
+a peer's type or spelling choice would turn a cosmetic wire difference into a lost game.
+
+> **Why it is worth two fields.** The cost compounds. A failed handshake ends in about 60 s while a
+> real sub-game takes minutes, so the side that failed runs **ahead** and never resynchronises.
+> Observed live: one side on sub-game 4 while the other was still on sub-game 2. That is two teams
+> describing different series — precisely the shape App. E rule 35 zeroes for **both**. A related
+> failure the same rule catches: an orphaned peer left holding the port answers a sub-game the real
+> peer was supposed to play, so one game is sealed under two different indices and nothing anywhere
+> notices.
+
+Status is **PROMOTED** (2026-07-26): both fields were declared **and asserted** by two independent
+implementations across the full six-sub-game cross-team series of 2026-07-25 — the opponent's
+inbound greetings carry both, top-level, alternating correctly with the role swap.
+
 ## 8. Conformance
 
 A team is **interop-ready** when:
 
 1. **Core vectors pass** — `python verify_vectors.py` reproduces every `[CORE]` fixture, and your
    own implementation reproduces them too (port the checks into your suite): canonical JSON with
-   `ensure_ascii=False`, the commit construction, the terms signature, `game_uid`, the pheromone
-   math, and — if you declare any locked model — the doc schema and the refusal rule.
-2. **Cross-team audit is clean** — feed your opponent's revealed log to your verifier and your log
+   `ensure_ascii=False`, the commit construction, the terms signature, `game_uid` and `game_id`,
+   the pheromone math, and — if you declare any locked model — the doc schema and the refusal rule.
+2. **The behaviour tables answer the same way** — your receiver's verdict on every row of
+   `delivery_contract.json` and `pairing_declaration.json`. These cost games exactly as byte
+   mismatches do, and unlike bytes they cannot be caught by comparing a hash with a partner.
+3. **Cross-team audit is clean** — feed your opponent's revealed log to your verifier and your log
    to theirs; both audits pass with zero `tamper_forfeit`. This is the real test §1 exists for.
-3. **Report bytes match** — the emailed body equals the canonical bytes that were hashed.
+4. **Report bytes match** — the emailed body equals the canonical bytes that were hashed, and the
+   `game_uid` inside is the one the handshake derived — never a freshly minted id (§4, §6).
 
 Each fixture declares its own tier — `CORE`, `PROMOTED`, `PROPOSED` or `ENH` — and
 `verify_vectors.py` prints it. What those tiers claim, and what it takes to move a fixture between

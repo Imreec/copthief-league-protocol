@@ -105,7 +105,9 @@
         }
       },
       "declared_as": "scent_model_sha256",
-      "sha256": "81ebee59640e80eae8ca9ee5f86abd26e7edf5cdbb27d15925cb6ee45ca6ddf4"
+      "sha256": "81ebee59640e80eae8ca9ee5f86abd26e7edf5cdbb27d15925cb6ee45ca6ddf4",
+      "status": "CORE",
+      "evidence": "the reference implementation's own model; pinned byte-for-byte by pheromone.json (section 5)"
     },
     {
       "doc": {
@@ -176,7 +178,9 @@
         }
       },
       "declared_as": "scent_model_sha256",
-      "sha256": "934c220d5bf62acaa3297c6c9d723ea954c220260b02292ca17f6d5daef9f4d9"
+      "sha256": "934c220d5bf62acaa3297c6c9d723ea954c220260b02292ca17f6d5daef9f4d9",
+      "status": "PROMOTED",
+      "evidence": "clean-room reproduction by anrbj666 (issue #6, 2026-07-20), and this exact doc hash was declared on the wire by their peer throughout the 2026-07-25 cross-team series"
     },
     {
       "doc": {
@@ -208,7 +212,9 @@
         }
       },
       "declared_as": "wire_shape_sha256",
-      "sha256": "229ae6487a418c3fcb6da9be404de2f2533c288ebc228811bff6dedc4164d6f7"
+      "sha256": "229ae6487a418c3fcb6da9be404de2f2533c288ebc228811bff6dedc4164d6f7",
+      "status": "PROMOTED",
+      "evidence": "two independent implementations played a full six-sub-game cross-team series on this shape (2026-07-25), mutual audits clean both ways, and their peer declared this exact doc hash"
     },
     {
       "doc": {
@@ -257,7 +263,9 @@
         }
       },
       "declared_as": "wire_shape_sha256",
-      "sha256": "f3fc1d424c461a02a1db9490306318c46043501bc1da1bfcb1b56ff9bc76f376"
+      "sha256": "f3fc1d424c461a02a1db9490306318c46043501bc1da1bfcb1b56ff9bc76f376",
+      "status": "PROPOSED",
+      "evidence": "one implementation; four preimages still unpinned, so the hash will change when they are settled"
     },
     {
       "doc": {
@@ -288,7 +296,9 @@
         }
       },
       "declared_as": "info_mode_sha256",
-      "sha256": "020947daeeb3f73494af9b04201326791742c7184085456e3517d21981ee1202"
+      "sha256": "020947daeeb3f73494af9b04201326791742c7184085456e3517d21981ee1202",
+      "status": "PROPOSED",
+      "evidence": "declared live, but as a bare string rather than a doc hash — see live_reproduction below"
     },
     {
       "doc": {
@@ -321,7 +331,9 @@
         }
       },
       "declared_as": "info_mode_sha256",
-      "sha256": "be93ca76794f1bf638572f532bba32e08131737397febf377395abe7333c5489"
+      "sha256": "be93ca76794f1bf638572f532bba32e08131737397febf377395abe7333c5489",
+      "status": "PROPOSED",
+      "evidence": "registered as the counterpart of `belief`; no second implementation has declared it"
     }
   ],
   "declaration_example": {
@@ -361,5 +373,16 @@
       "note": "neither declares",
       "decision": "play"
     }
-  ]
+  ],
+  "live_reproduction": {
+    "note": "the mechanism, exercised end-to-end by two independent implementations: a six-sub-game cross-team series on 2026-07-25 (imreeyal / anrbj666), mutual audits clean both ways. Their peer's inbound greeting declared the two hashes below, and each is byte-identical to this kit's registered doc — which is the whole claim of this section, since a bare hash over an ad-hoc dict would have differed while describing the same model. The mechanism also demonstrably REFUSED: an earlier attempt that night aborted on a scent lock mismatch, before any game was played.",
+    "observed_declarations_matching_registrations": {
+      "scent_model_sha256": "934c220d5bf62acaa3297c6c9d723ea954c220260b02292ca17f6d5daef9f4d9",
+      "wire_shape_sha256": "229ae6487a418c3fcb6da9be404de2f2533c288ebc228811bff6dedc4164d6f7"
+    },
+    "observed_but_not_registered_here": {
+      "info_mode": "declared as a BARE STRING ('belief'), not as a doc hash. So the info_mode family's registrations are not reproduced — only the intent is. A pair that wants info_mode comparable must agree whether it travels as a string or a hash; this kit registers the hash form and the observed run used the string form.",
+      "hardware_spec_sha256": "a FOURTH family observed on the wire that this kit does not register. It is not added here on the strength of one observation: the doc underneath it is unknown, and registering a family whose field set we have not seen would reintroduce exactly the ad-hoc-dict problem this section removes."
+    }
+  }
 }

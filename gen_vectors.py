@@ -40,6 +40,10 @@ TIERS: dict[str, tuple[str, str, str]] = {
                                                "sign-then-insert"),
     "locked_model.json":        ("CORE", "§7", "the locked-model doc schema and the refusal truth "
                                                "table"),
+    "pairing_declaration.json": ("PROMOTED", "§7.2", "`sub_game_number` + `role` in the negotiate "
+                                                     "extras, and when they refuse"),
+    "delivery_contract.json": ("PROMOTED", "§7.1", "the at-least-once receiver contract, as a "
+                                                   "decision table"),
     "scent_book_v3.json":   ("PROMOTED", "§5.1", "`multiplicative_book_v1` — the book's own scent "
                                                  "model"),
     "joint_seed.json":           ("ENH", "App. A", "the joint-seed coin flip (opt-in)"),
@@ -190,15 +194,29 @@ def gen_game_uid() -> None:
              "hint_max_words": 15, "thief_start": [3, 3], "cop_start": [0, 0], "num_games": 1}
     a, b = "team-aleph", "team-bet"
     _write("game_uid.json", {
-        "description": "Deterministic shared id both peers reproduce with no round-trip. "
-                       "game_uid = UUID(SHA256(canonical(terms)|'|'.join(sorted([g_a,g_b])))[:16]). "
-                       "Group order does not matter (ids are sorted first).",
+        "description": "The two deterministic match ids both peers reproduce with no round-trip. "
+                       "game_uid = UUID(SHA256(canonical(terms)|'|'.join(sorted([g_a,g_b])))[:16]) "
+                       "names the match cryptographically; game_id = '-vs-'.join(sorted([g_a,g_b])) "
+                       "names its four artifact files. BOTH sort the pair, so group order does not "
+                       "matter and neither side has to be told which name to use. A peer that "
+                       "names itself first produces a different game_id on each side, and one "
+                       "match then yields two sets of filenames that cannot be joined.",
         "vectors": [
             {"terms": terms, "group_a": a, "group_b": b, "game_uid": ref.ref_game_uid(terms, a, b),
-             "note": "canonical order"},
+             "game_id": ref.ref_game_id(a, b), "note": "canonical order"},
             {"terms": terms, "group_a": b, "group_b": a, "game_uid": ref.ref_game_uid(terms, b, a),
-             "note": "groups swapped -> identical uid (sorted)"},
+             "game_id": ref.ref_game_id(b, a),
+             "note": "groups swapped -> identical uid AND identical game_id (both sorted)"},
         ],
+        "artifact_filenames": {
+            "note": "the book's App. F table 20 grammar, derived from the game_id above. "
+                    "Per-sub-game files carry a zero-padded _g<NN>; all four carry the same "
+                    "game_uid inside, which is what joins them to the sealed logs.",
+            "declaration": f"declaration_{ref.ref_game_id(a, b)}.json",
+            "config": f"config_{ref.ref_game_id(a, b)}_g<NN>.json",
+            "log": f"log_{ref.ref_game_id(a, b)}_g<NN>.json",
+            "result": f"result_{ref.ref_game_id(a, b)}.json",
+        },
     })
 
 
@@ -398,8 +416,30 @@ def gen_locked_model() -> None:
     docs = [_doc_scent_subtractive(), _doc_scent_book(), _doc_wire_reference(),
             _doc_wire_bookletter(), _doc_info_mode("belief", exact=False),
             _doc_info_mode("exact", exact=True)]
+    # Per-registration status. A registration is not a fixture, so it carries its own tier here
+    # rather than through TIERS; the rules in docs/GOVERNANCE.md are the same ones.
+    status = {
+        "subtractive_chebyshev_v1": ("CORE", "the reference implementation's own model; pinned "
+                                             "byte-for-byte by pheromone.json (section 5)"),
+        "multiplicative_book_v1": ("PROMOTED", "clean-room reproduction by anrbj666 (issue #6, "
+                                               "2026-07-20), and this exact doc hash was declared "
+                                               "on the wire by their peer throughout the "
+                                               "2026-07-25 cross-team series"),
+        "reference-v3": ("PROMOTED", "two independent implementations played a full six-sub-game "
+                                     "cross-team series on this shape (2026-07-25), mutual audits "
+                                     "clean both ways, and their peer declared this exact doc "
+                                     "hash"),
+        "bookletter-v3": ("PROPOSED", "one implementation; four preimages still unpinned, so the "
+                                      "hash will change when they are settled"),
+        "belief": ("PROPOSED", "declared live, but as a bare string rather than a doc hash — see "
+                               "live_reproduction below"),
+        "exact": ("PROPOSED", "registered as the counterpart of `belief`; no second "
+                              "implementation has declared it"),
+    }
     registered = [{"doc": d, "declared_as": f"{d['family']}_sha256",
-                   "sha256": ref.ref_lock_hash(d)} for d in docs]
+                   "sha256": ref.ref_lock_hash(d),
+                   "status": status[d["name"]][0], "evidence": status[d["name"]][1]}
+                  for d in docs]
     by_name = {d["doc"]["name"]: d["sha256"] for d in registered}
     # The refusal rule is behavioural, not byte-level, so it gets its own truth table.
     a, b = by_name["subtractive_chebyshev_v1"], by_name["multiplicative_book_v1"]
@@ -433,6 +473,150 @@ def gen_locked_model() -> None:
             {"ours": o, "theirs": t, "note": note, "decision": ref.ref_lock_decision(o, t)}
             for o, t, note in decisions
         ],
+        "live_reproduction": {
+            "note": "the mechanism, exercised end-to-end by two independent implementations: a "
+                    "six-sub-game cross-team series on 2026-07-25 (imreeyal / anrbj666), mutual "
+                    "audits clean both ways. Their peer's inbound greeting declared the two "
+                    "hashes below, and each is byte-identical to this kit's registered doc — "
+                    "which is the whole claim of this section, since a bare hash over an ad-hoc "
+                    "dict would have differed while describing the same model. The mechanism "
+                    "also demonstrably REFUSED: an earlier attempt that night aborted on a scent "
+                    "lock mismatch, before any game was played.",
+            "observed_declarations_matching_registrations": {
+                "scent_model_sha256": by_name["multiplicative_book_v1"],
+                "wire_shape_sha256": by_name["reference-v3"],
+            },
+            "observed_but_not_registered_here": {
+                "info_mode": "declared as a BARE STRING ('belief'), not as a doc hash. So the "
+                             "info_mode family's registrations are not reproduced — only the "
+                             "intent is. A pair that wants info_mode comparable must agree "
+                             "whether it travels as a string or a hash; this kit registers the "
+                             "hash form and the observed run used the string form.",
+                "hardware_spec_sha256": "a FOURTH family observed on the wire that this kit does "
+                                        "not register. It is not added here on the strength of "
+                                        "one observation: the doc underneath it is unknown, and "
+                                        "registering a family whose field set we have not seen "
+                                        "would reintroduce exactly the ad-hoc-dict problem this "
+                                        "section removes.",
+            },
+        },
+    })
+
+
+def gen_pairing_declaration() -> None:
+    """SPEC section 7.2 — the two pairing fields and their refusal truth table."""
+    cases = [
+        ({"sub_game_number": 3, "role": "thief"}, {"sub_game_number": 3, "role": "police"},
+         "the ordinary case: same game, complementary sides"),
+        ({"sub_game_number": 3, "role": "thief"}, {"sub_game_number": 5, "role": "police"},
+         "sub-game mismatch -> refuse: one game cannot carry two indices, and a peer that runs "
+         "ahead never resynchronises"),
+        ({"sub_game_number": 3, "role": "police"}, {"sub_game_number": 3, "role": "police"},
+         "role collision -> refuse: two of the same side can only deadlock"),
+        ({"sub_game_number": 3, "role": "thief"}, {},
+         "they declare nothing (the unmodified reference peer) -> play"),
+        ({}, {"sub_game_number": 3, "role": "police"},
+         "we declare nothing -> play; omission never refuses in either direction"),
+        ({"sub_game_number": 3, "role": "thief"}, {"sub_game_number": "3", "role": "police"},
+         "their sub-game is a string, not an int -> treated as silence, NOT as a mismatch: a "
+         "cosmetic type difference must never cost a game"),
+        ({"sub_game_number": 3, "role": "thief"}, {"sub_game_number": 3},
+         "partial declaration -> the field they did declare is checked, the absent one is silence"),
+    ]
+    _write("pairing_declaration.json", {
+        "description": "PROMOTED — the pairing declaration (SPEC section 7.2): sub_game_number "
+                       "and role ride the negotiate extras BESIDE `terms`, never inside it (the "
+                       "terms are a flat signed set; adding a key breaks the signature). "
+                       "Identical terms give identical game_uids, so a mispairing is invisible by "
+                       "the time an artifact exists — the handshake is the only place it can be "
+                       "caught. Behaviour, not bytes, so it is pinned as a truth table. Promoted "
+                       "2026-07-26: both fields were declared AND asserted by two independent "
+                       "implementations across a full six-sub-game cross-team series on "
+                       "2026-07-25 (imreeyal / anrbj666); the opponent's inbound greetings carry "
+                       "both fields top-level, alternating correctly with the role swap.",
+        "fields": {
+            "sub_game_number": "the index of the sub-game THIS peer believes it is playing, taken "
+                               "from its sealed step-0 record rather than re-read from a config "
+                               "default (a re-read default is exactly what desynchronises)",
+            "role": "'police' | 'thief' — the side this peer is playing in that sub-game",
+            "placement": "top-level in the negotiate message, alongside nonce/signature/identity "
+                         "and OUTSIDE `terms`",
+        },
+        "refusal_rule": [
+            {"ours": o, "theirs": t, "note": n, "decision": ref.ref_pairing_decision(o, t)}
+            for o, t, n in cases
+        ],
+        "why_it_compounds": "a failed handshake ends in about 60s while a real sub-game takes "
+                            "minutes, so the side that failed runs AHEAD and never "
+                            "resynchronises. Observed live: one side on sub-game 4 while the "
+                            "other was still on sub-game 2 — two teams describing different "
+                            "series, which is the shape App. E rule 35 zeroes for BOTH.",
+    })
+
+
+def gen_delivery_contract() -> None:
+    """SPEC section 7.1 — the at-least-once receiver contract as a decision table."""
+    played = {"1": "c1", "2": "c2"}
+    state = {"played": played, "window": 2, "next": 3}
+    arrivals = [
+        ({"step": 3, "commit": "c3"}, "the next expected step"),
+        ({"step": 2, "commit": "c2"}, "redelivery: SAME commit for a played step -> absorb, state "
+                                      "unchanged. Dedupe on the commit, not on (kind, step)"),
+        ({"step": 2, "commit": "cX"}, "a DIFFERENT commit for a played step -> equivocation. This "
+                                      "is tampering evidence and must stay loud; a (kind, step) "
+                                      "key would have collapsed it silently into the row above"),
+        ({"step": 4, "commit": "c4"}, "one ahead, inside the reorder window -> buffer and replay "
+                                      "in step order"),
+        ({"step": 5, "commit": "c5"}, "at the window bound -> still buffered"),
+        ({"step": 6, "commit": "c6"}, "past the window -> violation. Let the window BE the flood "
+                                      "rule; a second threshold beside it is unreachable"),
+    ]
+    zero_window = {"played": played, "window": 0, "next": 3}
+    deadline_cases = [
+        (100.0, 90.0, False, False, "quiet lap, in budget"),
+        (100.0, 90.0, True, True, "tolerated traffic arrived -> the deadline does NOT move: one "
+                                  "clock per EXPECTED message, so a stall burns the sender's "
+                                  "budget, not ours"),
+        (100.0, 100.0, True, True, "expires on a lap where a message DID arrive — a receiver that "
+                                   "checks its clock only on an empty poll never checks it under "
+                                   "a flood"),
+    ]
+    _write("delivery_contract.json", {
+        "description": "PROMOTED — the at-least-once receiver contract (SPEC section 7.1). Both "
+                       "registered wire shapes ride HTTP, which is at-least-once: a push whose "
+                       "ack is lost is retried by a CORRECT client, so the same message arrives "
+                       "twice by design, not only on bad networks. Behaviour, not bytes, so it is "
+                       "pinned as a decision table. Promoted 2026-07-26: implemented "
+                       "independently by two teams (2026-07-22) and then exercised across a full "
+                       "six-sub-game cross-team series over public tunnels on 2026-07-25, mutual "
+                       "audits clean both ways.",
+        "state_shape": {
+            "played": "{step: commit} — every step already applied, keyed by the commit that "
+                      "sealed it",
+            "window": "how many out-of-order steps may be buffered; 0 means none",
+            "next": "the next step this receiver expects to apply",
+        },
+        "state": state,
+        "arrivals": [
+            {"arrival": a, "note": n, "decision": ref.ref_delivery_decision(state, a)}
+            for a, n in arrivals
+        ],
+        "no_reorder_window": {
+            "note": "the same one-ahead arrival against a receiver with window=0. A receiver with "
+                    "no reorder window turns an ordinary retry race into a protocol violation — "
+                    "under App. E rule 35 that is a self-inflicted technical loss zeroing BOTH "
+                    "teams. Zero tolerance is not a tightening here.",
+            "state": zero_window,
+            "arrival": {"step": 4, "commit": "c4"},
+            "decision": ref.ref_delivery_decision(zero_window, {"step": 4, "commit": "c4"}),
+        },
+        "deadline_rule": [
+            {"deadline_at": d, "now": n, "arrived": a, "tolerated": t, "note": note,
+             "decision": ref.ref_deadline_decision(d, n, a, t)}
+            for d, n, a, t, note in deadline_cases
+        ],
+        "no_rules_tolerance": "none of this relaxes commit-reveal. Transport tolerance, no rules "
+                              "tolerance: equivocation still collapses the game.",
     })
 
 
@@ -596,6 +780,8 @@ def main() -> None:
     gen_pheromone()
     gen_report_consensus()
     gen_locked_model()
+    gen_pairing_declaration()
+    gen_delivery_contract()
     gen_scent_book_v3()
     gen_joint_seed()
     gen_derive_starts()
