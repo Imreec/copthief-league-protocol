@@ -18,6 +18,12 @@ jobs:
           python examples/gen_sample_exchange.py
       - name: Verify all fixtures (core + enhancements)
         run: python verify_vectors.py
+      - name: Tools still catch what they claim to
+        # A checker that only ever passes is decoration, so both tools carry negative cases and
+        # CI runs them. netcheck's self-test is loopback-only and needs no network.
+        run: |
+          python tools/check_artifacts.py --selftest
+          python tools/netcheck.py --selftest
       - name: Fail on any drift between reference code and committed artifacts
         run: |
           git status --porcelain
