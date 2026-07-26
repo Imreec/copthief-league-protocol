@@ -23,10 +23,35 @@ from typing import Protocol
 class Clock(Protocol):
     def now(self) -> float: ...
 
+    def sleep(self, seconds: float) -> None: ...
+
 
 class MonotonicClock:
     def now(self) -> float:
         return time.monotonic()
+
+    def sleep(self, seconds: float) -> None:
+        time.sleep(seconds)
+
+
+def poll_until(predicate, budget: float, interval: float, clock: Clock):
+    """Call ``predicate`` until it returns something not-None, or our own budget runs out.
+
+    Lives here because this is the module that owns the clock — ``guards/purity.py`` rule P-3
+    keeps ``time`` out of every other module, and the networked driver needs to wait on a live
+    socket without becoming the second place that knows what time it is.
+
+    The budget is *ours*. A silent opponent is classified by rule (App. E) when this returns
+    empty-handed; it is never a reason to self-terminate, which is why the transport's own
+    give-up must outlast this (see ``Budgets``).
+    """
+    deadline = clock.now() + budget
+    while clock.now() < deadline:
+        got = predicate()
+        if got is not None:
+            return got
+        clock.sleep(interval)
+    return None
 
 
 class FakeClock:
@@ -37,6 +62,10 @@ class FakeClock:
 
     def now(self) -> float:
         return self._t
+
+    def sleep(self, seconds: float) -> None:
+        """Advance rather than block, so a test can exercise a polling loop instantly."""
+        self._t += seconds
 
     def advance(self, seconds: float) -> float:
         self._t += seconds

@@ -49,23 +49,62 @@ class McpClient:
     ``submit_audit`` takes ``payload``; the other three take ``message``. It looks like an
     inconsistency and it is load-bearing: a peer that sends ``message`` to ``submit_audit`` gets a
     schema error at the one moment both sides are trying to agree on a result.
+
+    MCP over streamable HTTP is **session-oriented**: a bare `tools/call` without an established
+    session is answered ``400 Missing session ID``, which reads like an unreachable peer and is
+    not one. So the session is held open here rather than re-established per call, on a private
+    event loop this class owns — the game loop stays synchronous, which is what keeps the rules,
+    the state machine and the tests free of async.
     """
 
     def __init__(self, url: str, timeout: float = 30.0) -> None:
         self.url = url
         self.timeout = timeout
-        self._id = 0
+        self._loop = None
+        self._client = None
+        self._entered = False
+
+    def _ensure_session(self) -> None:
+        import asyncio
+        import threading
+
+        if self._loop is None:
+            self._loop = asyncio.new_event_loop()
+            threading.Thread(target=self._loop.run_forever, daemon=True).start()
+        if self._entered:
+            return
+
+        from fastmcp import Client
+
+        self._client = Client(self.url)
+        try:
+            self._await(self._client.__aenter__())
+            self._entered = True
+        except Exception as exc:                       # noqa: BLE001 — surfaced as one diagnosis
+            self._client = None
+            raise PeerUnreachable(f"could not open an MCP session at {self.url}: {exc}") from exc
+
+    def _await(self, coro):
+        import asyncio
+
+        return asyncio.run_coroutine_threadsafe(coro, self._loop).result(self.timeout)
 
     def _call(self, tool: str, argument: dict) -> dict:
-        self._id += 1
+        self._ensure_session()
         arg_name = "payload" if tool == "submit_audit" else "message"
-        status, text = _post(self.url, {
-            "jsonrpc": "2.0", "id": self._id, "method": "tools/call",
-            "params": {"name": tool, "arguments": {arg_name: argument}},
-        }, self.timeout)
-        if status >= 400:
-            raise PeerUnreachable(f"{tool} -> HTTP {status}: {text[:200]}")
-        return {"ok": True, "raw": text}
+        try:
+            self._await(self._client.call_tool(tool, {arg_name: argument}))
+        except Exception as exc:                       # noqa: BLE001
+            raise PeerUnreachable(f"{tool} -> {type(exc).__name__}: {exc}") from exc
+        return {"ok": True}
+
+    def close(self) -> None:
+        if self._entered and self._client is not None:
+            try:
+                self._await(self._client.__aexit__(None, None, None))
+            except Exception:                          # noqa: BLE001 — closing is best-effort
+                pass
+        self._entered = False
 
     def negotiate(self, message: dict) -> dict:
         return self._call("negotiate", message)

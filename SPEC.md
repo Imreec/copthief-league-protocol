@@ -530,11 +530,13 @@ None of these run game logic, so the peer topology and trust model are unchanged
 falls back to direct peer play.
 
 - **Sparring peer — ships in [`sparring/`](sparring/), run it yourself.** A conformant practice
-  opponent any team can play a full six-sub-game series against without needing a partner online.
-  Local rather than hosted, on purpose: you get it on your own schedule, with no third party in
-  the path and nothing of yours leaving your machine. `python -m sparring.cli selfplay` needs no
-  dependencies; `docker compose -f sparring/docker-compose.await.yml up` stands one up for your
-  own implementation to dial.
+  implementation that plays a full six-sub-game series, with mutual audits and all four artifacts,
+  needing no dependencies: `python -m sparring.cli selfplay`. Local rather than hosted, on purpose
+  — you get it on your own schedule, with no third party in the path.
+
+  **Read its `Status` section before relying on it:** the game layer and the MCP tool surface are
+  verified in CI; driving a series against a *live* opponent over HTTP is written but not yet
+  observed working end to end, and nothing in this repo claims otherwise.
 
   It is an **uncounted warm-up** (App. E rule 52): nothing is owed by either side, no report is
   produced, and it has no mail code at all — a property checked at startup rather than promised.

@@ -202,6 +202,17 @@ class SubGamePeer:
             return skipped()
         return audit_records(AuditPayload.from_wire(theirs).records)
 
+    def verify_audit_if_ready(self) -> AuditResult | None:
+        """Poll-friendly form: None while the opponent has not revealed yet.
+
+        Against a live peer the reveal arrives when it arrives, so the caller waits on its own
+        budget rather than recording a skipped audit the moment the inbox happens to be empty.
+        """
+        theirs = self.transport.poll_audit()
+        if theirs is None:
+            return None
+        return audit_records(AuditPayload.from_wire(theirs).records)
+
     def fail(self, note: str) -> Outcome:
         self.machine.fail()
         self.outcome = Outcome.TECHNICAL_LOSS

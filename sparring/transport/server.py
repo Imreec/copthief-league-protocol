@@ -102,9 +102,48 @@ def serve(cfg: SparConfig, *, host: str, port: int, peer_url: str | None,
               "originRequest.httpHostHeader: "
               f"127.0.0.1:{port} · ngrok --host-header=rewrite  (SPEC Appendix D).")
 
-    stop = threading.Event()
-    try:
+    if not peer_url:
+        # Nothing to drive: answer tools and wait for a peer to dial us.
+        try:
+            mcp.run(transport="http", host=host, port=port, show_banner=False)
+        except KeyboardInterrupt:
+            pass
+        return 0
+
+    # The server runs on a daemon thread and the game on this one. The four handlers only ever
+    # touch a queue, so nothing about the game can block a tool call — two peers each awaiting the
+    # other inside a handler is an instant deadlock.
+    outcome: dict = {}
+
+    def _serve():
         mcp.run(transport="http", host=host, port=port, show_banner=False)
-    except KeyboardInterrupt:
-        stop.set()
-    return 0
+
+    threading.Thread(target=_serve, daemon=True).start()
+
+    from sparring.deadlines import MonotonicClock
+    from sparring.netplay import play_series
+    from sparring.transport.client import McpClient, PeerUnreachable
+
+    # Give both sides a moment to bind before the first greeting; a connect that races the
+    # opponent's startup looks exactly like an opponent that never arrived. Slept through the
+    # clock module, which is the only place permitted to know what time it is (purity rule P-3).
+    MonotonicClock().sleep(float(cfg.budgets.poll_interval) * 6)
+    client = McpClient(peer_url, timeout=cfg.budgets.connect_timeout)
+
+    try:
+        result = play_series(cfg, client, inboxes, artifacts, sub_games=cfg.num_games)
+    except PeerUnreachable as exc:
+        print(f"  opponent unreachable: {exc}\n"
+              f"  Run `python -m sparring.cli doctor --peer {peer_url}` — 502, 421 and a refused "
+              f"connection\n  mean three different things and have three different fixes.")
+        return 7
+
+    print(f"\n  game_id  {result.game_id}\n  game_uid {result.game_uid}")
+    for row in result.ledger:
+        print(f"  {row['sub_game_number']:>3}  {row['role']:<7} {row['outcome']:<10} "
+              f"steps {row['steps']:>3}  score {row['score']:>3}  "
+              f"audit {'OK' if row['audit_ok'] else 'NOT VERIFIED'}")
+    print(f"\n  {len(result.artifacts)} artifacts under {artifacts.resolve()}")
+    print("  Nothing is owed for this run: sparring is not a game under App. E rules 32/35.")
+    outcome["settled"] = result.settled
+    return 0 if result.settled else 6

@@ -15,6 +15,29 @@ docker compose -f sparring/docker-compose.await.yml up
 # then point your peer at http://localhost:8931/mcp
 ```
 
+## Status: what is verified, and what is not
+
+**What is verified, and re-verified by CI on every push:**
+
+- the whole game layer, with **no dependencies installed** — a full six-sub-game series with role
+  alternation, clean mutual audits and fourteen artifacts, over an in-process transport;
+- **that same series again over a transport that duplicates, reorders and drops-then-retries**,
+  producing a byte-identical outcome ledger;
+- the four MCP tools over a real FastMCP server, under the reference's names, with
+  `submit_audit` taking `payload` and the others `message`, and no handler blocking;
+- the artifacts it writes pass `tools/check_artifacts.py`, and its logs pass `cli replay`.
+
+**What is written but NOT yet verified:** driving a whole series against a *live* opponent over
+HTTP (`sparring/netplay.py`, `cli serve --peer <url>`). Two peers stand up, open MCP sessions and
+exchange calls that return 200 — but a greeting has not yet been observed arriving in the
+receiving peer's inbox, so a networked series has not been seen to complete. There is deliberately
+no CI job claiming otherwise, and `docker-compose.yml` (two peers playing each other) should be
+treated as unproven. `docker-compose.await.yml` stands a peer up and answers tools, which is
+verified.
+
+So today this is a **rehearsal harness and a conformance reference** you can read, run and copy
+from — not yet a live opponent. Finishing the networked path is the next piece of work.
+
 ---
 
 ## What you get
