@@ -180,6 +180,29 @@ def scan(check_env: bool = False) -> list[tuple[str, Path, int, str]]:
     return bad
 
 
+#: Distributions that can actually *send* mail or authorize sending it. Matched as whole names or
+#: name prefixes, never as substrings.
+#:
+#: A substring match on "mail" is the wrong test, and it was the first thing this check got wrong:
+#: it failed on `email-validator`, a transitive dependency of the one pinned package that checks
+#: the *shape of an address string* and opens no connection to anything. Failing the build over a
+#: name collision teaches people to disable the guard, which is worse than not having it.
+#:
+#: The load-bearing guarantee is NM-5 — outbound networking is confined to the two transport
+#: modules in our own source — so nothing installed can be reached for regardless. This scan is a
+#: second belt over the environment, and it should be precise rather than eager.
+ENV_SENDERS = (
+    "smtplib", "aiosmtplib", "sendgrid", "mailgun", "yagmail", "mailjet", "postmarker",
+    "sib-api", "sendinblue", "mailchimp", "boto3-ses", "django-anymail", "flask-mail",
+    "google-api-python-client", "google-auth-oauthlib", "oauth2client", "msal", "exchangelib",
+    "o365", "imapclient",
+)
+#: Name collisions, with the reason each is harmless. Anything added here needs one.
+ENV_ALLOW = {
+    "email-validator": "validates the shape of an address string; opens no connection",
+}
+
+
 def _scan_environment() -> list[tuple[str, Path, int, str]]:
     """Also check what is *installed*, so the claim covers the runtime and not only our source."""
     out: list[tuple[str, Path, int, str]] = []
@@ -189,8 +212,10 @@ def _scan_environment() -> list[tuple[str, Path, int, str]]:
         return out
     for dist in metadata.distributions():
         name = (dist.metadata["Name"] or "").lower()
-        if any(b in name for b in ("smtp", "mail", "sendgrid", "gmail", "oauth")):
-            out.append(("NM-6", Path("<environment>"), 0, name))
+        if name in ENV_ALLOW:
+            continue
+        if any(name == sender or name.startswith(f"{sender}-") for sender in ENV_SENDERS):
+            out.append(("NM-6", Path("<environment>"), 0, f"{name} can send mail"))
     return out
 
 
