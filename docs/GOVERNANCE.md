@@ -103,11 +103,15 @@ From there:
 - CI regenerates everything and fails on any drift.
 
 So the tier is written in one place and read in three, and prose elsewhere links the index rather
-than restating it. For the current check count, run the checker — it prints what it actually ran:
+than restating it. For the current counts, run the checker — its last-but-one line reports what it
+actually ran, in the form:
 
 ```
-53 checks across 10 fixtures — 7 CORE, 1 PROMOTED, 2 ENH
+<N> checks across <M> fixtures — <n> CORE, <n> PROMOTED, <n> PROPOSED, <n> ENH
 ```
+
+(No number is written here on purpose. A count in prose is a claim that a later commit can
+falsify, which is the failure this whole section exists to prevent.)
 
 **Why this is mechanised rather than remembered.** It was not, and it drifted.
 `multiplicative_book_v1` was promoted on 2026-07-20; the commit updated `SPEC.md`, the generator's
