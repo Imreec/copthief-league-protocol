@@ -1,5 +1,6 @@
 {
   "description": "Scent field (book ch.4). Radial emit: half=grid//2, falloff=intensity/(half+1), value=round(max(0,intensity-falloff*chebyshev),3). Decay/step: round(max(0,v-decay),3). Only value>0 crosses the wire as {'r,c': value}. Each peer emits its own and transmits it, so this is a self-test — but a correct port is what makes your belief map behave as the book describes.",
+  "status": "CORE",
   "emit": [
     {
       "center": [

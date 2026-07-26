@@ -1,5 +1,6 @@
 {
   "description": "Pre-game agreement gate. signature = SHA256(canonical_json(terms)|nonce), the same construction as a commit, over the agreed terms. The opponent re-verifies over the terms it received (which must value-equal its own). The float 0.1 pins shortest round-trip repr — a language that emits '0.10000000000000001' fails the signature and cannot play.",
+  "status": "CORE",
   "vectors": [
     {
       "terms": {

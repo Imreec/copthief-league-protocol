@@ -1,5 +1,6 @@
 {
   "description": "The one canonical form every hash uses: json.dumps(obj, sort_keys=True, ensure_ascii=False, separators=(',', ':')), UTF-8. ensure_ascii=FALSE is the load-bearing detail — see SPEC section 'Canonical JSON'.",
+  "status": "CORE",
   "serialization": {
     "sort_keys": true,
     "ensure_ascii": false,

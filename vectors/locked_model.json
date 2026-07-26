@@ -1,5 +1,6 @@
 {
   "description": "Locked-model declarations — ONE doc schema serving THREE named-parameter families (scent_model, wire_shape, info_mode). A peer publishes a doc, hashes it with the section-2 compact canonical form, and declares only the hash at negotiate time under '<family>_sha256'. The schema exists so that two teams' hashes are COMPARABLE: a bare hash over an ad-hoc dict makes two correct implementations of the same model refuse each other. Refusal fires ONLY when both peers declare a family and disagree — omission is never refusal. See SPEC section 7.",
+  "status": "CORE",
   "doc_schema": {
     "keys": [
       "family",

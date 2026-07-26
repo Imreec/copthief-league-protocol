@@ -18,5 +18,11 @@ jobs:
           python examples/gen_sample_exchange.py
       - name: Verify all fixtures (core + enhancements)
         run: python verify_vectors.py
-      - name: Fail on any drift between reference code and committed fixtures
-        run: git diff --exit-code
+      - name: Fail on any drift between reference code and committed artifacts
+        run: |
+          git status --porcelain
+          # `git diff --exit-code` catches edits to committed artifacts. It does NOT see untracked
+          # files, so a newly generated artifact that was never committed would pass silently —
+          # hence the porcelain check beside it.
+          git diff --exit-code
+          test -z "$(git status --porcelain)"

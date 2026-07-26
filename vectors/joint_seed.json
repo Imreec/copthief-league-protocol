@@ -1,5 +1,6 @@
 {
   "description": "ENHANCEMENT (not required by the book): trustless coin flip for a shared seed, if a pair opts into randomized starts instead of the book's fixed configured starts. commit=SHA256(canonical({'seed_share':r})); seed=SHA256(canonical({'shares':[r1,r2]})).",
+  "status": "ENH",
   "vectors": [
     {
       "share_group_1": "3f9a1c",
