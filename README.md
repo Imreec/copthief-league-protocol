@@ -44,6 +44,9 @@ schedule — that it will interoperate.
 | [`verify_vectors.py`](verify_vectors.py) | Stdlib-only reference checker — `python verify_vectors.py`; prints the roster and the totals it ran |
 | [`gen_vectors.py`](gen_vectors.py) | Regenerates every fixture from the reference constructions; CI fails on drift |
 | [`examples/`](examples/) | A worked exchange (agreement → sealed steps → audit → settlement), every hash real and regenerable |
+| [`docs/WARNINGS.md`](docs/WARNINGS.md) | The mistakes that cost points — including the opponent's. Read before configuring any recipient |
+| [`docs/LEAGUE-OPS.md`](docs/LEAGUE-OPS.md) | How a scheduled window actually runs: the T-protocol, netcheck discipline, topologies, budget math |
+| [`tools/`](tools/) | `check_artifacts.py` (your four artifacts, before anyone sees them) and `netcheck.py` (your network, before you name a start time) |
 | [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) | What `CORE` / `PROMOTED` / `PROPOSED` / `ENH` claim, and what it takes to promote one |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to report a conformance failure, file a reproduction, or propose a construction |
 
@@ -80,9 +83,16 @@ Everything else — strategy, GUI, prompts, infra — is private and needs no ag
 2. Run `python verify_vectors.py` to see the reference constructions reproduce every fixture.
 3. Port the checks into your own suite and point them at `vectors/*.json`. When your implementation
    reproduces every **CORE** vector, your bytes match every other conformant team's.
-4. The real acceptance test: feed a partner's revealed log to your verifier and yours to theirs —
-   both audits must pass with zero `tamper_forfeit`. The sparring server (Appendix B) exists so you
-   can do this without a partner online.
+4. Check your own artifacts before anyone else does — `python tools/check_artifacts.py <dir>`.
+   It catches the defect that zeroes **both** teams: a report whose `game_uid` is not the one the
+   handshake derived.
+5. Before you name a start time, prove your network: `python tools/netcheck.py <peer-url>` to
+   classify their edge, and `--loopback <port> <your hostnames>` to prove your own receiving path.
+   A bare `502` check cannot tell a healthy idle tunnel from one with no ingress.
+6. Read [`docs/WARNINGS.md`](docs/WARNINGS.md) before configuring any recipient, and
+   [`docs/LEAGUE-OPS.md`](docs/LEAGUE-OPS.md) before agreeing a window.
+7. The real acceptance test: feed a partner's revealed log to your verifier and yours to theirs —
+   both audits must pass with zero `tamper_forfeit`.
 
 ## Enhancements (opt-in)
 
