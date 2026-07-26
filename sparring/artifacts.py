@@ -1,0 +1,132 @@
+"""The four submission artifacts, written locally and marked unmistakably uncounted.
+
+The names and the shared ``game_uid`` follow the book's App. F table 20 exactly, because
+rehearsing the real thing is the point — you should be able to run ``tools/check_artifacts.py``
+over this output and over a counted run and have it say the same thing.
+
+**Five independent layers say "not a league game".** Any one of them would do; five means a human
+skimming a directory, a script globbing filenames, and a tool parsing JSON each hit it
+independently:
+
+1. the group id is prefixed ``sparring-``, and ``game_id`` is built from the group ids — so the
+   prefix is in every filename;
+2. every artifact carries a top-level ``league`` block citing App. E rule 52;
+3. the run lands in ``runs/sparring_<uid>/`` rather than beside real work;
+4. a ``NOT_A_LEAGUE_GAME.txt`` sits in the directory;
+5. **the result carries no signature key at all** — only ``"settlement": "not_owed"``.
+
+The fifth is the strongest, and it is the reason the others are not enough on their own: a label
+can be edited by anyone who wants to pass this off as a real result, but a *missing preimage*
+cannot be emailed. There is nothing to verify, so there is nothing to submit.
+
+Files are written as canonical bytes (SPEC section 2), rehearsing section 6's rule that what you
+emit is what you hashed — never a pretty-printed re-serialization.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from sparring import CODE_VERSION, GROUP_PREFIX, kitref
+
+NOT_A_GAME = """This directory holds a SPARRING run — a practice game, not a league game.
+
+App. E rule 52 permits uncounted warm-ups explicitly. Nothing is owed for a run like this one:
+no report is due from either side, and the result artifact here deliberately carries no
+consensus signature, so there is nothing in it that could be submitted.
+
+Do not send these files to anyone. Do not let them near a counted series' artifact directory.
+"""
+
+
+def _league_block() -> dict:
+    return {
+        "counted": False,
+        "reason": "sparring",
+        "authority": "book App. E rule 52 — uncounted warm-up games are permitted",
+        "peer": CODE_VERSION,
+    }
+
+
+def _write(path: Path, doc: dict) -> Path:
+    path.write_bytes(kitref.canonical_bytes(doc) + b"\n")
+    return path
+
+
+class ArtifactSet:
+    """Writes the four artifacts for one sparring series."""
+
+    def __init__(self, root: Path, game_id: str, game_uid: str, mail_scan: str) -> None:
+        self.dir = root / f"sparring_{game_uid}"
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.game_id = game_id
+        self.game_uid = game_uid
+        self.mail_scan = mail_scan
+        (self.dir / "NOT_A_LEAGUE_GAME.txt").write_text(NOT_A_GAME, encoding="utf-8")
+
+    @property
+    def links(self) -> dict:
+        return {
+            "_remark": "match-level files are named <kind>_<game_id>.json; per-sub-game files "
+                       "carry _g<NN>. All four share one game_uid, which is what joins them.",
+            "declaration": f"declaration_{self.game_id}.json",
+            "config": f"config_{self.game_id}_g<NN>.json",
+            "log": f"log_{self.game_id}_g<NN>.json",
+            "result": f"result_{self.game_id}.json",
+        }
+
+    def _base(self) -> dict:
+        return {"schema_version": "1.1", "game_id": self.game_id, "game_uid": self.game_uid,
+                "links": self.links, "league": _league_block()}
+
+    def declaration(self, groups: list[dict], num_sub_games: int) -> Path:
+        doc = {
+            **self._base(),
+            "declaration_type": "pre_game_declaration",
+            "num_sub_games": num_sub_games,
+            "max_tokens_per_game": 0,
+            "groups": {"group_1": groups[0], "group_2": groups[1]},
+            # The peer's own proof, carried by the artifact it produced: the hash over every
+            # source file scanned by the mail-absence guard.
+            "mail_surface": {"present": False, "scan_sha256": self.mail_scan, "ruleset": "nm-v1"},
+        }
+        return _write(self.dir / f"declaration_{self.game_id}.json", doc)
+
+    def config(self, sub_game_number: int, terms: dict) -> Path:
+        doc = {**self._base(), "sub_game_number": sub_game_number,
+               "config_name": f"config_{self.game_id}_g{sub_game_number:02d}.json",
+               "terms": terms, "config_sha256": kitref.canonical_hash(terms)}
+        return _write(self.dir / f"config_{self.game_id}_g{sub_game_number:02d}.json", doc)
+
+    def log(self, sub_game_number: int, summary: dict, records: list[dict],
+            mutual: dict) -> Path:
+        doc = {**self._base(), "summary": summary, "records": records,
+               "mutual_agreement": mutual}
+        return _write(self.dir / f"log_{self.game_id}_g{sub_game_number:02d}.json", doc)
+
+    def result(self, groups: list[dict], sub_games: list[dict], final: dict) -> Path:
+        doc = {
+            **self._base(),
+            "report_type": "final_game_result",
+            "groups": groups,
+            "num_sub_games": len(sub_games),
+            "sub_games": sub_games,
+            "final_result": final,
+            # No consensus signature, by construction. See the module docstring.
+            "settlement": "not_owed",
+        }
+        return _write(self.dir / f"result_{self.game_id}.json", doc)
+
+
+def assert_uncounted_group(group_id: str) -> None:
+    """A sparring peer's group id must carry the reserved prefix.
+
+    ``game_id`` is built from the two group ids, so this is what puts "sparring" into every
+    filename the run produces — the cheapest possible way for a human to tell two directories
+    apart at a glance.
+    """
+    if not group_id.startswith(GROUP_PREFIX):
+        raise ValueError(
+            f"a sparring peer's group id must start with {GROUP_PREFIX!r} (got {group_id!r}). "
+            f"game_id is built from the group ids, so this prefix is what keeps a practice "
+            f"artifact from ever being mistaken for a league pairing.")

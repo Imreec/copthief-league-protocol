@@ -1,0 +1,46 @@
+# Two peers playing each other over real HTTP, in two containers.
+#
+#     docker compose -f sparring/docker-compose.yml up --abort-on-container-exit
+#
+# This is the demo and a CI job at once. Two separate processes is also what the book requires of
+# a real submission (App. E rules 1-2: the cop's and the thief's code run in completely separate
+# processes, no shared memory) — so the topology here is the one you will actually ship, not a
+# convenience.
+#
+# To practise against THIS peer with your own implementation, use docker-compose.await.yml
+# instead: it stands up one peer and waits for you to dial it.
+
+services:
+  spar-a:
+    build:
+      context: ..
+      dockerfile: sparring/Dockerfile
+    command:
+      - serve
+      - --host=0.0.0.0
+      - --port=8931
+      - --role=police
+      - --group-id=sparring-a
+      - --peer=http://spar-b:8932/mcp
+      - --artifacts=/kit/runs
+    ports:
+      - "8931:8931"
+    volumes:
+      - ./runs:/kit/runs
+
+  spar-b:
+    build:
+      context: ..
+      dockerfile: sparring/Dockerfile
+    command:
+      - serve
+      - --host=0.0.0.0
+      - --port=8932
+      - --role=thief
+      - --group-id=sparring-b
+      - --peer=http://spar-a:8931/mcp
+      - --artifacts=/kit/runs
+    ports:
+      - "8932:8932"
+    volumes:
+      - ./runs:/kit/runs

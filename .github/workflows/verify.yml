@@ -24,6 +24,24 @@ jobs:
         run: |
           python tools/check_artifacts.py --selftest
           python tools/netcheck.py --selftest
+      - name: Sparring peer — guarantees about its own source
+        # Both guards run here, in the job that installs NOTHING, so the claims hold even on a
+        # change that never touches the peer.
+        run: |
+          python -m sparring.guards.no_mail
+          python -m sparring.guards.purity
+      - name: Sparring peer — the whole game layer, with no dependencies installed
+        # A full six-sub-game series over an in-process transport: role alternation, mutual
+        # audits, artifacts, and the same series again over a transport that duplicates,
+        # reorders and retries.
+        run: python -m unittest discover -s sparring/tests -t . -v
+      - name: Sparring peer — a series still produces the artifacts a checker accepts
+        run: |
+          python -m sparring.cli selfplay --skip-vectors --artifacts /tmp/spar
+          python tools/check_artifacts.py /tmp/spar/sparring_*
+          python -m sparring.cli replay /tmp/spar --expect-clean
+      - name: Regenerate the behavioural golden
+        run: python -m sparring.tests.gen_golden
       - name: Fail on any drift between reference code and committed artifacts
         run: |
           git status --porcelain
