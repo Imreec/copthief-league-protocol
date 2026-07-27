@@ -109,6 +109,67 @@ receiver contract (§7.1) and the pairing declaration `sub_game_number` + `role`
 
 Everything else — strategy, GUI, prompts, infra — is private and needs no agreement.
 
+## This has been played, not just written
+
+None of the above is theoretical. On **2026-07-25** two independently built implementations played
+a **full six-sub-game series** against each other over public tunnels, on these constructions:
+
+- one wire `game_uid`, derived at the handshake and shared across all twelve halves;
+- **every mutual audit clean, in both directions** — each side re-hashed the other's revealed log
+  with its own serializer and reproduced every commitment;
+- both teams' final reports agreeing on every game value — winner, totals, per-sub-game outcomes;
+- roles alternating across the six sub-games, one report fired automatically per side.
+
+It also surfaced one substantive defect, which is why [`docs/WARNINGS.md`](docs/WARNINGS.md) §2
+leads with it: one side's report carried a **freshly minted** `game_uid` rather than the
+wire-locked one, so it could not be joined to its own sealed logs — while every game *value* in
+the two reports matched perfectly and nothing in either implementation noticed. Two counted reports
+naming one match by two uids is what App. E rule 35 scores zero, for *both* teams.
+`tools/check_artifacts.py` exists because of that, and catches it in one second.
+
+The series took **seven scheduled windows** to complete. Every one of the six that burned was a
+launch-time default rather than a protocol fault, every abort was clean and before any report went
+out, and the ones worth learning from are written up — anonymised — in
+[`docs/LEAGUE-OPS.md`](docs/LEAGUE-OPS.md). What that run produced is most of
+[`docs/WARNINGS.md`](docs/WARNINGS.md), the two tools in [`tools/`](tools/), and the promotions in
+[`docs/GOVERNANCE.md`](docs/GOVERNANCE.md).
+
+A real inbound frame from that run — redacted, with the redaction marked — is in
+[`docs/EVIDENCE.md`](docs/EVIDENCE.md) §6. It shows a second implementation declaring locked-model
+hashes **byte-identical** to this kit's registered documents, which is the whole point of pinning
+the document schema rather than just the hash.
+
+Separately, the [sparring peer](sparring/) plays a full series over MCP between two separate
+processes, and CI re-runs a networked sub-game on every push.
+
+## Credit
+
+This kit is better than we could have made it alone. **anrbj666 — Alon Engel and Renat
+Karimov** — have been its most demanding readers and are the reason several parts of it exist:
+
+- **two full review passes** on the early drafts (issue #1), including the transcript-interlock DAG
+  now in Appendix A — they found that per-sender hash chains with no cross-links can be re-forged
+  wholesale offline, which is not an obvious hole;
+- **the consensus signature's second canonical form** (SPEC §6) — that settlement signatures use
+  the *spaced* serialization with sign-then-insert ordering. Two teams that disagree on that detail
+  fail at the exact moment they must agree on a result;
+- **the clean-room reproduction** that promoted `multiplicative_book_v1` (issue #6), byte-exact
+  from an implementation built from the book alone, predating our fixtures — which is what the
+  promotion bar in [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) actually requires;
+- **the T-protocol** (`docs/LEAGUE-OPS.md` §1), which fixed days of half-started windows on the
+  first attempt;
+- **the at-least-once receiver contract** (SPEC §7.1), worked out jointly after a live
+  duplicate-delivery drill over a public tunnel.
+
+Where we disagreed, the disagreement improved the result: on the scent kernel they read the printed
+figure as an exact Gaussian and were right about its shape, we read it as matching no clean formula
+and were right about its reproducibility — so the kit pins the printed values *and* documents the
+closed form, which follows from both readings (SPEC §5.1).
+
+Reviewers are credited by name throughout, beside the thing they contributed. That is provenance,
+not courtesy: a reader deciding how far to trust a construction should be able to see who else has
+looked at it.
+
 ## How to adopt
 
 1. Read [`SPEC.md`](SPEC.md) — it's short and maps each construction to a book chapter.
