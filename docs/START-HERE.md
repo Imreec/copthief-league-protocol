@@ -102,6 +102,16 @@ Try it on the sparring peer's own output first, so you can see it pass:
 python tools/check_artifacts.py runs/sparring_*
 ```
 
+**Give it two directories — yours and your opponent's — and it also checks the join between
+them:**
+
+```bash
+python tools/check_artifacts.py <your dir> <their dir>
+```
+
+That is the check neither team can run alone, because each side's bundle is internally perfect.
+Run it before either of you reports.
+
 ---
 
 ## Gate 4 — your network

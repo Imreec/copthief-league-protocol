@@ -82,6 +82,16 @@ catches both classes in one second. Note the `--terms`: without it the tool can 
 your uid is *consistent*, which the wrong-input case already is. Pass the flat signed terms and it
 **re-derives** the uid and compares — which is the only check that catches the sneaky one.
 
+And before either side reports, run it over **both** artifact sets:
+
+```
+python tools/check_artifacts.py <your dir> <their dir>
+```
+
+It checks each set and then the **join between them** — the check neither team can perform alone,
+because each bundle is internally perfect. That is precisely the check the 2026-07-25 pairing
+needed and did not have.
+
 ---
 
 ## 2a. Declare your derived `game_uid` at the handshake (PROPOSED)

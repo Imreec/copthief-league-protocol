@@ -70,6 +70,48 @@ def _group_ids(declaration: dict) -> list[str]:
     return [b.get("group_id") for b in blocks if isinstance(b, dict) and b.get("group_id")]
 
 
+def _check_many(directories: list[str], terms: str | None) -> int:
+    """Check several artifact sets, then the join between them.
+
+    This is the check no single team can perform alone, and the one the 2026-07-25 series needed:
+    each side's bundle was internally perfect, and they disagreed with each other. Run it against
+    your directory and your opponent's before either of you reports.
+    """
+    import subprocess
+
+    worst = 0
+    for directory in directories:
+        cmd = [sys.executable, __file__, directory] + (["--terms", terms] if terms else [])
+        worst = max(worst, subprocess.run(cmd).returncode)
+
+    print(f"\n=== cross-team join across {len(directories)} artifact sets ===")
+    seen: dict[str, set[str]] = {"game_uid": set(), "game_id": set()}
+    for directory in directories:
+        for path in Path(directory).rglob("*.json"):
+            try:
+                doc = json.loads(path.read_text(encoding="utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                continue
+            for key in seen:
+                if doc.get(key):
+                    seen[key].add(doc[key])
+
+    for key, values in seen.items():
+        ok = check(f"all sets agree on one {key}", len(values) == 1,
+                   f"found {len(values)}: {sorted(values)}")
+        if not ok:
+            worst = 1
+            if key == "game_uid":
+                print("\n  ^ two independently derived uids disagree. Neither side can see this "
+                      "alone —\n    each bundle is self-consistent. The usual cause is one side "
+                      "deriving from a\n    wider object than the flat negotiated terms. Do NOT "
+                      "report until it is resolved:\n    two counted reports naming one match by "
+                      "two uids zero BOTH teams (App. E r.35).")
+
+    print(f"\n{'ALL SETS AGREE' if worst == 0 else 'CROSS-TEAM JOIN FAILED'}")
+    return 1 if worst else 0
+
+
 def _selftest() -> int:
     """Build a synthetic artifact set, then break it, and require the right verdict each time.
 
@@ -156,8 +198,11 @@ def _selftest() -> int:
 def main() -> int:
     global _quiet
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("directory", nargs="?",
-                    help="directory holding declaration/config/log/result JSON files")
+    ap.add_argument("directory", nargs="*",
+                    help="one or more directories, each holding a declaration/config/log/result "
+                         "set. Give TWO — yours and your opponent's — and the cross-team join is "
+                         "checked too: both sides must have derived the same game_uid and the "
+                         "same game_id, which is the check no single team can do alone")
     ap.add_argument("--selftest", action="store_true",
                     help="check this script still catches what it claims to (used by CI)")
     ap.add_argument("--terms", help="the signed 14-key terms as JSON, to also verify that the "
@@ -173,7 +218,10 @@ def main() -> int:
         print("give a directory, or --selftest", file=sys.stderr)
         return 2
 
-    root = Path(args.directory)
+    if len(args.directory) > 1:
+        return _check_many(args.directory, args.terms)
+
+    root = Path(args.directory[0])
     if not root.is_dir():
         print(f"not a directory: {root}", file=sys.stderr)
         return 2
