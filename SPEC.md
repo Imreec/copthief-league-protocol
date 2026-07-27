@@ -529,9 +529,25 @@ weaken any mandatory minimum. These are ours; a pair uses one only if both sign 
 None of these run game logic, so the peer topology and trust model are unchanged and any outage
 falls back to direct peer play.
 
-- **Sparring server.** An always-on conformant opponent any team can test against without needing a
-  partner online — the biggest testing gap in EX06, and the league's adoption engine. We (ImreEyal)
-  intend to host one.
+- **Sparring peer — ships in [`sparring/`](sparring/), run it yourself.** A conformant practice
+  implementation that plays a full six-sub-game series, with mutual audits and all four artifacts,
+  needing no dependencies: `python -m sparring.cli selfplay`. Local rather than hosted, on purpose
+  — you get it on your own schedule, with no third party in the path.
+
+  **Read its `Status` section before relying on it:** the game layer and the MCP tool surface are
+  verified in CI; driving a series against a *live* opponent over HTTP is written but not yet
+  observed working end to end, and nothing in this repo claims otherwise.
+
+  It is an **uncounted warm-up** (App. E rule 52): nothing is owed by either side, no report is
+  produced, and it has no mail code at all — a property checked at startup rather than promised.
+  Its group id is reserved with the `sparring-` prefix, so a practice artifact can never be
+  mistaken for a league pairing: `game_id` is built from the group ids.
+
+  It is a third independent implementation of the **game layer** — rules, engine, state machine,
+  wire, receiver contract, artifacts, written from this document and the book. Its byte-level
+  constructions are imported from `verify_vectors.py` rather than rewritten, so it cannot drift
+  from the published vectors and equally cannot catch a bug inside them. Playing a real team
+  remains the true test.
 - **Lobby via a league GitHub repo.** Roster as one JSON file per team (maintained by PR); each
   scheduled match gets an Issue carrying its `config/game.json` and, at settlement, both teams'
   report hashes and links to their committed artifacts. Registration + scheduling + a public

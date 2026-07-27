@@ -1,0 +1,49 @@
+# The ONLY workflow permitted to install a dependency.
+#
+# `verify.yml` installs nothing and must keep installing nothing — the repository root's
+# zero-dependency promise is what lets any team verify the kit without a toolchain decision.
+# `sparring/guards/purity.py` rule P-4 fails the build if `verify.yml` ever grows a `pip install`.
+#
+# Everything that can run without fastmcp already runs in verify.yml, including the full
+# six-sub-game series. What is left here is what genuinely needs a network stack: the four MCP
+# tools over real HTTP, and two containers playing each other.
+
+name: sparring
+
+on:
+  push:
+    paths:
+      - "sparring/**"
+      - "verify_vectors.py"
+      - ".github/workflows/sparring.yml"
+  pull_request:
+    paths:
+      - "sparring/**"
+      - "verify_vectors.py"
+      - ".github/workflows/sparring.yml"
+
+jobs:
+  http:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install the one dependency
+        run: pip install -r sparring/requirements.txt
+      - name: The dependency claim covers the environment, not only our source
+        run: python -m sparring.guards.no_mail --check-env
+      - name: The four MCP tools answer over real HTTP
+        run: python -m unittest discover -s sparring/tests/http -t . -v
+
+  # NOT YET ENABLED: a two-container job that plays a whole series over HTTP.
+  #
+  # The networked driver (sparring/netplay.py) is written, both peers stand up, open MCP sessions
+  # and exchange calls that return 200 — but the greeting has not been observed arriving in the
+  # receiving peer's inbox, so a series over HTTP has NOT been seen to complete. Until it has,
+  # there is no job here asserting that it does.
+  #
+  # What IS verified: the four-tool surface over a real server (the `http` job above), and the
+  # entire game layer including a full six-sub-game series with mutual audits, over an in-process
+  # transport, in the dependency-free `verify` workflow. See sparring/README.md, "Status".

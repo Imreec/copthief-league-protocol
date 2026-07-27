@@ -44,6 +44,7 @@ schedule — that it will interoperate.
 | [`verify_vectors.py`](verify_vectors.py) | Stdlib-only reference checker — `python verify_vectors.py`; prints the roster and the totals it ran |
 | [`gen_vectors.py`](gen_vectors.py) | Regenerates every fixture from the reference constructions; CI fails on drift |
 | [`examples/`](examples/) | A worked exchange (agreement → sealed steps → audit → settlement), every hash real and regenerable |
+| [`sparring/`](sparring/) | A practice implementation you run locally — full rulebook, no mail, simple brains. `python -m sparring.cli selfplay` ([status](sparring/README.md#status-what-is-verified-and-what-is-not)) |
 | [`docs/WARNINGS.md`](docs/WARNINGS.md) | The mistakes that cost points — including the opponent's. Read before configuring any recipient |
 | [`docs/LEAGUE-OPS.md`](docs/LEAGUE-OPS.md) | How a scheduled window actually runs: the T-protocol, netcheck discipline, topologies, budget math |
 | [`tools/`](tools/) | `check_artifacts.py` (your four artifacts, before anyone sees them) and `netcheck.py` (your network, before you name a start time) |
@@ -91,7 +92,11 @@ Everything else — strategy, GUI, prompts, infra — is private and needs no ag
    A bare `502` check cannot tell a healthy idle tunnel from one with no ingress.
 6. Read [`docs/WARNINGS.md`](docs/WARNINGS.md) before configuring any recipient, and
    [`docs/LEAGUE-OPS.md`](docs/LEAGUE-OPS.md) before agreeing a window.
-7. The real acceptance test: feed a partner's revealed log to your verifier and yours to theirs —
+7. Read the [sparring peer](sparring/) — a second implementation of the game layer you can run and
+   copy from. `python -m sparring.cli selfplay` plays a whole series with mutual audits and writes
+   the four artifacts, and it puts Hebrew on the wire so a serializer that escapes non-ASCII fails
+   there rather than at a real opponent's audit.
+8. The real acceptance test: feed a partner's revealed log to your verifier and yours to theirs —
    both audits must pass with zero `tamper_forfeit`.
 
 ## Enhancements (opt-in)
