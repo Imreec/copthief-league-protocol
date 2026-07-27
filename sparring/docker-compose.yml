@@ -9,6 +9,11 @@
 #
 # To practise against THIS peer with your own implementation, use docker-compose.await.yml
 # instead: it stands up one peer and waits for you to dial it.
+#
+# On Linux, create the artifacts directory before you start, or the daemon creates it root-owned
+# and the peers — which run as a non-root user on purpose — cannot write into it:
+#
+#     mkdir -p sparring/runs && chmod 777 sparring/runs
 
 services:
   spar-a:

@@ -1,11 +1,11 @@
-# One sparring peer, waiting for YOUR implementation to dial it.
+﻿# One sparring peer, waiting for YOUR implementation to dial it.
 #
 #     docker compose -f sparring/docker-compose.await.yml up
 #
 # Point your peer at  http://localhost:8931/mcp  (or host.docker.internal from inside a container).
 #
 # If you expose this through a tunnel to play from elsewhere, rewrite the Host header or fastmcp
-# answers 421 to every request — its DNS-rebinding guard rejects any Host that is not its bind
+# answers 421 to every request â€” its DNS-rebinding guard rejects any Host that is not its bind
 # address, which is every request arriving through a tunnel:
 #
 #     Cloudflare   originRequest.httpHostHeader: 127.0.0.1:8931
@@ -13,8 +13,8 @@
 #
 # (SPEC Appendix D. It is the single most common first-contact failure between two teams.)
 #
-# Expect NO report from this host. Sparring is an uncounted warm-up (App. E rule 52), so nothing
-# is owed by either side — and point your OWN mail at yourselves or at nothing while practising,
+# On Linux: mkdir -p sparring/runs && chmod 777 sparring/runs  before you start, or the daemon\n# creates the bind-mount target root-owned and this peer (which runs as non-root on purpose)\n# cannot write its artifacts.\n#\n# Expect NO report from this host. Sparring is an uncounted warm-up (App. E rule 52), so nothing
+# is owed by either side â€” and point your OWN mail at yourselves or at nothing while practising,
 # never at the lecturer. See docs/WARNINGS.md.
 
 services:
