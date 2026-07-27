@@ -37,13 +37,28 @@ jobs:
       - name: The four MCP tools answer over real HTTP
         run: python -m unittest discover -s sparring/tests/http -t . -v
 
-  # NOT YET ENABLED: a two-container job that plays a whole series over HTTP.
-  #
-  # The networked driver (sparring/netplay.py) is written, both peers stand up, open MCP sessions
-  # and exchange calls that return 200 — but the greeting has not been observed arriving in the
-  # receiving peer's inbox, so a series over HTTP has NOT been seen to complete. Until it has,
-  # there is no job here asserting that it does.
-  #
-  # What IS verified: the four-tool surface over a real server (the `http` job above), and the
-  # entire game layer including a full six-sub-game series with mutual audits, over an in-process
-  # transport, in the dependency-free `verify` workflow. See sparring/README.md, "Status".
+  compose:
+    # Two peers, two containers, one whole series over HTTP — which is also what the book
+    # requires of a real submission (App. E rules 1-2: cop and thief in completely separate
+    # processes, no shared memory). The `http` job proves the networked driver settles a sub-game
+    # identically on both sides; this proves the packaging a team would actually run.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Two peers, two containers, one series
+        run: |
+          docker compose -f sparring/docker-compose.yml up \
+            --abort-on-container-exit --exit-code-from spar-a
+      - name: The emitted artifacts verify, and both sides share one game_uid
+        run: |
+          python -m sparring.cli replay sparring/runs --expect-clean
+          python tools/check_artifacts.py sparring/runs/sparring_*
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sparring-run
+          path: sparring/runs/

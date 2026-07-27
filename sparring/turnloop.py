@@ -78,6 +78,11 @@ class SubGamePeer:
         self.step = 0
         self.outcome: Outcome | None = None
         self.last_hint: str | None = None
+        #: The thief's obligatory answer to a capture claim, waiting to ride the next message
+        #: out. It has to actually travel: the cop cannot see the board, so an answer computed
+        #: and discarded means the cop can never learn it captured anyone, and the sub-game runs
+        #: to the step ceiling and settles as a timeout that nobody caused.
+        self.pending_answer: dict | None = None
 
     # --- sealing ---------------------------------------------------------------------------
 
@@ -145,8 +150,43 @@ class SubGamePeer:
             smell_grid=field_now,
             barrier_placed=list(action.barrier) if action.barrier else None,
             capture_claim=(list(self.engine.position) if self.role is Role.POLICE else None),
+            # The answer we owe from their last claim rides out now. Under hidden positions the
+            # cop learns the result of its claim only from this field.
+            claim_response=self.pending_answer,
+            # Survival is *claimed*, not inferred: the cop cannot count our steps for us, so a
+            # thief that reaches the threshold and says nothing leaves the cop waiting for a turn
+            # that will never come.
+            win_claim=({"type": "survival"} if self.engine.survived() else None),
         )
+        self.pending_answer = None
         self.machine.to(PeerState.AWAITING_REVEAL)
+        return message
+
+    def terminal_message(self) -> TurnMessage | None:
+        """One last sealed record carrying whatever we still owe, after the game ended for us.
+
+        Without it a thief that sees its own capture returns immediately and never delivers the
+        answer, so the cop — which cannot see the board — waits out its budget and settles a
+        sub-game it actually won as a timeout. Both sides then describe the same game
+        differently, which is the shape App. E rule 35 zeroes.
+
+        The action is ``STAY``, which is always legal, so the record chain stays consistent and
+        the opponent's audit still reproduces every commit.
+        """
+        if self.pending_answer is None and not self.engine.survived():
+            return None
+        self.step += 1
+        self.engine.step = self.step
+        record = self._seal({
+            "step": self.step, "role": self.role.value, "sub_game": self.n,
+            "state": self.engine.state_string(), "position": list(self.engine.position),
+            "move": "STAY", "intent": TRUTH, "hint": "", "verdict": "settled",
+        })
+        message = TurnMessage(
+            step=self.step, sender=self.role.value, commit=record["commit"], hint="",
+            smell_grid={}, claim_response=self.pending_answer,
+            win_claim=({"type": "survival"} if self.engine.survived() else None))
+        self.pending_answer = None
         return message
 
     def receive(self, raw: dict) -> list[TurnMessage]:
@@ -162,10 +202,25 @@ class SubGamePeer:
         return applied
 
     def answer(self, msg: TurnMessage) -> dict | None:
-        return self.engine.answer_capture_claim(msg.capture_claim)
+        """Compute the honest answer AND queue it for the wire.
+
+        Answering truthfully is required (App. E rules 21-22) and is also the cheapest move
+        available: the sealed ``state`` string in our own records carries our position, so a
+        denial is contradicted by our own revealed log at the audit.
+        """
+        answer = self.engine.answer_capture_claim(msg.capture_claim)
+        if answer is not None:
+            self.pending_answer = answer
+        return answer
 
     def adjudicate(self, incoming: TurnMessage, answer: dict | None) -> Outcome | None:
-        """Decide only from what this side is entitled to know."""
+        """Decide only from what this side is entitled to know.
+
+        Note how little that is for the cop: it cannot see the thief, so every terminal condition
+        reaches it as something the thief *said* — an answered capture claim, or a survival claim.
+        The thief, by contrast, sees its own capture directly (a barrier on its cell, or no legal
+        move) because those are facts about its own position.
+        """
         self_caught = self.engine.self_captured()
         if self_caught is not None:
             return self_caught
@@ -173,6 +228,8 @@ class SubGamePeer:
             return Outcome.CAPTURE
         if incoming.claim_response is not None and incoming.claim_response.get("caught"):
             return Outcome.CAPTURE
+        if incoming.win_claim and incoming.win_claim.get("type") == "survival":
+            return Outcome.SURVIVAL
         if self.engine.survived():
             return Outcome.SURVIVAL
         if self.step >= self.cfg.max_steps and self.role is Role.THIEF:

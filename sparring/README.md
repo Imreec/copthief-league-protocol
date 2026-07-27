@@ -15,28 +15,34 @@ docker compose -f sparring/docker-compose.await.yml up
 # then point your peer at http://localhost:8931/mcp
 ```
 
-## Status: what is verified, and what is not
+## Status: what is verified
 
-**What is verified, and re-verified by CI on every push:**
+Everything below is re-verified by CI on every push.
 
-- the whole game layer, with **no dependencies installed** — a full six-sub-game series with role
-  alternation, clean mutual audits and fourteen artifacts, over an in-process transport;
-- **that same series again over a transport that duplicates, reorders and drops-then-retries**,
-  producing a byte-identical outcome ledger;
-- the four MCP tools over a real FastMCP server, under the reference's names, with
-  `submit_audit` taking `payload` and the others `message`, and no handler blocking;
-- the artifacts it writes pass `tools/check_artifacts.py`, and its logs pass `cli replay`.
+- **The whole game layer with no dependencies installed** — a full six-sub-game series, role
+  alternation, clean mutual audits, fourteen artifacts under one `game_uid`, over an in-process
+  transport.
+- **That same seeded series again over a transport that duplicates, reorders and
+  drops-then-retries**, producing a *byte-identical outcome ledger*.
+- **A live series over HTTP between two separate processes** — the real thing. Two peers, two
+  FastMCP servers, handshake per sub-game, sealed turns, mutual audit, artifacts. Both sides
+  settle every sub-game identically and derive **one shared `game_uid`**, and CI runs a
+  single-sub-game version of exactly this on every push.
+- The four MCP tools under the reference's names, with `submit_audit` taking `payload` and the
+  others `message`, and no handler blocking.
+- The artifacts it writes pass `tools/check_artifacts.py`; its logs pass `cli replay`.
 
-**What is written but NOT yet verified:** driving a whole series against a *live* opponent over
-HTTP (`sparring/netplay.py`, `cli serve --peer <url>`). Two peers stand up, open MCP sessions and
-exchange calls that return 200 — but a greeting has not yet been observed arriving in the
-receiving peer's inbox, so a networked series has not been seen to complete. There is deliberately
-no CI job claiming otherwise, and `docker-compose.yml` (two peers playing each other) should be
-treated as unproven. `docker-compose.await.yml` stands a peer up and answers tools, which is
-verified.
+A representative full run (two processes, `--policy random`): six sub-games settled
+`survival, survival, capture, capture, survival, capture`, every mutual audit *Verified OK* both
+ways, 14 artifacts per side, and **one `game_uid` across all 28 files**.
 
-So today this is a **rehearsal harness and a conformance reference** you can read, run and copy
-from — not yet a live opponent. Finishing the networked path is the next piece of work.
+> **The bug that only a live run could find.** In self-play both sides shared one outcome
+> variable, which hid the fact that the thief computed its honest answer to a capture claim and
+> never sent it. Over a real transport the cop cannot see the board, so an answer that does not
+> travel means the cop waits out its budget and settles a game it *won* as a timeout — two peers
+> describing the same game differently, which is the shape App. E rule 35 zeroes for both teams.
+> Fixed by making the peer deliver what it owes before it stops talking, and there is now a
+> two-server CI test that would catch it again.
 
 ---
 
