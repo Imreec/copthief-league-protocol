@@ -12,10 +12,11 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Regenerate vectors and worked example
+      - name: Regenerate vectors, worked example and evidence
         run: |
           python gen_vectors.py
           python examples/gen_sample_exchange.py
+          python gen_evidence.py
       - name: Verify all fixtures (core + enhancements)
         run: python verify_vectors.py
       - name: Tools still catch what they claim to
