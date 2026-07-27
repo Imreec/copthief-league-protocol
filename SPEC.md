@@ -534,9 +534,11 @@ falls back to direct peer play.
   needing no dependencies: `python -m sparring.cli selfplay`. Local rather than hosted, on purpose
   — you get it on your own schedule, with no third party in the path.
 
-  **Read its `Status` section before relying on it:** the game layer and the MCP tool surface are
-  verified in CI; driving a series against a *live* opponent over HTTP is written but not yet
-  observed working end to end, and nothing in this repo claims otherwise.
+  It plays a **live series over MCP between two separate processes** — handshake per sub-game,
+  sealed turns, mutual audit, four artifacts, both sides deriving one shared `game_uid` — and CI
+  runs a two-server version of exactly that on every push. `python -m sparring.cli selfplay` needs
+  no dependencies at all; `docker compose -f sparring/docker-compose.await.yml up` stands one up
+  for your own implementation to dial.
 
   It is an **uncounted warm-up** (App. E rule 52): nothing is owed by either side, no report is
   produced, and it has no mail code at all — a property checked at startup rather than promised.

@@ -126,7 +126,14 @@ def cmd_serve(args) -> int:
               f"  ({exc})", file=sys.stderr)
         return 2
     try:
-        return serve(_config(args), host=args.host, port=args.port, peer_url=args.peer,
+        cfg = _config(args)
+    except BudgetError as exc:
+        # A refused budget is an expected answer to a wrong flag, not a crash. It must be
+        # readable in an ops window, where a traceback is the last thing anyone needs.
+        print(exc, file=sys.stderr)
+        return 2
+    try:
+        return serve(cfg, host=args.host, port=args.port, peer_url=args.peer,
                      artifacts=Path(args.artifacts), await_peer=args.await_peer)
     except PreflightRefused as exc:
         print(exc, file=sys.stderr)

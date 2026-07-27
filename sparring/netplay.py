@@ -166,6 +166,36 @@ def play_series(cfg: SparConfig, client, inboxes, artifacts_dir: Path,
         # the next sub-game's handshake, not this one.
         inboxes.turns.clear()
 
+    # The result artifact is written only when every sub-game settled. That is the settlement
+    # guard from docs/WARNINGS.md §1: a report that quietly drops a game is precisely what App. E
+    # rule 35 punishes — on BOTH teams. Nothing is owed for a sparring run, which is exactly why
+    # it costs nothing to keep the habit here.
+    if artifacts is not None and result.settled and len(result.ledger) == sub_games:
+        ours, theirs = cfg.group_id, result.ledger and agreed.opponent_group
+        totals = {ours: sum(row["score"] for row in result.ledger)}
+        sub_games_block = [{
+            "sub_game_number": row["sub_game_number"],
+            "roles": {ours: row["role"]},
+            "result": row["outcome"],
+            "score": {ours: row["score"]},
+            "tokens": {ours: 0},
+            "audit": {"log_verified": row["audit_ok"], "tampered": not row["audit_ok"]},
+        } for row in result.ledger]
+        result.artifacts.append(artifacts.result(
+            [{"group_id": ours, "group_name": cfg.group_name},
+             {"group_id": theirs, "group_name": ""}],
+            sub_games_block,
+            {"total_score": totals,
+             "sub_games_won": {ours: sum(1 for r in result.ledger if r["score"] > 5)},
+             "ties": 0, "winner_group": None, "series_tie": False,
+             "tokens_total_series": {ours: 0},
+             "_remark": "one side's view. A counted series settles the result WITH the opponent "
+                        "before either reports; this is a practice run and reports nothing."}))
+    elif artifacts is not None:
+        print("\n  no result artifact: a sub-game did not settle. A report that quietly drops a "
+              "game\n  is what rule 35 punishes, on both teams — so the guard refuses the whole "
+              "series.")
+
     return result
 
 
@@ -187,6 +217,12 @@ def _play_one(peer: SubGamePeer, role: Role, cfg: SparConfig, budgets, clock) ->
             answer = peer.answer(applied)
             verdict = peer.adjudicate(applied, answer)
             if verdict is not None:
+                # Deliver what we owe before we stop talking. The opponent cannot see the board;
+                # if we walk away holding the answer, it waits out its budget and settles a game
+                # it won as a timeout.
+                final = peer.terminal_message()
+                if final is not None:
+                    peer.transport.send_turn(final.to_wire())
                 return verdict
 
         if not our_move_first:
@@ -196,7 +232,11 @@ def _play_one(peer: SubGamePeer, role: Role, cfg: SparConfig, budgets, clock) ->
             peer.machine.to(PeerState.WAITING_FOR_OPPONENT)
             own = peer.engine.self_captured()
             if own is not None:
+                final = peer.terminal_message()
+                if final is not None:
+                    peer.transport.send_turn(final.to_wire())
                 return own
             if peer.engine.survived():
+                # The survival claim already rode out on the message just sent.
                 return Outcome.SURVIVAL
     return Outcome.SURVIVAL
