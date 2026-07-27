@@ -131,10 +131,17 @@ itself. The registry exists so that cannot recur.
 | Pairing declaration — [`vectors/pairing_declaration.json`](../vectors/pairing_declaration.json), SPEC §7.2 | 2026-07-26 | Both `sub_game_number` and `role` were declared **and asserted** by two independent implementations across the run below; the opponent's inbound greetings carry both fields top-level, alternating correctly with the role swap. |
 | `wire_shape: reference-v3` — [`vectors/locked_model.json`](../vectors/locked_model.json), SPEC §7 | 2026-07-26 | Two independent implementations played the whole run below on this shape, and the opponent declared a `wire_shape_sha256` **byte-identical to the registered doc**. The checker asserts that equality, so this row is verified rather than asserted. |
 
-**The run** all four rows cite: the first fully autonomous cross-team series, **2026-07-25** —
+| `game_id` = the sorted pair — [`vectors/game_uid.json`](../vectors/game_uid.json), SPEC §4 | 2026-07-27 | Reference-derived, and **independently matched by two implementations**: anrbj666's `build_game_id` sorts the pair in their own code, written before this kit pinned it, and the imreeyal implementation adopted the sorted derivation on 2026-07-27. Neither agreed it with the other. |
+
+**The run** the first four rows cite: the first fully autonomous cross-team series, **2026-07-25** —
 six sub-games under one wire `game_uid`, roles alternating, mutual audits clean both ways,
 imreeyal vs anrbj666. Per the rule above, the run is cited and not the path: its logs live in a
 private implementation repository.
+
+**Currently `PROPOSED`**, with one implementation behind it: the **`game_uid` declaration** at
+negotiate (SPEC §7.3, [`vectors/uid_declaration.json`](../vectors/uid_declaration.json)). One
+implementation intends it and the other is invited; a cross-team warm-up is the promotion path.
+Recorded here so the difference between "agreed" and "proposed" stays visible.
 
 Not promoted from the same run, and why: **`info_mode`** travelled as a bare string rather than a
 doc hash, so the `belief` / `exact` registrations were not reproduced — only the intent was.

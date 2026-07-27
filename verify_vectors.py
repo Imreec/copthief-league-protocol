@@ -225,6 +225,34 @@ def ref_pairing_decision(ours: dict, theirs: dict) -> str:
     return "play"
 
 
+# --- UID DECLARATION (SPEC section 7.3, PROPOSED) ----------------------------------------
+#
+# The `game_uid` never crosses the wire: each peer derives it from the flat negotiated terms and
+# the two sorted group ids, so neither has anything to compare against. A peer that derives it
+# from the wrong input — a whole config rather than the extracted terms — therefore produces a
+# uid that is perfectly deterministic, self-consistent across all four of its artifacts, and
+# wrong only against the opponent. That divergence is invisible until two reports are diffed,
+# which happens after the games are over.
+#
+# Declaring the derived uid at negotiate closes the window: the disagreement surfaces before a
+# single move instead of the next morning.
+
+def ref_uid_declaration_decision(ours: str | None, theirs: str | None) -> str:
+    """Refuse only when both peers declare a derived uid and the values differ.
+
+    Deliberately the same rule as ``ref_lock_decision`` and ``ref_pairing_decision`` — omission
+    never refuses, in either direction — and it delegates rather than restating it, so the three
+    declarations cannot drift apart. The reference peer declares nothing at all, and a guard that
+    fail-fasts on silence forfeits that game to itself.
+
+    A value that is not a string is treated as silence for the same reason: refusing over a
+    representation choice would turn a cosmetic difference into a lost game.
+    """
+    if not isinstance(ours, str) or not isinstance(theirs, str):
+        return "play"
+    return ref_lock_decision(ours, theirs)
+
+
 # --- AT-LEAST-ONCE DELIVERY (SPEC section 7.1) -------------------------------------------
 #
 # Both registered wire shapes ride HTTP, which is at-least-once. A push whose ack is lost is
@@ -554,6 +582,34 @@ def run() -> int:
     reasons = {v["decision"] for v in pd["refusal_rule"]}
     failures += not check("both fields can refuse, and refusals name which",
                           {"refuse:sub_game", "refuse:role"} <= reasons)
+
+    ud = _section("uid_declaration.json")
+    for i, v in enumerate(ud["refusal_rule"]):
+        got = ref_uid_declaration_decision(v["ours"], v["theirs"])
+        failures += not check(f"uid decl #{i} ({v['note'][:58]})", got == v["decision"], f"got {got}")
+    failures += not check(
+        "omission is never refusal (uid declaration)",
+        all(ref_uid_declaration_decision(v["ours"], None) == "play"
+            and ref_uid_declaration_decision(None, v["theirs"]) == "play"
+            for v in ud["refusal_rule"]))
+    # The worked example is the whole point: two VALID uids from one derivation over two inputs.
+    we = ud["worked_example"]
+    failures += not check(
+        "the wrong input yields a different, equally valid uid",
+        we["from_flat_terms"] != we["from_a_wider_config"] and we["identical"] is False)
+    # And that the "right" one really is the section-4 derivation over the flat set, rather than
+    # a value the fixture asserts about itself.
+    a, b = we["group_ids"]
+    failures += not check(
+        "the right uid is the section-4 derivation over the flat terms",
+        ref_game_uid(we["flat_terms"], a, b) == we["from_flat_terms"])
+    failures += not check(
+        "the wrong uid is the SAME derivation over a wider object",
+        ref_game_uid(we["wider_config"], a, b) == we["from_a_wider_config"])
+    failures += not check(
+        "the flat set is the signed 14 keys",
+        len(we["flat_terms"]) == 14
+        and set(we["flat_terms"]) == set(_load("terms_signature.json")["vectors"][0]["terms"]))
 
     dc = _section("delivery_contract.json")
     for i, v in enumerate(dc["arrivals"]):
