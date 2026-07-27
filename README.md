@@ -1,14 +1,39 @@
 # Cop–Thief League Interop Kit
 
-**Conformance test vectors + agreed-enhancement modules for the official final-project assignment**
-— *Distributed Cops-and-Robbers over a Peer-to-Peer Network*, Dr. Yoram Reuven Segal, book v3.0.0
-(Orchestration of AI Agents, University of Haifa).
+**Everything you need to be sure your agent can finish a clean game against ours — verified on
+your own machine, before you ever contact us.**
+
+For the official final-project assignment: *Distributed Cops-and-Robbers over a Peer-to-Peer
+Network*, Dr. Yoram Reuven Segal, book v3.0.0 (Orchestration of AI Agents, University of Haifa).
+
+### → [**Start here**](docs/START-HERE.md) — four commands, four pass criteria, no account and no conversation with us.
+
+```bash
+git clone https://github.com/Imreec/copthief-league-protocol && cd copthief-league-protocol
+python verify_vectors.py          # do your bytes match everyone else's?
+python -m sparring.cli selfplay   # a full six-sub-game series against a real opponent
+```
+
+Both run on a clean Python 3.12 with **no dependencies installed**.
+
+## What the game is, in three sentences
+
+Two agents — a cop and a thief — play on a small grid over MCP, with **no referee and no shared
+board**: neither can see the other's position, and each enforces the rules on its own side. Every
+move is sealed with a SHA-256 commitment and revealed only at an end-of-game audit, where **your
+opponent re-hashes your log with their serializer**. A series is six sub-games with roles
+alternating, and both teams then report the result independently.
+
+That audit is why this repo exists. Two *honest* implementations whose JSON differs by one escaped
+character will each fail to reproduce the other's commitments, each conclude the other cheated, and
+**both score zero**.
 
 **This is not the game spec — [the book](https://github.com/rmisegal/Game-P2P-Cop-Chase) is.** The
 book fixes the transport (MCP/FastMCP), the game (hidden positions, the pheromone scent, capture,
 scoring), the commit-reveal, the `config/game.json` constitution, and the Gmail-API reporting. This
 repo adds the one thing the book does not ship: **machine-checkable vectors** for the byte-level
-constructions two independent implementations must agree on — plus a few opt-in enhancements.
+constructions two independent implementations must agree on — plus a practice opponent, the
+operational knowledge two teams paid for in burned evenings, and a few opt-in enhancements.
 
 ## Why this exists
 
@@ -37,8 +62,13 @@ schedule — that it will interoperate.
 
 ## What's here
 
+**New here? [`docs/START-HERE.md`](docs/START-HERE.md) is the ordered path** — four gates, a
+glossary of the vocabulary the rest of these documents assume, and what to read before contacting
+anyone. The table below is the map, not the route.
+
 | File | What it is |
 |---|---|
+| [`docs/START-HERE.md`](docs/START-HERE.md) | **The onboarding path.** Four runnable gates with pass criteria, plus the glossary |
 | [`SPEC.md`](SPEC.md) | The interop surface: canonical JSON, commit-reveal, agreement signature + `game_uid`, pheromone math, report bytes, locked-model declarations — mapped to the book's chapters, plus opt-in enhancements |
 | [`vectors/`](vectors/) | Machine-generated fixtures, one file per construction — each declares its own tier; roster at [`vectors/INDEX.md`](vectors/INDEX.md) |
 | [`verify_vectors.py`](verify_vectors.py) | Stdlib-only reference checker — `python verify_vectors.py`; prints the roster and the totals it ran |
@@ -48,6 +78,7 @@ schedule — that it will interoperate.
 | [`docs/WARNINGS.md`](docs/WARNINGS.md) | The mistakes that cost points — including the opponent's. Read before configuring any recipient |
 | [`docs/LEAGUE-OPS.md`](docs/LEAGUE-OPS.md) | How a scheduled window actually runs: the T-protocol, netcheck discipline, topologies, budget math |
 | [`tools/`](tools/) | `check_artifacts.py` (your four artifacts, before anyone sees them) and `netcheck.py` (your network, before you name a start time) |
+| [`docs/EVIDENCE.md`](docs/EVIDENCE.md) | Real frames off the wire — handshake, sealed step, audit, all four artifacts. Generated, so it cannot drift |
 | [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) | What `CORE` / `PROMOTED` / `PROPOSED` / `ENH` claim, and what it takes to promote one |
 | [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to report a conformance failure, file a reproduction, or propose a construction |
 

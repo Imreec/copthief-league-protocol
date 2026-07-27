@@ -224,13 +224,19 @@ def manifest_sha256() -> str:
 
     Written into the declaration artifact, so a run's own artifact carries the evidence that the
     peer which produced it had no mail surface.
+
+    Line endings are normalised before hashing, and paths use forward slashes. Without that the
+    manifest identifies a *checkout* rather than the source: the same commit hashes differently on
+    a machine that checked out CRLF than on one that checked out LF, which makes the value useless
+    for comparing two peers — and made a generated page fail its own drift check.
     """
     h = hashlib.sha256()
     h.update(b"nm-v1\n")
     for path in _sources():
         h.update(str(path.relative_to(KIT)).replace("\\", "/").encode())
         h.update(b"\0")
-        h.update(hashlib.sha256(path.read_bytes()).hexdigest().encode())
+        normalised = path.read_bytes().replace(b"\r\n", b"\n")
+        h.update(hashlib.sha256(normalised).hexdigest().encode())
         h.update(b"\n")
     return h.hexdigest()
 
