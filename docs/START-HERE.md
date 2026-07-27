@@ -85,18 +85,32 @@ It checks the filename grammar, that **one `game_uid`** spans all four files, th
 sorted pair, that required keys are present, and that declared totals equal the sum of the
 sub-game scores.
 
-**This is the gate that protects your opponent, not just you.** A report carrying a freshly minted
-`game_uid` instead of the wire-locked one cannot be joined to its own sealed logs — and the
-opponent's report, carrying the real uid, then contradicts it. Under App. E rule 35 two
-contradictory reports score **0 for both teams**. That exact defect happened in a real cross-team
-series while every *value* in the two reports agreed perfectly, and nothing in either
-implementation noticed. Read [`WARNINGS.md`](WARNINGS.md) §2 before you settle anything.
+**This is the gate that protects your opponent, not just you.** Under App. E rule 35, two counted
+reports naming one match by two different `game_uid`s score **0 for both teams**.
+
+Pass `--terms <your flat signed terms>.json` and it also **re-derives** the uid rather than just
+checking it is consistent. That matters more than it sounds: in a real cross-team series one side
+derived its uid from its whole config instead of the flat negotiated terms, so the uid was
+perfectly deterministic, identical across all four of its artifacts, and joined them correctly —
+only the cross-team join failed, while every game *value* in the two reports agreed. Consistency
+checks cannot see that; re-derivation can. Read [`WARNINGS.md`](WARNINGS.md) §2 before you settle
+anything.
 
 Try it on the sparring peer's own output first, so you can see it pass:
 
 ```bash
 python tools/check_artifacts.py runs/sparring_*
 ```
+
+**Give it two directories — yours and your opponent's — and it also checks the join between
+them:**
+
+```bash
+python tools/check_artifacts.py <your dir> <their dir>
+```
+
+That is the check neither team can run alone, because each side's bundle is internally perfect.
+Run it before either of you reports.
 
 ---
 

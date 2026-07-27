@@ -44,6 +44,8 @@ TIERS: dict[str, tuple[str, str, str]] = {
                                                      "extras, and when they refuse"),
     "delivery_contract.json": ("PROMOTED", "§7.1", "the at-least-once receiver contract, as a "
                                                    "decision table"),
+    "uid_declaration.json":   ("PROPOSED", "§7.3", "declaring the derived `game_uid` at "
+                                                   "negotiate, and when it refuses"),
     "scent_book_v3.json":   ("PROMOTED", "§5.1", "`multiplicative_book_v1` — the book's own scent "
                                                  "model"),
     "joint_seed.json":           ("ENH", "App. A", "the joint-seed coin flip (opt-in)"),
@@ -554,6 +556,71 @@ def gen_pairing_declaration() -> None:
     })
 
 
+def gen_uid_declaration() -> None:
+    """SPEC section 7.3 — declaring the derived game_uid at negotiate. PROPOSED."""
+    terms = {
+        "board_size": 7, "smell_grid_size": 5, "decay_per_step": 0.1, "emit_intensity": 0.9,
+        "min_center_intensity": 0.5, "max_steps": 35, "barriers_max": 14, "setting": "Haifa",
+        "hint_max_words": 15, "axis_origin_corner": "top-left", "axis_start_index": 0,
+        "thief_start": [3, 3], "cop_start": [0, 0], "num_games": 6,
+    }
+    a, b = "team-aleph", "team-bet"
+    right = ref.ref_game_uid(terms, a, b)
+    # The wrong-input failure, reproduced exactly: the same deterministic derivation over a WIDER
+    # object than the flat negotiated terms. Note it is a valid, stable uid — just not the one the
+    # other side computes.
+    wider = {**terms, "network": {"my_port": 8801}, "strategy": {"police_class": "example"}}
+    wrong = ref.ref_game_uid(wider, a, b)
+    cases = [
+        (right, right, "both derived from the flat terms — the ordinary case"),
+        (right, wrong, "their uid came from a WIDER config than the negotiated terms. It is "
+                       "deterministic and self-consistent across all four of their artifacts, so "
+                       "nothing on their side can see it — this row is the only place it surfaces "
+                       "before the reports are diffed"),
+        (right, None, "they declare nothing (the unmodified reference peer) -> play"),
+        (None, right, "we declare nothing -> play; omission never refuses in either direction"),
+        (None, None, "neither declares"),
+        (right, 12345, "an uncomparable value is treated as silence, not as a mismatch"),
+    ]
+    _write("uid_declaration.json", {
+        "description": "PROPOSED — declaring the derived game_uid at negotiate (SPEC section "
+                       "7.3). The uid never crosses the wire: each peer derives it from the flat "
+                       "negotiated terms and the two sorted group ids, so neither has anything to "
+                       "compare against. A peer that derives it from the wrong input produces a "
+                       "uid that is deterministic, self-consistent across its own four artifacts, "
+                       "and wrong only against the opponent — invisible until two reports are "
+                       "diffed, after the games are over. Observed live across a full six-sub-game "
+                       "series on 2026-07-25. Behaviour, not bytes, so it is pinned as a truth "
+                       "table. PROPOSED: one implementation intends it and the other is invited; "
+                       "a cross-team warm-up is the promotion path. Finding credited to both "
+                       "teams — imreeyal observed that the divergence was silent for the whole "
+                       "series, anrbj666's root-cause analysis made the mechanism precise.",
+        "field": {
+            "name": "game_uid",
+            "placement": "top-level in the negotiate message, beside `role` and "
+                         "`sub_game_number` and OUTSIDE `terms` — the signed set is flat and "
+                         "closed, so a key added there breaks the signature (section 4)",
+            "value": "the uid this peer derived: "
+                     "UUID(SHA256(canonical(flat_terms)|'|'.join(sorted([g_a,g_b])))[:16])",
+        },
+        "worked_example": {
+            "note": "the same derivation over the right input and over a wider config; both are "
+                    "valid stable uuids, which is precisely why the wrong one is hard to notice",
+            "group_ids": [a, b],
+            "flat_terms": terms,
+            "wider_config": wider,
+            "from_flat_terms": right,
+            "from_a_wider_config": wrong,
+            "identical": right == wrong,
+        },
+        "refusal_rule": [
+            {"ours": o, "theirs": t, "note": n,
+             "decision": ref.ref_uid_declaration_decision(o, t)}
+            for o, t, n in cases
+        ],
+    })
+
+
 def gen_delivery_contract() -> None:
     """SPEC section 7.1 — the at-least-once receiver contract as a decision table."""
     played = {"1": "c1", "2": "c2"}
@@ -781,6 +848,7 @@ def main() -> None:
     gen_report_consensus()
     gen_locked_model()
     gen_pairing_declaration()
+    gen_uid_declaration()
     gen_delivery_contract()
     gen_scent_book_v3()
     gen_joint_seed()

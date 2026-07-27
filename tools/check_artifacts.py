@@ -8,9 +8,14 @@ that joins your report to your own sealed logs *and* to your opponent's report. 
 reports that name one match by two different uids are contradictory, and App. E rule 35 scores
 that **0 for both teams** — so a mistake here costs the points of a team that did nothing wrong.
 
-That exact defect happened in a real cross-team series (2026-07-25): one side's report carried a
-freshly minted uid that appeared nowhere in either side's logs, while every game *value* in the
-two reports agreed exactly. Nothing in either implementation noticed. This script notices.
+That exact defect happened in a real cross-team series (2026-07-25), in its sneakiest form: one
+side derived its uid from its **whole configuration** rather than from the flat negotiated terms.
+The result was perfectly deterministic and identical across all four of that team's artifacts, so
+they joined each other correctly and looked healthy — only the cross-team join failed, while every
+game *value* in the two reports agreed exactly. Nothing on either side had reason to look.
+
+Which is why ``--terms`` matters: without it this script can tell you the uid is **consistent**,
+and a wrongly-derived uid already is. Only re-derivation catches that one.
 
 Exit codes:  0 = all checks pass · 1 = at least one failed · 2 = usage / nothing to check
 """
@@ -65,6 +70,48 @@ def _group_ids(declaration: dict) -> list[str]:
     return [b.get("group_id") for b in blocks if isinstance(b, dict) and b.get("group_id")]
 
 
+def _check_many(directories: list[str], terms: str | None) -> int:
+    """Check several artifact sets, then the join between them.
+
+    This is the check no single team can perform alone, and the one the 2026-07-25 series needed:
+    each side's bundle was internally perfect, and they disagreed with each other. Run it against
+    your directory and your opponent's before either of you reports.
+    """
+    import subprocess
+
+    worst = 0
+    for directory in directories:
+        cmd = [sys.executable, __file__, directory] + (["--terms", terms] if terms else [])
+        worst = max(worst, subprocess.run(cmd).returncode)
+
+    print(f"\n=== cross-team join across {len(directories)} artifact sets ===")
+    seen: dict[str, set[str]] = {"game_uid": set(), "game_id": set()}
+    for directory in directories:
+        for path in Path(directory).rglob("*.json"):
+            try:
+                doc = json.loads(path.read_text(encoding="utf-8"))
+            except (ValueError, UnicodeDecodeError):
+                continue
+            for key in seen:
+                if doc.get(key):
+                    seen[key].add(doc[key])
+
+    for key, values in seen.items():
+        ok = check(f"all sets agree on one {key}", len(values) == 1,
+                   f"found {len(values)}: {sorted(values)}")
+        if not ok:
+            worst = 1
+            if key == "game_uid":
+                print("\n  ^ two independently derived uids disagree. Neither side can see this "
+                      "alone —\n    each bundle is self-consistent. The usual cause is one side "
+                      "deriving from a\n    wider object than the flat negotiated terms. Do NOT "
+                      "report until it is resolved:\n    two counted reports naming one match by "
+                      "two uids zero BOTH teams (App. E r.35).")
+
+    print(f"\n{'ALL SETS AGREE' if worst == 0 else 'CROSS-TEAM JOIN FAILED'}")
+    return 1 if worst else 0
+
+
 def _selftest() -> int:
     """Build a synthetic artifact set, then break it, and require the right verdict each time.
 
@@ -76,7 +123,11 @@ def _selftest() -> int:
     import tempfile
 
     a, b = "team-bet", "team-aleph"          # deliberately unsorted, to exercise the sorting
-    gid, guid = ref.ref_game_id(a, b), "57ea5514-cff0-b04c-edb8-f6efeadeb4ee"
+    terms = {"board_size": 7, "smell_grid_size": 5, "decay_per_step": 0.1, "emit_intensity": 0.9,
+             "min_center_intensity": 0.5, "max_steps": 35, "barriers_max": 14, "setting": "Haifa",
+             "hint_max_words": 15, "axis_origin_corner": "top-left", "axis_start_index": 0,
+             "thief_start": [3, 3], "cop_start": [0, 0], "num_games": 6}
+    gid, guid = ref.ref_game_id(a, b), ref.ref_game_uid(terms, a, b)
     links = {"declaration": f"declaration_{gid}.json", "result": f"result_{gid}.json",
              "config": f"config_{gid}_g<NN>.json", "log": f"log_{gid}_g<NN>.json"}
     base = {"game_id": gid, "game_uid": guid, "links": links}
@@ -84,7 +135,7 @@ def _selftest() -> int:
         f"declaration_{gid}.json": {**base, "num_sub_games": 1,
                                     "groups": {"group_1": {"group_id": a},
                                                "group_2": {"group_id": b}}},
-        f"config_{gid}_g01.json": {**base, "sub_game_number": 1},
+        f"config_{gid}_g01.json": {**base, "sub_game_number": 1, "terms": terms},
         f"log_{gid}_g01.json": {**base, "summary": {"sub_game_number": 1}, "records": []},
         f"result_{gid}.json": {**base, "num_sub_games": 1,
                                "groups": [{"group_id": a}, {"group_id": b}],
@@ -108,6 +159,18 @@ def _selftest() -> int:
     def mint(data):
         data[f"result_{gid}.json"]["game_uid"] = "2f0c25a9-0000-4000-8000-000000000000"
 
+    def wrong_input(data):
+        """The failure that actually happened, and the one consistency checks cannot see.
+
+        A uid derived from a WIDER config than the flat negotiated terms: perfectly
+        deterministic, identical in all four files, joining them to each other correctly. Only
+        re-derivation catches it.
+        """
+        wider = {**terms, "network": {"my_port": 8801}, "strategy": {"police_class": "x"}}
+        bad = ref.ref_game_uid(wider, a, b)
+        for doc in data.values():
+            doc["game_uid"] = bad
+
     def self_first(data):
         wrong = f"{a}-vs-{b}"
         for doc in data.values():
@@ -118,6 +181,7 @@ def _selftest() -> int:
 
     cases = [("a clean set", None, 0),
              ("a minted game_uid in the result", mint, 1),
+             ("a CONSISTENT uid derived from the wrong input", wrong_input, 1),
              ("a self-first (unsorted) game_id", self_first, 1),
              ("a declared total that is not the sum", bad_total, 1)]
     bad = 0
@@ -134,8 +198,11 @@ def _selftest() -> int:
 def main() -> int:
     global _quiet
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("directory", nargs="?",
-                    help="directory holding declaration/config/log/result JSON files")
+    ap.add_argument("directory", nargs="*",
+                    help="one or more directories, each holding a declaration/config/log/result "
+                         "set. Give TWO — yours and your opponent's — and the cross-team join is "
+                         "checked too: both sides must have derived the same game_uid and the "
+                         "same game_id, which is the check no single team can do alone")
     ap.add_argument("--selftest", action="store_true",
                     help="check this script still catches what it claims to (used by CI)")
     ap.add_argument("--terms", help="the signed 14-key terms as JSON, to also verify that the "
@@ -151,7 +218,10 @@ def main() -> int:
         print("give a directory, or --selftest", file=sys.stderr)
         return 2
 
-    root = Path(args.directory)
+    if len(args.directory) > 1:
+        return _check_many(args.directory, args.terms)
+
+    root = Path(args.directory[0])
     if not root.is_dir():
         print(f"not a directory: {root}", file=sys.stderr)
         return 2
@@ -207,11 +277,12 @@ def main() -> int:
     ok = check("ONE game_uid across every artifact", len(uids) == 1,
                f"found {len(uids)}: {sorted(str(u) for u in uids)}")
     if not ok:
-        print("\n  ^ this is the one that zeroes both teams. The uid is derived from the signed "
-              "terms\n    and both group ids, so every sub-game of one pairing shares it by "
-              "construction.\n    A minted uid cannot be joined to your own sealed logs by its own "
-              "key, and your\n    opponent's report — carrying the wire uid — then contradicts "
-              "yours (App. E rule 35).")
+        print("\n  ^ this is the one that zeroes both teams. The uid is derived from the FLAT "
+              "negotiated\n    terms and both group ids, so every sub-game of one pairing shares "
+              "it by construction.\n    Two reports naming one match by two uids are "
+              "contradictory (App. E rule 35).\n    Note this failure is the loud kind. The quiet "
+              "kind — a uid derived from a wider\n    config — keeps all four files agreeing and "
+              "is only caught by --terms.")
 
     uid = next(iter(uids))
     try:
@@ -267,18 +338,46 @@ def main() -> int:
                   f"logs present for {sorted(logged)}, result lists "
                   f"{sorted(x for x in listed if x is not None)}")
 
-    # --- 7. optional: do the ids actually DERIVE? ----------------------------------------
+    # --- 7. does the uid actually DERIVE? ------------------------------------------------
+    #
+    # The check that matters most, and the only one that catches the failure that actually
+    # happened. A uid derived from the WRONG INPUT — a whole config rather than the flat
+    # negotiated terms — is perfectly deterministic and identical across all four artifacts, so
+    # every consistency check above passes and the bundle looks healthy. Only re-derivation sees
+    # it, and only the cross-team join would otherwise fail.
+    gids = _group_ids(found["declaration"][0][2]) if found["declaration"] else []
+    terms = None
+    source = ""
     if args.terms:
         terms = json.loads(Path(args.terms).read_text(encoding="utf-8"))
-        gids = _group_ids(found["declaration"][0][2]) if found["declaration"] else []
-        if len(gids) == 2:
-            check("game_uid derives from these terms and group ids",
-                  ref.ref_game_uid(terms, *gids) == uid,
-                  f"derived {ref.ref_game_uid(terms, *gids)}, artifacts carry {uid}")
+        source = f"--terms {args.terms}"
+    else:
+        # Some artifact sets carry the flat signed set inline; use it if it is really the 14-key
+        # set, rather than guessing at an extraction this kit does not pin.
+        for kind, _, _, data in every:
+            candidate = data.get("terms")
+            if isinstance(candidate, dict) and len(candidate) == 14:
+                terms, source = candidate, f"the {kind} artifact's own `terms`"
+                break
+
+    if terms is not None and len(gids) == 2:
+        derived = ref.ref_game_uid(terms, *gids)
+        ok = check(f"game_uid DERIVES from the flat terms ({source})", derived == uid,
+                   f"derived {derived}, artifacts carry {uid}")
+        if not ok:
+            print("\n  ^ the uid is consistent everywhere and still wrong. That is the sneaky\n"
+                  "    failure: a uid derived from the wrong input — a whole config rather than\n"
+                  "    the flat 14-key negotiated terms — joins your own four files perfectly and\n"
+                  "    fails only against your opponent. The reference computes\n"
+                  "    derive_game_ids(terms_from_config(...), ...): the EXTRACTED keys, not the\n"
+                  "    configuration they came from.")
+        check("game_id derives from the same sorted pair",
+              ref.ref_game_id(*gids) == next(iter(ids)))
     elif not _quiet:
-        print("\n  note: pass --terms to also verify the game_uid DERIVES from your signed terms.\n"
-              "        Without it this script confirms the uid is consistent, not that it is the\n"
-              "        one your handshake produced. The extraction of the 14 terms from a config\n"
+        print("\n  note: pass --terms <flat signed terms>.json to verify the uid DERIVES.\n"
+              "        Without it this script confirms the uid is CONSISTENT, which a uid derived\n"
+              "        from the wrong input already is — that is exactly the case that has cost a\n"
+              "        real pairing a clean join. The extraction of the 14 terms from a config\n"
               "        file is the reference's `terms_from_config` and is not pinned by this kit,\n"
               "        so it is not guessed here.")
 

@@ -27,7 +27,11 @@ services:
       - --role=police
       - --group-id=sparring-a
       - --peer=http://spar-b:8932/mcp
-      - --artifacts=/kit/runs
+      # Each peer gets its OWN artifacts directory. Both derive the same game_id — that is the
+      # point of sorting it — so a shared directory means both processes writing identical
+      # filenames at the same time, and a reader can catch a file mid-write. Two real teams are
+      # never on one filesystem; this mirrors that rather than pretending otherwise.
+      - --artifacts=/kit/runs/spar-a
     ports:
       - "8931:8931"
     volumes:
@@ -44,7 +48,7 @@ services:
       - --role=thief
       - --group-id=sparring-b
       - --peer=http://spar-a:8931/mcp
-      - --artifacts=/kit/runs
+      - --artifacts=/kit/runs/spar-b
     ports:
       - "8932:8932"
     volumes:

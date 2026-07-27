@@ -102,10 +102,11 @@ vector is generated from our own synthetic inputs — no reference content is co
    scent models, wire shapes and information modes, hashed and declared at negotiate time.
    Refusal fires only when **both** peers declare and disagree; silence never refuses (SPEC §7).
 
-Three more are **behaviour** rather than bytes, pinned as truth tables because answering them
+Four more are **behaviour** rather than bytes, pinned as truth tables because answering them
 differently costs a game just as surely as a bad hash — and unlike a hash, you cannot catch these
 by comparing a digest with a partner: the locked-model refusal rule (§7), the at-least-once
-receiver contract (§7.1) and the pairing declaration `sub_game_number` + `role` (§7.2).
+receiver contract (§7.1), the pairing declaration `sub_game_number` + `role` (§7.2), and the
+`game_uid` declaration (§7.3, `PROPOSED`).
 
 Everything else — strategy, GUI, prompts, infra — is private and needs no agreement.
 
@@ -121,11 +122,12 @@ a **full six-sub-game series** against each other over public tunnels, on these 
 - roles alternating across the six sub-games, one report fired automatically per side.
 
 It also surfaced one substantive defect, which is why [`docs/WARNINGS.md`](docs/WARNINGS.md) §2
-leads with it: one side's report carried a **freshly minted** `game_uid` rather than the
-wire-locked one, so it could not be joined to its own sealed logs — while every game *value* in
-the two reports matched perfectly and nothing in either implementation noticed. Two counted reports
-naming one match by two uids is what App. E rule 35 scores zero, for *both* teams.
-`tools/check_artifacts.py` exists because of that, and catches it in one second.
+leads with it: one side derived its `game_uid` from its **whole config** rather than from the flat
+negotiated terms. That is the sneaky failure — the uid was perfectly deterministic and identical
+across all four of that team's artifacts, so they joined each other correctly and looked healthy;
+only the *cross-team* join failed, while every game *value* in the two reports matched exactly.
+Nothing on either side had reason to look. Two counted reports naming one match by two uids is what
+App. E rule 35 scores zero, for *both* teams. `tools/check_artifacts.py` exists because of that.
 
 The series took **seven scheduled windows** to complete. Every one of the six that burned was a
 launch-time default rather than a protocol fault, every abort was clean and before any report went
@@ -159,7 +161,10 @@ Karimov** — have been its most demanding readers and are the reason several pa
 - **the T-protocol** (`docs/LEAGUE-OPS.md` §1), which fixed days of half-started windows on the
   first attempt;
 - **the at-least-once receiver contract** (SPEC §7.1), worked out jointly after a live
-  duplicate-delivery drill over a public tunnel.
+  duplicate-delivery drill over a public tunnel;
+- **the root cause of the `game_uid` divergence** (SPEC §6, §7.3) — including correcting our own
+  first published diagnosis of it. We wrote that the uid had been "freshly minted"; it had not, and
+  the real mechanism is both subtler and more useful to teach.
 
 Where we disagreed, the disagreement improved the result: on the scent kernel they read the printed
 figure as an exact Gaussian and were right about its shape, we read it as matching no clean formula

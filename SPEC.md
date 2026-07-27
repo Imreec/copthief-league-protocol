@@ -171,10 +171,20 @@ refuses to start on any mismatch.
 > `sorted([g_a, g_b])`, so neither peer has to be told which order to use and there is no
 > convention for a pairing to settle. A peer that instead builds `"<us>-vs-<them>"` produces a
 > *different* `game_id` on each side of the same match: two sets of artifact filenames, and two
-> final reports that cannot be joined by `game_id` at all. Observed live — both sides of the
-> 2026-07-25 cross-team series named themselves first, and the two result artifacts disagreed on
-> the id while agreeing on every game value. It cost nothing that time because the `game_uid`
-> still joined them; it is load-bearing the moment a uid is wrong (see the warning in §6).
+> final reports that cannot be joined by `game_id` at all.
+>
+> **Observed live, and worse than it first looked.** In the 2026-07-25 cross-team series *both*
+> join keys diverged at once — the `game_id` because each side named itself first, and the
+> `game_uid` because one side derived it from a wider object than the flat negotiated terms (§6).
+> Two reports that agreed on every game value could be joined by **neither** key. An earlier
+> revision of this document said the uid "still joined them"; it did not, and the correction is
+> anrbj666's.
+>
+> **Status: reference-derived, and independently matched by two implementations.** anrbj666's
+> `build_game_id` sorts the pair in their own code, written before this section pinned it, and the
+> imreeyal implementation adopted the sorted derivation on 2026-07-27. Two implementations now
+> agree on it without having agreed it with each other, which is the strongest form this evidence
+> takes (see [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)).
 >
 > `vectors/game_uid.json` pins both ids, a swapped-group case proving each is order-independent,
 > and the four filenames derived from them.
@@ -263,16 +273,22 @@ Both teams independently build the final result JSON, and both email it — the 
 - **Derived, not declared.** Totals and the diversity flag are derived from the per-sub-game
   results and the game-count declarations by the fixed scoring table (book ch.9), so agreement on
   sub-games implies agreement on totals.
-- **The report's `game_uid` must be the one the handshake derived — never a freshly minted id.**
-  The uid is a pure function of the signed terms and both group ids (§4), so every sub-game of one
-  pairing carries it by construction, and it is what joins your report to the sealed logs and to
-  your opponent's report. Mint a new one at settlement and your report cannot be joined to your own
-  evidence *by its own key*, while the opponent's report — carrying the wire uid — says something
-  different about the same match. Two counted reports naming one match by two uids is the
-  contradiction App. E rule 35 zeroes **both** teams for. Keep a fresh id for internal attempt
-  bookkeeping if you want one; the emitted uid is the wire's. Observed live on 2026-07-25: one
-  side's report carried a minted uid that appeared nowhere in either side's logs, while every
-  game value in the two reports agreed exactly.
+- **The report's `game_uid` must be derived from the flat negotiated terms.**
+  The uid is a pure function of the **flat 14-key negotiated terms** and both group ids (§4) — the
+  reference computes `derive_game_ids(terms_from_config(...), ...)`, where `terms_from_config`
+  *extracts* those keys. Two counted reports naming one match by two uids is the contradiction
+  App. E rule 35 zeroes **both** teams for.
+  Two ways to get it wrong, and the second is far harder to catch: a **freshly minted** id, which
+  announces itself because it appears nowhere in your logs; and a **deterministic id derived from
+  the wrong input** — the whole `game.json` rather than the extracted terms — which is stable,
+  reproducible and identical across all four of your artifacts, so they join each other perfectly
+  and only the *cross-team* join fails.
+  Observed live on 2026-07-25: one side's uid came from its whole config rather than the flat
+  terms. Its artifacts were internally self-consistent and every game value in the two teams'
+  reports agreed exactly; nothing on either side had reason to look. *(An earlier revision of this
+  document called that uid "minted", which was wrong — the correction is anrbj666's.)* The
+  divergence was silent for six sub-games because the uid never crosses the wire; §7.3 proposes
+  closing that.
 - **Stage / draft interlock.** The reference's `email.mode = "draft"` is the safety gate: nothing
   reaches the lecturer's real inbox until intended. Under the diversity rule (only the *first*
   meeting with an opponent counts), an accidental early real send can burn your one counted game —
@@ -470,6 +486,47 @@ Status is **PROMOTED** (2026-07-26): both fields were declared **and asserted** 
 implementations across the full six-sub-game cross-team series of 2026-07-25 — the opponent's
 inbound greetings carry both, top-level, alternating correctly with the role swap.
 
+### 7.3 `game_uid` declaration (PROPOSED)
+
+**The `game_uid` never crosses the wire.** Each peer derives it from the flat negotiated terms and
+the two sorted group ids (§4), which is the point — no round-trip is needed. But it also means
+neither peer has anything to compare against, so a peer that derives it from the **wrong input**
+produces a uid that is deterministic, self-consistent across all four of its own artifacts, and
+wrong only against its opponent.
+
+That is not a hypothetical failure mode. It happened across a full six-sub-game series on
+2026-07-25 and was **silent the entire time** — one side had derived the uid from its whole
+configuration rather than from the extracted flat terms. It surfaced the next morning, when two
+reports were diffed.
+
+The proposed closure is one more field in the negotiate extras, in exactly the shape of §7.2:
+
+```json
+{"terms": {…}, "nonce": "…", "signature": "…", "role": "police",
+ "sub_game_number": 3, "game_uid": "1e73c318-5b29-4a7b-1c6…"}
+```
+
+| Case | Decision |
+|---|---|
+| both declare, values equal | play |
+| both declare, values differ | **refuse** — two derivations of one game disagree; check your terms input |
+| either side omits it | play |
+| a declared value cannot be compared | play — treated as silence |
+
+**Omission never refuses**, in either direction — the same rule §7 and §7.2 use, for the same
+reason: the unmodified reference peer declares nothing, and a guard that fail-fasts on silence
+forfeits that game to itself. `vectors/uid_declaration.json` pins the table, and carries a worked
+example of the failure: the same derivation over the flat terms and over a wider config produces
+**two valid, stable uuids**, which is precisely why the wrong one is hard to notice.
+
+Status is **PROPOSED** — one implementation intends it, the other is invited, and a cross-team
+warm-up is the promotion path (see [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)). Do not assume an
+opponent implements it.
+
+*Finding credited to both teams: **Imreec** observed that the divergence was silent for the whole
+series; **anrbj666**'s root-cause analysis established the mechanism — and corrected our first
+published diagnosis, which had wrongly called the uid "minted".*
+
 ## 8. Conformance
 
 A team is **interop-ready** when:
@@ -484,7 +541,8 @@ A team is **interop-ready** when:
 3. **Cross-team audit is clean** — feed your opponent's revealed log to your verifier and your log
    to theirs; both audits pass with zero `tamper_forfeit`. This is the real test §1 exists for.
 4. **Report bytes match** — the emailed body equals the canonical bytes that were hashed, and the
-   `game_uid` inside is the one the handshake derived — never a freshly minted id (§4, §6).
+   `game_uid` inside is derived from the flat negotiated terms — not from a wider config, and not
+   freshly minted (§4, §6).
 
 Each fixture declares its own tier — `CORE`, `PROMOTED`, `PROPOSED` or `ENH` — and
 `verify_vectors.py` prints it. What those tiers claim, and what it takes to move a fixture between

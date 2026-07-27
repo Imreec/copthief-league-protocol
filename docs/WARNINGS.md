@@ -39,29 +39,82 @@ the other team playing a match you have abandoned.
 
 ---
 
-## 2. The report's `game_uid` must be the one the handshake derived
+## 2. Derive the `game_uid` from the **flat negotiated terms** — not from your config
 
-**Never mint a fresh id at settlement.** The `game_uid` is a pure function of the signed terms and
-both group ids (SPEC §4), so every sub-game of one pairing carries it by construction, and it is
-the only key that joins your report to your own sealed logs *and* to your opponent's report.
+The `game_uid` is a pure function of two things: the **flat negotiated terms** and the two sorted
+group ids (SPEC §4). It is the only key that joins your report to your own sealed logs *and* to
+your opponent's report.
 
-Mint a new one and your report cannot be joined to your own evidence by its own key, while your
-opponent's report — carrying the wire uid — says something different about the same match. Two
-counted reports naming one match by two uids is exactly the contradiction in §1.
+So there are two ways to get it wrong, and **the second is much harder to catch than the first**:
 
-This is not hypothetical. In a real cross-team series (2026-07-25), one side's report carried a
-freshly minted uid that appeared nowhere in either side's logs, **while every game value in the two
-reports agreed exactly**: same winner, same totals, same per-sub-game outcomes. Nothing in either
-implementation noticed. The cause was a sensible fix aimed at something else — minting fresh ids to
-keep a discarded attempt's evidence out of aggregation — applied to the wrong field.
+| | What it looks like |
+|---|---|
+| **A fresh id** | Obvious once anyone looks: the uid appears nowhere in your logs. |
+| **A deterministic id from the wrong input** | **Everything looks healthy.** The uid is stable, reproducible, and identical across all four of your artifacts — they join to each other perfectly. Only the *cross-team* join fails. |
 
-Keep a fresh id for internal attempt bookkeeping if you want one. The **emitted** uid is the wire's.
+The correct input is the flat 14-key set that was signed and exchanged — the reference computes
+`derive_game_ids(terms_from_config(...), ...)`, where `terms_from_config` **extracts** those keys.
+Feeding the whole `game.json`, or any wider configuration object, produces a uid that is wrong in a
+way nothing on your side can see.
+
+**This is the one that actually happened.** In the 2026-07-25 cross-team series, one side's uid was
+derived from its whole config rather than from the flat negotiated terms. Its four artifacts were
+internally self-consistent on that uid and looked entirely correct; every game *value* in the two
+teams' reports agreed exactly — same winner, same totals, same per-sub-game outcomes. Nothing in
+either implementation noticed, because nothing on either side had reason to look.
+
+*(Our first published account of this said the uid had been "freshly minted". That was wrong, and
+the correction is anrbj666's — the true mechanism is more instructive than the one we guessed,
+because a minted id announces itself and a wrongly-derived one does not.)*
+
+**Why it stayed silent for six sub-games:** the uid never crosses the wire. Each side derives it
+independently and neither has anything to compare against, so a divergence surfaces only when two
+reports are diffed — which happens *after* the games are over. See §2a.
+
+Keep a fresh id for internal attempt bookkeeping if you want one. The **emitted** uid is derived,
+from the terms.
 
 ```
-python tools/check_artifacts.py <your artifact dir>
+python tools/check_artifacts.py <your artifact dir> --terms terms.json
 ```
 
-catches this in one second, along with the rest of §4.
+catches both classes in one second. Note the `--terms`: without it the tool can only check that
+your uid is *consistent*, which the wrong-input case already is. Pass the flat signed terms and it
+**re-derives** the uid and compares — which is the only check that catches the sneaky one.
+
+And before either side reports, run it over **both** artifact sets:
+
+```
+python tools/check_artifacts.py <your dir> <their dir>
+```
+
+It checks each set and then the **join between them** — the check neither team can perform alone,
+because each bundle is internally perfect. That is precisely the check the 2026-07-25 pairing
+needed and did not have.
+
+---
+
+## 2a. Declare your derived `game_uid` at the handshake (PROPOSED)
+
+The reason §2 stayed invisible for a whole series is structural: **the uid never crosses the wire.**
+Both peers derive it independently, so neither has anything to compare, and the first moment a
+disagreement can surface is a post-game report diff.
+
+The proposed closure — SPEC §7.3, and deliberately the same shape as the pairing declaration in
+§7.2 — is for each peer to declare its derived uid top-level in the negotiate extras:
+
+- both declare and the values **differ** → refuse, before a single move is played;
+- either side omits it → **play**. Omission never refuses, in either direction; the unmodified
+  reference peer declares nothing at all, and a guard that fail-fasts on silence forfeits that game
+  to itself.
+
+Status is **PROPOSED**: one implementation intends it and the other is invited, so under
+[`GOVERNANCE.md`](GOVERNANCE.md) it has one implementation behind it until a cross-team run
+reproduces it. Do not assume an opponent implements it — but if you do, a wrong-input uid becomes a
+refusal at the handshake instead of a contradiction in two reports the next morning.
+
+*Finding credited to both teams: imreeyal observed that the divergence was silent for the entire
+series; anrbj666's root-cause analysis made the mechanism precise.*
 
 ---
 
@@ -94,12 +147,16 @@ meeting that scores, so the cost of being casual here is not symmetric.
 names *itself* first produces a different `game_id` on each side, so one match yields two sets of
 artifact filenames and two reports that cannot be joined by `game_id` at all.
 
-Both sides of the 2026-07-25 series did exactly this. It cost nothing **only** because the
-`game_uid` still joined the two reports — which is precisely why §2 above is load-bearing. Two
-independent naming bugs, and the second one was survivable solely because the first field was
-right.
+Both sides of the 2026-07-25 series did exactly this — **and the `game_uid` diverged in the same
+run** (§2). Two reports that agreed on every game value could be joined by neither key. If you are
+tempted to treat `game_id` as cosmetic because the uid will save you: in the one run where this has
+actually been observed, it did not.
 
-If you and your opponent cannot agree, agree to join on `game_uid` alone — and then never mint one.
+*(Both implementations now sort the pair — anrbj666's did so already, and imreeyal adopted it on
+2026-07-27.)*
+
+If you and your opponent cannot agree, agree to join on `game_uid` alone — and then be certain
+yours is derived from the flat negotiated terms (§2).
 
 ---
 
@@ -173,7 +230,7 @@ That permission comes with a shape:
 | Do not | Because |
 |---|---|
 | send a report for a series that did not fully settle | rule 35 zeroes **both** teams |
-| mint a `game_uid` at settlement | your report stops joining your own evidence, and contradicts theirs |
+| derive the `game_uid` from anything but the flat negotiated terms | your four artifacts still join each other perfectly; only the cross-team join fails, and nothing on your side can see it |
 | configure the lecturer's address in a non-counted run | it is then one flag from being used |
 | name the pair self-first in `game_id` | one match, two names, two sets of files |
 | reuse a log directory between attempts | attempts share a deterministic uid; appended dead records reach settlement |
