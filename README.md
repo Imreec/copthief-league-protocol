@@ -99,8 +99,9 @@ vector is generated from our own synthetic inputs — no reference content is co
    were hashed, and the consensus signature inside the report uses a **second (spaced)
    serialization** with sign-then-insert ordering (SPEC §6 — found by Alon's team).
 7. **Locked-model declarations** — one doc schema (`family`/`name`/`params`/`example`) serving
-   scent models, wire shapes and information modes, hashed and declared at negotiate time.
-   Refusal fires only when **both** peers declare and disagree; silence never refuses (SPEC §7).
+   scent models, wire shapes, information modes and scent bindings, hashed and declared at
+   negotiate time. Refusal fires only when **both** peers declare and disagree; silence never
+   refuses (SPEC §7).
 
 Four more are **behaviour** rather than bytes, pinned as truth tables because answering them
 differently costs a game just as surely as a bad hash — and unlike a hash, you cannot catch these

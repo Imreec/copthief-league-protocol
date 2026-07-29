@@ -320,21 +320,24 @@ teams that implement the *same* model from the *same* spec still declare differe
 serialized different field sets — and refuse each other for no reason at all. The hash is only as
 useful as the agreement on what goes into it.
 
-**One schema, three families.** A locked-model doc has exactly four keys:
+**One schema, four families.** A locked-model doc has exactly four keys:
 
 ```json
 {"family": "scent_model", "name": "multiplicative_book_v1", "params": {...}, "example": {...}}
 ```
 
-`family` ∈ `scent_model` | `wire_shape` | `info_mode`; `name` is the registered name; `params`
-carries the model-specific values; `example` carries a worked case. Everything variable lives in
-the last two, so the envelope never changes as families are added.
+`family` ∈ `scent_model` | `wire_shape` | `info_mode` | `smell_binding`; `name` is the registered
+name; `params` carries the model-specific values; `example` carries a worked case. Everything
+variable lives in the last two, so the envelope never changes as families are added — `smell_binding`
+(§7.4) was added without touching a single byte of the six docs that preceded it, which is the
+property the closed envelope exists to give.
 
 - **Hash:** `sha256(canonical_json(doc))` — the compact §2 form, the same construction anrbj666's
   team already ships for `scent_model_sha256`. Adopting the schema changes the *bytes hashed*,
   not the mechanism.
 - **Declaration:** the doc never crosses the wire; only `"<family>_sha256"` does, in the negotiate
-  extras. The kit registers six docs: two scent models (§5, §5.1), two wire shapes, two info modes.
+  extras. The kit registers eight docs: two scent models (§5, §5.1), two wire shapes, two info
+  modes, two smell bindings (§7.4).
 - **Refusal rule: refuse only when BOTH peers declare a family and the hashes differ.** Omission is
   never refusal — in either direction. A lock that fail-fasts on a *missing* declaration cannot
   start a game against the unmodified reference peer, which declares nothing at all; that is a
@@ -357,7 +360,8 @@ mismatch catchable before the game — but a pair should know which of the two i
 **Every registration now carries its own `status` and the evidence for it**, on the terms in
 [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — read them off `vectors/locked_model.json` rather than
 from prose. In summary: `subtractive_chebyshev_v1` is `CORE`; `multiplicative_book_v1` and
-`reference-v3` are `PROMOTED`; `bookletter-v3`, `belief` and `exact` are `PROPOSED`.
+`reference-v3` are `PROMOTED`; `bookletter-v3`, `belief`, `exact`, `none` and `commit_grid_v1` are
+`PROPOSED`.
 
 `bookletter-v3` is a **documented deviation** from the book's formal model that a pair may lock by
 explicit mutual sign-off. Its commit layer reproduces under §3 over the full 7-field payload, but
@@ -526,6 +530,72 @@ opponent implements it.
 *Finding credited to both teams: **Imreec** observed that the divergence was silent for the whole
 series; **anrbj666**'s root-cause analysis established the mechanism — and corrected our first
 published diagnosis, which had wrongly called the uid "minted".*
+
+### 7.4 `smell_binding` — anchoring the transmitted grid to the sealed record (PROPOSED)
+
+Under wire shape `reference-v3` the smell grid is the **one per-step observable that no commitment
+covers**. The move is sealed and re-hashed at the audit; the grid beside it is not. So a peer that
+transmits a stale, malformed or fabricated field is caught — if at all — only by the receiver's own
+physics check, and that refusal is provable to nobody but the receiver that made it. Both teams
+ship such a check today; both know it is evidence-grade at best.
+
+`smell_binding` is a fourth locked-model family (§7's envelope, §7's truth table:
+both-declare-and-differ refuses, omission never refuses). It answers *is this field authenticated?*
+`vectors/smell_binding.json` pins the digest, the sealed record and the audit rule.
+
+**`smell_binding:none`** — `params: {}`. The unbound default: byte-identical to today's wire, and
+registered only so that "unbound" is a state a peer can **declare** rather than a silence that
+cannot be told apart from never having heard of the family.
+
+**`smell_binding:commit_grid_v1`** — the sender's sealed per-step record gains exactly one key:
+
+```
+smell_grid_sha256 = sha256(canonical_json(smell_grid_as_transmitted))
+```
+
+- `smell_grid_as_transmitted` is the **exact wire value** of that step's `smell_grid` — never a
+  re-derived, re-rounded or re-ordered copy. The grid's keys are `"r,c"` **strings**, so the
+  canonical form sorts them lexicographically and `"10,1"` precedes `"2,3"`: an implementation that
+  sorts its grid numerically before serializing agrees on every board narrower than eleven and
+  silently disagrees on every board wider than ten. The fixture pins that case.
+- An **empty grid is an input, not a gap**: `{}` has a real digest, a sender that transmits nothing
+  seals *that* value, and its audit passes. Under an arrangement where nothing crosses the wire the
+  binding is therefore **inert** — the digest is constant — and still harmless.
+- The key sits inside the sealed record, so it enters the step's commit preimage through the
+  **existing §3 construction**. No new hash form, no change to the commit algorithm, no change to
+  the wire. The fixture asserts that adding the key *moves* the commit; if it did not, the grid
+  would be bound to nothing.
+- At the mutual audit the standard re-hash proves record integrity as it does today, and a verifier
+  additionally recomputes `sha256(canonical_json(archived_inbound_grid))` per step and compares.
+
+**What it buys, and what it does not.** It buys **authenticity**: a stale, malformed or forged frame
+becomes provable at the mutual audit instead of evidence-grade-only in one team's dispute file. The
+in-play transition check stays the early-warning layer; the binding upgrades its refusals from
+*provable only to us* to sanctionable. It does **not** buy **privacy**. An honest, correctly bound
+field inverts to the sender's cell exactly as an unbound one does. Two consecutive transmitted
+frames determine a single emitter cell — **224 of 224 frame pairs, under both registered scent
+models, including saturated dwells**; anrbj666's finding (2026-07-27), reproduced independently by
+Imreec before adoption. Signing a frame does not un-leak it. Localization is `info_mode`'s problem,
+or a pairwise nothing-on-the-wire arrangement's; never this binding's.
+
+**Interop.** The wire is unchanged — the grid rides where it always rode and only the sealed record
+grows a key, so a reference-shaped peer indexes its own keys, ignores the extra one, declares
+nothing, and plays unbound. The binding is meaningful only where grids actually cross the wire; what
+a scent model's `transmitted: false` means for the wire is being settled separately and is not yet
+part of this document. The convention both known implementations follow meanwhile is
+`smell_grid: {}` rather than a dropped key — the reference message schema makes the key required,
+and both implementations fault on an absent one.
+
+Status is **PROPOSED**, and at the weak end of it: this is published so that a *first* and a
+*second* implementation can both build to it — nobody has shipped it. Promotion needs the usual bar
+in [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) **plus a live warm-up drill**, because it changes a
+commit preimage: both peers change what they seal on the same turn or neither does, and under App. E
+rule 35 a mid-series divergence there zeroes **both** teams. It never debuts in a counted game.
+
+*Proposed by **anrbj666** (Alon Engel, Renat Karimov) — bind the grid to the sealed record so that
+the machinery already protecting moves protects the field. Scoped by **Imreec** — authenticity, not
+privacy — from the frame-inversion measurement that showed a bound field leaks the sender's cell
+exactly as an unbound one does. Agreed by both teams 2026-07-29 as worth doing on its own merits.*
 
 ## 8. Conformance
 

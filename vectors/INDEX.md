@@ -20,6 +20,7 @@ the totals it actually ran.
 | [`pairing_declaration.json`](pairing_declaration.json) | `PROMOTED` | §7.2 | `sub_game_number` + `role` in the negotiate extras, and when they refuse |
 | [`delivery_contract.json`](delivery_contract.json) | `PROMOTED` | §7.1 | the at-least-once receiver contract, as a decision table |
 | [`uid_declaration.json`](uid_declaration.json) | `PROPOSED` | §7.3 | declaring the derived `game_uid` at negotiate, and when it refuses |
+| [`smell_binding.json`](smell_binding.json) | `PROPOSED` | §7.4 | binding the transmitted smell grid into the sealed step record |
 | [`scent_book_v3.json`](scent_book_v3.json) | `PROMOTED` | §5.1 | `multiplicative_book_v1` — the book's own scent model |
 | [`joint_seed.json`](joint_seed.json) | `ENH` | App. A | the joint-seed coin flip (opt-in) |
 | [`derive_starts.json`](derive_starts.json) | `ENH` | App. A | seeded asymmetric starts (opt-in) |

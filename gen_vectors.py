@@ -46,6 +46,8 @@ TIERS: dict[str, tuple[str, str, str]] = {
                                                    "decision table"),
     "uid_declaration.json":   ("PROPOSED", "§7.3", "declaring the derived `game_uid` at "
                                                    "negotiate, and when it refuses"),
+    "smell_binding.json":     ("PROPOSED", "§7.4", "binding the transmitted smell grid into the "
+                                                   "sealed step record"),
     "scent_book_v3.json":   ("PROMOTED", "§5.1", "`multiplicative_book_v1` — the book's own scent "
                                                  "model"),
     "joint_seed.json":           ("ENH", "App. A", "the joint-seed coin flip (opt-in)"),
@@ -414,10 +416,57 @@ def _doc_info_mode(name: str, exact: bool) -> dict:
     )
 
 
+# The sample field the smell-binding registration and fixture both work from. Deliberately tiny
+# and deliberately mixed-width: a board wider than ten produces the key `"10,1"`, which canonical
+# JSON sorts BEFORE `"2,3"` because the keys are strings. Sorting a grid numerically before
+# serializing is the one way two correct implementations disagree on this digest.
+BINDING_SAMPLE_GRID = {"2,3": 0.9, "2,4": 0.6, "10,1": 0.3}
+
+
+def _doc_smell_binding_none() -> dict:
+    return ref.ref_lock_doc(
+        "smell_binding", "none",
+        {},
+        {
+            "note": "the default and the whole of today's wire: the transmitted grid is "
+                    "unauthenticated. Registered so that `unbound` is a state a peer can "
+                    "declare rather than a silence it cannot distinguish from ignorance.",
+            "sealed_record_keys_added": [],
+        },
+    )
+
+
+def _doc_smell_binding_commit_grid() -> dict:
+    return ref.ref_lock_doc(
+        "smell_binding", "commit_grid_v1",
+        {
+            "binds": "smell_grid",
+            "sealed_record_key": "smell_grid_sha256",
+            "digest": "sha256(canonical_json(smell_grid_as_transmitted))",
+            "grid_as_transmitted": "the exact wire value of that step's smell_grid; an empty "
+                                   "grid is {} and hashes as {}",
+            "commit_construction": "unchanged — the key rides the existing section-3 preimage",
+            "wire": "unchanged",
+            "verified_at": "mutual_audit",
+            "mismatch_grade": "audit",
+            "buys": ["authenticity"],
+            "does_not_buy": ["privacy"],
+        },
+        {
+            "note": "the digest a sender seals for one step; the verifier re-hashes the grid it "
+                    "archived as received and compares",
+            "smell_grid": BINDING_SAMPLE_GRID,
+            "smell_grid_sha256": ref.ref_smell_grid_sha256(BINDING_SAMPLE_GRID),
+            "empty_grid_sha256": ref.ref_smell_grid_sha256({}),
+        },
+    )
+
+
 def gen_locked_model() -> None:
     docs = [_doc_scent_subtractive(), _doc_scent_book(), _doc_wire_reference(),
             _doc_wire_bookletter(), _doc_info_mode("belief", exact=False),
-            _doc_info_mode("exact", exact=True)]
+            _doc_info_mode("exact", exact=True),
+            _doc_smell_binding_none(), _doc_smell_binding_commit_grid()]
     # Per-registration status. A registration is not a fixture, so it carries its own tier here
     # rather than through TIERS; the rules in docs/GOVERNANCE.md are the same ones.
     status = {
@@ -437,6 +486,16 @@ def gen_locked_model() -> None:
                                "live_reproduction below"),
         "exact": ("PROPOSED", "registered as the counterpart of `belief`; no second "
                               "implementation has declared it"),
+        "none": ("PROPOSED", "the unbound default. It describes what every implementation "
+                             "already does, but NO implementation declares it yet — the "
+                             "registration exists so that `unbound` becomes sayable"),
+        "commit_grid_v1": ("PROPOSED", "agreed by both league teams on 2026-07-29 as worth "
+                                       "doing on its own merits — proposed by anrbj666, scoped "
+                                       "by imreeyal. NOT YET IMPLEMENTED BY ANYONE: this is the "
+                                       "weakest form of PROPOSED, published so a first and a "
+                                       "second implementation can both build to it. Promotion "
+                                       "needs the usual two, plus a live warm-up — it changes a "
+                                       "commit preimage, so it never debuts in a counted game"),
     }
     registered = [{"doc": d, "declared_as": f"{d['family']}_sha256",
                    "sha256": ref.ref_lock_hash(d),
@@ -453,8 +512,9 @@ def gen_locked_model() -> None:
         (None, None, "neither declares"),
     ]
     _write("locked_model.json", {
-        "description": "Locked-model declarations — ONE doc schema serving THREE named-parameter "
-                       "families (scent_model, wire_shape, info_mode). A peer publishes a doc, "
+        "description": "Locked-model declarations — ONE doc schema serving FOUR named-parameter "
+                       "families (scent_model, wire_shape, info_mode, smell_binding). A peer "
+                       "publishes a doc, "
                        "hashes it with the section-2 compact canonical form, and declares only "
                        "the hash at negotiate time under '<family>_sha256'. The schema exists so "
                        "that two teams' hashes are COMPARABLE: a bare hash over an ad-hoc dict "
@@ -618,6 +678,106 @@ def gen_uid_declaration() -> None:
              "decision": ref.ref_uid_declaration_decision(o, t)}
             for o, t, n in cases
         ],
+    })
+
+
+def gen_smell_binding() -> None:
+    """SPEC section 7.4 — `smell_binding:commit_grid_v1`, the owed vectors. PROPOSED.
+
+    Three things are pinned, because three things can be got wrong independently: the digest
+    over a populated grid (key ordering), the digest over the empty grid (`{}` is an input, not
+    a gap), and the sealed record that carries the digest (the key must enter the section-3
+    commit preimage, which is checkable only by showing that the commit MOVES when it is added).
+    """
+    grids = [
+        (BINDING_SAMPLE_GRID,
+         "a populated grid. The keys are STRINGS, so canonical JSON sorts them lexicographically "
+         "and '10,1' precedes '2,3'. An implementation that sorts its grid numerically before "
+         "serializing agrees with this fixture on every board narrower than eleven and silently "
+         "disagrees on every board wider than ten"),
+        ({}, "the empty grid — the `{}` convention. It is a legal input with a real digest, not "
+             "an absence; a bound sender that transmits nothing seals THIS value and its audit "
+             "passes. The binding is inert under a nothing-on-the-wire arrangement (the digest is "
+             "constant) and still harmless"),
+        (ref.ref_smell_emit([3, 3], 0.9, 5, 7),
+         "the section-5 emitted field, bound as it would actually ride the wire — the digest is "
+         "over the transmitted value, never over a re-derived or re-rounded copy"),
+    ]
+    # The sealed record: an ordinary section-3 move record, then the same record bound. The
+    # commit construction does not change; what changes is the record it seals over.
+    # The board is 12 wide on purpose: it is the only width at which the sample grid's `"10,1"`
+    # key is a legal cell, and therefore the only width at which the lexicographic-ordering trap
+    # this fixture pins can actually bite a real game.
+    unbound_record = {
+        "step": 4, "state": "grid=12x12;self=[2, 3];barriers=[]", "position": [2, 3],
+        "move": "MOVE:E", "intent": "truth", "hint": "The alley smells of rain.",
+    }
+    nonce = "9f8e7d6c5b4a39281706f5e4d3c2b1a0"
+    bound_record = ref.ref_bind_record(unbound_record, BINDING_SAMPLE_GRID)
+    audit_cases = [
+        (bound_record, BINDING_SAMPLE_GRID,
+         "the ordinary case: the grid the verifier archived re-hashes to the digest the sender "
+         "sealed"),
+        (bound_record, {**BINDING_SAMPLE_GRID, "2,4": 0.5},
+         "one cell differs between what was sealed and what was archived. Today this is at best "
+         "evidence-grade in one team's dispute file; under the binding it is AUDIT-GRADE — the "
+         "sender sealed one field and transmitted another"),
+        (ref.ref_bind_record(unbound_record, {}), {},
+         "a bound sender under a nothing-on-the-wire arrangement: `{}` sealed, `{}` archived, "
+         "audit clean"),
+        (bound_record, None,
+         "a sender that claims a binding but transmitted no grid at all for the step. There is "
+         "nothing that can re-hash to the digest, so it is a mismatch — and it is NOT the empty "
+         "case above, which has a real digest of its own"),
+        (unbound_record, BINDING_SAMPLE_GRID,
+         "the peer never heard of the family and sealed no digest -> `unbound`, not a failure. "
+         "The same rule as section 7's refusal table: silence is playable, in either direction"),
+    ]
+    _write("smell_binding.json", {
+        "description": "PROPOSED — `smell_binding:commit_grid_v1` (SPEC section 7.4). Under the "
+                       "reference wire the smell grid is the one per-step observable no "
+                       "commitment covers, so a stale or forged frame is provable only to the "
+                       "receiver that refused it. This binding seals "
+                       "sha256(canonical_json(smell_grid_as_transmitted)) INSIDE the step record, "
+                       "so the grid enters the existing commit preimage and a mismatch becomes "
+                       "provable at the mutual audit. The wire is unchanged and the commit "
+                       "algorithm is unchanged; only the sealed record grows a key. It buys "
+                       "AUTHENTICITY and explicitly not privacy — an honest bound grid inverts to "
+                       "the sender's cell exactly as an unbound one does. Proposed by anrbj666, "
+                       "scoped by imreeyal, agreed 2026-07-29; no implementation has shipped it "
+                       "yet, and because it changes a commit preimage it must never debut in a "
+                       "counted game.",
+        "digest": {
+            "construction": "sha256(canonical_json(smell_grid_as_transmitted))",
+            "vectors": [{"grid": g, "note": n, "sha256": ref.ref_smell_grid_sha256(g)}
+                        for g, n in grids],
+        },
+        "sealed_record": {
+            "note": "the binding key rides the section-3 preimage — same construction, larger "
+                    "record. `commit_moves` is the point of this vector: if adding the key left "
+                    "the commit unchanged, the grid would not be bound to anything. The board is "
+                    "12 wide so that the sample grid's '10,1' key is a legal cell — the "
+                    "lexicographic-ordering trap only bites on boards wider than ten.",
+            "nonce": nonce,
+            "grid": BINDING_SAMPLE_GRID,
+            "unbound": {"record": unbound_record,
+                        "commit": ref.ref_commit(unbound_record, nonce)},
+            "bound": {"record": bound_record, "commit": ref.ref_commit(bound_record, nonce)},
+            "commit_moves": ref.ref_commit(unbound_record, nonce) != ref.ref_commit(
+                bound_record, nonce),
+        },
+        "audit_rule": [
+            {"sealed_record": s, "archived_grid": g, "note": n,
+             "verdict": ref.ref_binding_audit(s, g)}
+            for s, g, n in audit_cases
+        ],
+        "declaration": {
+            "note": "what crosses the wire is the family hash, exactly as for the other three "
+                    "families (section 7) — the doc itself never does. Both registrations live "
+                    "in locked_model.json; omission plays unbound.",
+            "declared_key": "smell_binding_sha256",
+            "registered": ["none", "commit_grid_v1"],
+        },
     })
 
 
@@ -849,6 +1009,7 @@ def main() -> None:
     gen_locked_model()
     gen_pairing_declaration()
     gen_uid_declaration()
+    gen_smell_binding()
     gen_delivery_contract()
     gen_scent_book_v3()
     gen_joint_seed()
