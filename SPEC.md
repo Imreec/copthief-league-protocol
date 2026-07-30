@@ -387,6 +387,17 @@ emitter for every frame will refuse an entire game against a peer doing exactly 
 permits. Both known implementations have shipped or fixed to this gate; the failure mode is real,
 and anrbj666 found it in their own checker.
 
+**The zero-step final convention.** The same reading has a second form of "nothing to rely on": a
+game-ending caught=true final message. That message is mid-round and action-free, so its
+`smell_grid` may legitimately be a **zero-step re-send** of the last boundary's field, unchanged —
+which the frame-to-frame law (exactly one decay+deposit step) can never explain. It is exempt: a
+receiver-side transition check MUST NOT apply the one-advance law to the game-ending final. A
+re-sent boundary adds nothing a peer could rely on, exactly as an empty field does — and a check
+that refuses it plants a structural false refusal into the evidence of **every capture ending,
+forever** (anrbj666 found and fixed this in their own receiver; the other implementation's final
+advances the field one step instead, which the exemption must — and does — tolerate equally: the
+rule is "do not judge the final", not "expect any particular final").
+
 Three reasons for this reading over the literal one. First, the literal one ("nothing crosses the
 wire") is unimplementable against the reference schema without either breaking the closed key set or
 defining `{}` semantics anyway — at which point the rely-on reading has been adopted in fact.
@@ -399,9 +410,10 @@ This is a clarification of what the registered docs already say. **No `params` v
 registration is re-hashed**; `vectors/locked_model.json` is untouched by it.
 
 *Credit: **anrbj666** (Alon Engel, Renat Karimov) — the `REQUIRED_KEYS` collision observation, the
-`{}` convention, and the empty-field checker trap, found and fixed in their own client. **Imreec** —
-the send/receive split probe that surfaced the ambiguity, the rely-on reading, and the cross-checks
-against both implementations. Settled jointly, Round 16, 2026-07-29.*
+`{}` convention, the empty-field checker trap, and the zero-step-final exemption (both found and
+fixed in their own client). **Imreec** — the send/receive split probe that surfaced the ambiguity,
+the rely-on reading, and the cross-checks against both implementations. Settled jointly, Rounds
+16–17, 2026-07-29/30.*
 
 **Every registration now carries its own `status` and the evidence for it**, on the terms in
 [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — read them off `vectors/locked_model.json` rather than
