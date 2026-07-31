@@ -143,6 +143,15 @@ negotiate (SPEC §7.3, [`vectors/uid_declaration.json`](../vectors/uid_declarati
 implementation intends it and the other is invited; a cross-team warm-up is the promotion path.
 Recorded here so the difference between "agreed" and "proposed" stays visible.
 
+**Currently `PROPOSED` with *zero* implementations** — the weakest thing this repo publishes, and
+labelled so rather than dressed up: the **`smell_binding` family** (SPEC §7.4,
+[`vectors/smell_binding.json`](../vectors/smell_binding.json)). Both league teams agreed on
+2026-07-29 that it is worth doing; neither has built it. It is published so that a *first* and a
+*second* implementation can each build to the same bytes instead of to each other. Its promotion
+bar is the ordinary one **plus a live warm-up drill**, because it changes a commit preimage: both
+peers must change what they seal on the same turn, and a mid-series divergence there is the
+contradiction App. E rule 35 zeroes both teams for. It never debuts in a counted game.
+
 Not promoted from the same run, and why: **`info_mode`** travelled as a bare string rather than a
 doc hash, so the `belief` / `exact` registrations were not reproduced — only the intent was.
 **`hardware_spec_sha256`** was observed on the wire as a fourth family and is deliberately not

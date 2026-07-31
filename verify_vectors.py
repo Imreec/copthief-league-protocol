@@ -152,7 +152,7 @@ def ref_report_consensus_signature(report: dict) -> str:
 # that hash different field sets refuse each other for no reason; that is the failure this
 # section removes.
 
-LOCK_FAMILIES = ("scent_model", "wire_shape", "info_mode")
+LOCK_FAMILIES = ("scent_model", "wire_shape", "info_mode", "smell_binding")
 LOCK_DOC_KEYS = ("family", "name", "params", "example")
 
 
@@ -251,6 +251,69 @@ def ref_uid_declaration_decision(ours: str | None, theirs: str | None) -> str:
     if not isinstance(ours, str) or not isinstance(theirs, str):
         return "play"
     return ref_lock_decision(ours, theirs)
+
+
+# --- SMELL BINDING (SPEC section 7.4) ----------------------------------------------------
+#
+# Under `wire_shape: reference-v3` the smell grid rides the wire unauthenticated: it is the one
+# per-step observable that no commitment covers. A stale, malformed or forged grid is therefore
+# detectable only by a receiver's own physics check, whose refusals are provable to nobody but
+# the refuser. `smell_binding:commit_grid_v1` binds the grid to the sealed step record, so the
+# same machinery that already protects moves protects the field — a mismatch becomes provable at
+# the mutual audit, where it can be sanctioned rather than merely logged.
+#
+# What it does NOT buy is privacy: an honest, correctly bound grid inverts to the sender's cell
+# exactly as an unbound one does. Localization is `info_mode`'s problem, or a pairwise
+# nothing-on-the-wire arrangement's — never this binding's.
+
+def ref_smell_grid_sha256(grid: dict) -> str:
+    """The digest a bound sender seals: SHA-256 over the compact canonical grid (section 2).
+
+    The argument is the grid **as transmitted** — the exact wire value, not a re-derived or
+    re-rounded copy. Two consequences worth pinning:
+
+    * an empty grid is `{}` and hashes as `{}`; it is a legal, meaningful input, not a gap;
+    * the keys are `"r,c"` STRINGS, so canonical JSON sorts them lexicographically —
+      `"10,1"` precedes `"2,3"`. An implementation that sorts its grid numerically before
+      serializing produces a different digest for the same field on any board wider than ten.
+    """
+    return canonical_hash(grid)
+
+
+def ref_bind_record(record: dict, grid: dict) -> dict:
+    """Add the binding key to a sealed step record.
+
+    Deliberately nothing more than a key insertion: the digest enters the step's commit preimage
+    through the existing section-3 construction, so binding adds no new hash form and does not
+    touch the commit algorithm. That is also why it is a commit-preimage change and must never
+    debut in a counted game — both peers change what they seal on the same turn or neither does.
+    """
+    return {**record, "smell_grid_sha256": ref_smell_grid_sha256(grid)}
+
+
+def ref_binding_audit(sealed: dict, archived_grid: dict | None) -> str:
+    """The audit-side verdict on one bound step.
+
+    ``sealed`` is the revealed step record; ``archived_grid`` is the grid the verifier's own
+    peer archived as received for that step. Returns:
+
+    * ``"unbound"``  — the record carries no digest. Not a failure: a peer that never heard of
+      the family plays exactly as today, the same way omission never refuses in section 7.
+    * ``"ok"``       — the archived grid re-hashes to the sealed digest.
+    * ``"bound_mismatch"`` — it does not. The sender sealed one field and transmitted another,
+      which is audit-grade, not merely evidence-grade.
+
+    ``archived_grid = None`` means no grid was archived for a step whose sender claims to have
+    bound one, and that is a mismatch too: there is nothing that can re-hash to the digest. It is
+    not the empty-grid case — a sender that transmitted ``{}`` sealed the digest OF ``{}``, and
+    that re-hashes cleanly. Absence and emptiness are different inputs here, on purpose.
+    """
+    digest = sealed.get("smell_grid_sha256")
+    if digest is None:
+        return "unbound"
+    if archived_grid is None:
+        return "bound_mismatch"
+    return "ok" if ref_smell_grid_sha256(archived_grid) == digest else "bound_mismatch"
 
 
 # --- AT-LEAST-ONCE DELIVERY (SPEC section 7.1) -------------------------------------------
@@ -610,6 +673,56 @@ def run() -> int:
         "the flat set is the signed 14 keys",
         len(we["flat_terms"]) == 14
         and set(we["flat_terms"]) == set(_load("terms_signature.json")["vectors"][0]["terms"]))
+
+    sb = _section("smell_binding.json")
+    for i, v in enumerate(sb["digest"]["vectors"]):
+        got = ref_smell_grid_sha256(v["grid"])
+        failures += not check(f"grid digest #{i} ({v['note'][:58]})", got == v["sha256"], f"got {got}")
+    # The empty grid is an INPUT with a real digest, not a gap. A bound sender that transmits
+    # nothing seals this value, and its audit passes — which is what makes the binding inert
+    # rather than broken under a nothing-on-the-wire arrangement.
+    failures += not check(
+        "the empty grid has a real digest, and it is the digest of `{}`",
+        any(v["grid"] == {} and v["sha256"] == hashlib.sha256(b"{}").hexdigest()
+            for v in sb["digest"]["vectors"]))
+    # Grid keys are strings, so canonical JSON sorts them lexicographically. Pinned as a property
+    # rather than as a value: a numeric sort is the one way two correct implementations disagree.
+    wide = {"2,3": 0.9, "10,1": 0.3}
+    failures += not check(
+        "grid keys sort lexicographically, so '10,1' precedes '2,3'",
+        _canonical_str(wide).index('"10,1"') < _canonical_str(wide).index('"2,3"')
+        and ref_smell_grid_sha256(wide) == ref_smell_grid_sha256({"10,1": 0.3, "2,3": 0.9}))
+    sr = sb["sealed_record"]
+    got_unbound = ref_commit(sr["unbound"]["record"], sr["nonce"])
+    got_bound = ref_commit(sr["bound"]["record"], sr["nonce"])
+    failures += not check(
+        "the sealed record commits under the unchanged section-3 construction",
+        got_unbound == sr["unbound"]["commit"] and got_bound == sr["bound"]["commit"])
+    # If adding the key left the commit where it was, the grid would be bound to nothing.
+    failures += not check(
+        "adding the binding key MOVES the commit — the grid is really bound",
+        got_unbound != got_bound and sr["commit_moves"] is True)
+    failures += not check(
+        "the sealed digest is the digest of the transmitted grid",
+        sr["bound"]["record"]["smell_grid_sha256"] == ref_smell_grid_sha256(sr["grid"])
+        and ref_bind_record(sr["unbound"]["record"], sr["grid"]) == sr["bound"]["record"])
+    for i, v in enumerate(sb["audit_rule"]):
+        got = ref_binding_audit(v["sealed_record"], v["archived_grid"])
+        failures += not check(f"binding audit #{i} ({v['note'][:56]})", got == v["verdict"], f"got {got}")
+    # Omission is playable here too: a peer that seals no digest is `unbound`, never a failure —
+    # the same property section 7's refusal table and section 7.2's pairing table both carry.
+    failures += not check(
+        "an unbound peer is never failed by the binding",
+        all(ref_binding_audit({k: val for k, val in v["sealed_record"].items()
+                               if k != "smell_grid_sha256"}, v["archived_grid"]) == "unbound"
+            for v in sb["audit_rule"]))
+    # The declaration rides the same mechanism as the other three families, or it is a new one.
+    lm_names = {e["doc"]["name"] for e in lm["registered"] if e["doc"]["family"] == "smell_binding"}
+    failures += not check(
+        "both binding registrations exist under the section-7 schema",
+        set(sb["declaration"]["registered"]) == lm_names
+        and all(e["declared_as"] == sb["declaration"]["declared_key"]
+                for e in lm["registered"] if e["doc"]["family"] == "smell_binding"))
 
     dc = _section("delivery_contract.json")
     for i, v in enumerate(dc["arrivals"]):
