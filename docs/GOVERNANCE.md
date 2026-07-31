@@ -16,7 +16,7 @@ Read this before opening an issue that proposes a new construction, and before b
 |---|---|---|
 | **`CORE`** | Two independent implementations **must** produce these bytes, or the game cannot start, cannot audit, or cannot settle. Confirmed byte-for-byte against the official reference implementation. | Reproduce every one of them before you play anyone. This is the interop floor. |
 | **`PROMOTED`** | Not required by the book, but **a second independent implementation has reproduced it**. The claim has survived contact with someone else's code. | Safe to build against. Still declare it — see the locked-model rule in [`../SPEC.md`](../SPEC.md) §7. |
-| **`PROPOSED`** | Published so that a second implementation *can* reproduce it. **One implementation only.** It may be wrong in ways nobody has noticed yet. | Read it, reproduce it, and tell us — reproducing it is what promotes it. Do not assume an opponent has it. |
+| **`PROPOSED`** | Published so that a second implementation *can* reproduce it. **At most one implementation** — an entry published for two first implementations to build to says zero, explicitly. It may be wrong in ways nobody has noticed yet. | Read it, reproduce it, and tell us — reproducing it is what promotes it. Do not assume an opponent has it. |
 | **`ENH`** | An opt-in enhancement (SPEC Appendix A). Binding on a pair **only** if both teams signed it into their `config/game.json`. | Ignore it unless you and your opponent both agreed to it. |
 
 Tiers are about *evidence*, not about importance. `CORE` outranks `PROMOTED` because the book and

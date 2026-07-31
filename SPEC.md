@@ -410,15 +410,20 @@ and no declared hash changes. Third, it scopes the alternative cleanly: a pair t
 nothing on the wire adopts that as a deliberate pairwise arrangement — `{}` on send — instead of the
 registry pretending the flag already required it.
 
+Whether any pairwise arrangement under this section satisfies the course rulebook is the pair's own
+duty to establish; this registry pins wire semantics between consenting implementations and
+adjudicates nothing about the book.
+
 This is a clarification of what the registered docs already say. **No `params` value changes and no
 registration is re-hashed**; `vectors/locked_model.json` is untouched by it.
 
 *Credit: **anrbj666** (Alon Engel, Renat Karimov) — the `REQUIRED_KEYS` collision observation, the
 `{}` convention, the empty-field checker trap, the zero-step-final exemption (both found and fixed
-in their own client), and the pair-vouching clause, which caught this section's own draft
-contradicting the registry's `info_mode:belief` document before either team signed it. **Imreec** —
-the send/receive split probe that surfaced the ambiguity, the rely-on reading, and the cross-checks
-against both implementations. Settled jointly, Rounds 16–18, 2026-07-29/30.*
+in their own client), the pair-vouching clause, which caught this section's own draft contradicting
+the registry's `info_mode:belief` document before either team signed it, and the book-adjudication
+scope sentence. **Imreec** — the send/receive split probe that surfaced the ambiguity, the rely-on
+reading, and the cross-checks against both implementations. Settled jointly, Rounds 16–19,
+2026-07-29/31.*
 
 **Every registration now carries its own `status` and the evidence for it**, on the terms in
 [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — read them off `vectors/locked_model.json` rather than
