@@ -374,7 +374,11 @@ The reading this kit pins:
 - **`transmitted: false`** — the model defines **no receiver-side meaning** for the field. A peer
   MAY still populate the wire key, because the *wire shape* owns whether the key exists and the
   scent model does not; and a receiver MUST NOT treat its content as protocol data it can rely on,
-  because nothing in the model's semantics vouches for it.
+  because nothing in the **model's** semantics vouches for it. A **pair** may vouch where the model
+  does not: a declared `info_mode` whose registered sources include the field (this registry's
+  `info_mode:belief` does), or a `smell_binding` registration authenticating its bytes, restores
+  receiver-side reliance as a **deliberate pairwise arrangement** — the mirror of the `{}`
+  arrangement, for pairs that say what they rely on rather than pairs that want nothing relied on.
 
 **The `{}` convention.** An arrangement in which a peer sends nothing under a `transmitted: false`
 model is expressed as `smell_grid: {}` — **never by dropping the key**. That keeps the reference
@@ -410,10 +414,11 @@ This is a clarification of what the registered docs already say. **No `params` v
 registration is re-hashed**; `vectors/locked_model.json` is untouched by it.
 
 *Credit: **anrbj666** (Alon Engel, Renat Karimov) — the `REQUIRED_KEYS` collision observation, the
-`{}` convention, the empty-field checker trap, and the zero-step-final exemption (both found and
-fixed in their own client). **Imreec** — the send/receive split probe that surfaced the ambiguity,
-the rely-on reading, and the cross-checks against both implementations. Settled jointly, Rounds
-16–17, 2026-07-29/30.*
+`{}` convention, the empty-field checker trap, the zero-step-final exemption (both found and fixed
+in their own client), and the pair-vouching clause, which caught this section's own draft
+contradicting the registry's `info_mode:belief` document before either team signed it. **Imreec** —
+the send/receive split probe that surfaced the ambiguity, the rely-on reading, and the cross-checks
+against both implementations. Settled jointly, Rounds 16–18, 2026-07-29/30.*
 
 **Every registration now carries its own `status` and the evidence for it**, on the terms in
 [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — read them off `vectors/locked_model.json` rather than
@@ -630,11 +635,15 @@ smell_grid_sha256 = sha256(canonical_json(smell_grid_as_transmitted))
 becomes provable at the mutual audit instead of evidence-grade-only in one team's dispute file. The
 in-play transition check stays the early-warning layer; the binding upgrades its refusals from
 *provable only to us* to sanctionable. It does **not** buy **privacy**. An honest, correctly bound
-field inverts to the sender's cell exactly as an unbound one does. Two consecutive transmitted
-frames determine a single emitter cell — **224 of 224 frame pairs, under both registered scent
-models, including saturated dwells**; anrbj666's finding (2026-07-27), reproduced independently by
-Imreec before adoption. Signing a frame does not un-leak it. Localization is `info_mode`'s problem,
-or a pairwise nothing-on-the-wire arrangement's; never this binding's.
+field inverts to the sender's cell exactly as an unbound one does — two consecutive transmitted
+frames determine a single emitter cell, **224 of 224 frame pairs, under both registered scent
+models, including saturated dwells** (anrbj666's finding, 2026-07-27, reproduced independently by
+Imreec before adoption). **That number is the measured size of the oracle the `info_mode:belief`
+declaration exists to fence**: both known implementations declare belief mode and wall the
+inversion out of play behind a verdict-only validator, pinned by a test on each side — the
+measurement quantifies what the fence holds back, not a capability in use. Signing a frame does
+not un-leak it. Localization is `info_mode`'s problem, or a pairwise nothing-on-the-wire
+arrangement's; never this binding's.
 
 **Interop.** The wire is unchanged — the grid rides where it always rode and only the sealed record
 grows a key, so a reference-shaped peer indexes its own keys, ignores the extra one, declares
