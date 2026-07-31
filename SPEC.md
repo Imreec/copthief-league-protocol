@@ -357,6 +357,74 @@ position never crosses the wire; under `bookletter-v3`, which puts it on the wir
 are an **honor term**. Declaring the mode is still worth doing — it makes the intent explicit and a
 mismatch catchable before the game — but a pair should know which of the two it is relying on.
 
+**What a scent model's `transmitted` flag means — and what it does not.** Two of the registered
+scent models carry a `transmitted` parameter, and read literally it contradicts the wire it runs on.
+`multiplicative_book_v1` declares `transmitted: false`, because the book's model has each side
+recompute the rival's field rather than receive it. But wire shape `reference-v3` makes `smell_grid`
+a **required key of every turn message** — the reference's own message type gives it no default, and
+both known independent implementations fault on an absent key. A wire that mandates the field and a
+lock that forbids sending it cannot both hold.
+
+The reading this kit pins:
+
+> **`transmitted` constrains what a peer may RELY ON, not what crosses the wire.**
+
+- **`transmitted: true`** — the field on the wire is the model's own protocol data. A receiver may
+  absorb it and feed it to inference, subject to its own validation.
+- **`transmitted: false`** — the model defines **no receiver-side meaning** for the field. A peer
+  MAY still populate the wire key, because the *wire shape* owns whether the key exists and the
+  scent model does not; and a receiver MUST NOT treat its content as protocol data it can rely on,
+  because nothing in the **model's** semantics vouches for it. A **pair** may vouch where the model
+  does not: a declared `info_mode` whose registered sources include the field (this registry's
+  `info_mode:belief` does), or a `smell_binding` registration authenticating its bytes, restores
+  receiver-side reliance as a **deliberate pairwise arrangement** — the mirror of the `{}`
+  arrangement, for pairs that say what they rely on rather than pairs that want nothing relied on.
+
+**The `{}` convention.** An arrangement in which a peer sends nothing under a `transmitted: false`
+model is expressed as `smell_grid: {}` — **never by dropping the key**. That keeps the reference
+wire's closed key set intact (absent faults, empty is legal, verified against the reference schema
+and both independent implementations) and costs no one a code change.
+
+*Implementer's note, behaviour rather than bytes:* a receiver-side physics or validity check must
+treat an empty field as **absence of data, not impossible data**. A transition check that demands an
+emitter for every frame will refuse an entire game against a peer doing exactly what the lock
+permits. Both known implementations have shipped or fixed to this gate; the failure mode is real,
+and anrbj666 found it in their own checker.
+
+**The zero-step final convention.** The same reading has a second form of "nothing to rely on": a
+game-ending caught=true final message. That message is mid-round and action-free, so its
+`smell_grid` may legitimately be a **zero-step re-send** of the last boundary's field, unchanged —
+which the frame-to-frame law (exactly one decay+deposit step) can never explain. It is exempt: a
+receiver-side transition check MUST NOT apply the one-advance law to the game-ending final. A
+re-sent boundary adds nothing a peer could rely on, exactly as an empty field does — and a check
+that refuses it plants a structural false refusal into the evidence of **every capture ending,
+forever** (anrbj666 found and fixed this in their own receiver; the other implementation's final
+advances the field one step instead, which the exemption must — and does — tolerate equally: the
+rule is "do not judge the final", not "expect any particular final").
+
+Three reasons for this reading over the literal one. First, the literal one ("nothing crosses the
+wire") is unimplementable against the reference schema without either breaking the closed key set or
+defining `{}` semantics anyway — at which point the rely-on reading has been adopted in fact.
+Second, it matches what every implementation in the league does today, so nothing on the wire moves
+and no declared hash changes. Third, it scopes the alternative cleanly: a pair that genuinely wants
+nothing on the wire adopts that as a deliberate pairwise arrangement — `{}` on send — instead of the
+registry pretending the flag already required it.
+
+Whether any pairwise arrangement under this section satisfies the course rulebook is the pair's own
+duty to establish; this registry pins wire semantics between consenting implementations and
+adjudicates nothing about the book.
+
+This is a clarification of what the registered docs already say. **No `params` value changes and no
+registration is re-hashed**; `vectors/locked_model.json` is untouched by it.
+
+*Credit: **anrbj666** (Alon Engel, Renat Karimov) — the `REQUIRED_KEYS` collision observation, the
+`{}` convention, the empty-field checker trap, the zero-step-final exemption (both found and fixed
+in their own client), the pair-vouching clause, which caught this section's own draft contradicting
+the registry's `info_mode:belief` document before either team signed it, and the book-adjudication
+scope sentence. **Imreec** — the send/receive split probe that surfaced the ambiguity, the rely-on
+reading, and the cross-checks against both implementations. Settled jointly, Rounds 16–19,
+2026-07-29/31.*
+
 **Every registration now carries its own `status` and the evidence for it**, on the terms in
 [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — read them off `vectors/locked_model.json` rather than
 from prose. In summary: `subtractive_chebyshev_v1` is `CORE`; `multiplicative_book_v1` and
@@ -572,19 +640,22 @@ smell_grid_sha256 = sha256(canonical_json(smell_grid_as_transmitted))
 becomes provable at the mutual audit instead of evidence-grade-only in one team's dispute file. The
 in-play transition check stays the early-warning layer; the binding upgrades its refusals from
 *provable only to us* to sanctionable. It does **not** buy **privacy**. An honest, correctly bound
-field inverts to the sender's cell exactly as an unbound one does. Two consecutive transmitted
-frames determine a single emitter cell — **224 of 224 frame pairs, under both registered scent
-models, including saturated dwells**; anrbj666's finding (2026-07-27), reproduced independently by
-Imreec before adoption. Signing a frame does not un-leak it. Localization is `info_mode`'s problem,
-or a pairwise nothing-on-the-wire arrangement's; never this binding's.
+field inverts to the sender's cell exactly as an unbound one does — two consecutive transmitted
+frames determine a single emitter cell, **224 of 224 frame pairs, under both registered scent
+models, including saturated dwells** (anrbj666's finding, 2026-07-27, reproduced independently by
+Imreec before adoption). **That number is the measured size of the oracle the `info_mode:belief`
+declaration exists to fence**: both known implementations declare belief mode and wall the
+inversion out of play behind a verdict-only validator, pinned by a test on each side — the
+measurement quantifies what the fence holds back, not a capability in use. Signing a frame does
+not un-leak it. Localization is `info_mode`'s problem, or a pairwise nothing-on-the-wire
+arrangement's; never this binding's.
 
 **Interop.** The wire is unchanged — the grid rides where it always rode and only the sealed record
 grows a key, so a reference-shaped peer indexes its own keys, ignores the extra one, declares
-nothing, and plays unbound. The binding is meaningful only where grids actually cross the wire; what
-a scent model's `transmitted: false` means for the wire is being settled separately and is not yet
-part of this document. The convention both known implementations follow meanwhile is
-`smell_grid: {}` rather than a dropped key — the reference message schema makes the key required,
-and both implementations fault on an absent one.
+nothing, and plays unbound. The binding is meaningful only where grids actually cross the wire — see
+the `transmitted` clarification in §7 above: the flag constrains what a peer may rely on, not what
+crosses the wire, and a peer sending nothing sends `smell_grid: {}` rather than dropping the key.
+Under such an arrangement the binding is inert, since `{}` hashes constantly, and still harmless.
 
 Status is **PROPOSED**, and at the weak end of it: this is published so that a *first* and a
 *second* implementation can both build to it — nobody has shipped it. Promotion needs the usual bar
