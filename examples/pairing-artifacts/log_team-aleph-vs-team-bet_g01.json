@@ -1,0 +1,84 @@
+{
+  "_schema": "Per-sub-game log, PAIRING-PLAYBOOK example: sealed records in the commit-reveal form, step-0 shown in BOTH conformant spellings (own side slim `step_zero` + declaration_ref; opponent side inline `system_spec`). Static team metadata lives in the declaration; join by game_uid.",
+  "schema_version": "1.1",
+  "game_id": "team-aleph-vs-team-bet",
+  "game_uid": "da4f6f1e-c9b0-6051-1485-b02030c5b1e6",
+  "links": {
+    "declaration": "declaration_team-aleph-vs-team-bet.json",
+    "config": "config_team-aleph-vs-team-bet_g<NN>.json",
+    "log": "log_team-aleph-vs-team-bet_g<NN>.json",
+    "result": "result_team-aleph-vs-team-bet.json"
+  },
+  "sub_game_number": 1,
+  "summary": {
+    "sub_game_number": 1,
+    "group_id": "team-aleph",
+    "role": "police",
+    "opponent_group_id": "team-bet",
+    "result": "capture",
+    "winner_group": "team-aleph",
+    "timezone": "Asia/Jerusalem",
+    "steps": 1,
+    "audit": "Verified OK"
+  },
+  "records": [
+    {
+      "payload": {
+        "step": 0,
+        "type": "step_zero",
+        "declaration_ref": "declaration_team-aleph-vs-team-bet.json",
+        "group_id": "team-aleph",
+        "role": "police",
+        "sub_game_number": 1,
+        "github_commit": "a1ef0000c0fc0fc0fc0fc0fc0fc0fc0fc0fc0f5c"
+      },
+      "nonce": "a9e82a522428616fa2d8f88e779d4d2e",
+      "commit": "60751b20a0f0cccd03ce517f4c38f070c8d361960c4ddd5ca107f611e118ce82"
+    },
+    {
+      "payload": {
+        "step": 1,
+        "state": "grid=7x7;self=[0,0];barriers=[]",
+        "position": [
+          0,
+          1
+        ],
+        "move": "MOVE:E",
+        "intent": "truth",
+        "hint": "מתחיל לנוע מזרחה ברחובות — בהצלחה 🚔",
+        "tokens_step": 0,
+        "tokens_total": 0,
+        "response_seconds": 0.4,
+        "random_move": false
+      },
+      "nonce": "4fa3ce624ea7bdf070e9e9bd032623cd",
+      "commit": "56a62bf39addeb1cb16b3b0c8a28950e561754e4cbe0df75d1632eca9c586b26"
+    }
+  ],
+  "opponent_records": [
+    {
+      "payload": {
+        "step": 0,
+        "type": "system_spec",
+        "spec": {
+          "os": "Windows (10.0.19045)",
+          "cpu_type": "AuthenticAMD x86_64",
+          "cpu_cores": 24,
+          "cpu_freq_mhz": 3693,
+          "ram_gb": 31.9,
+          "gpu_type": "RTX 3080 Ti",
+          "gpu_cores_or_cuda": "cuda",
+          "vram_gb": 12.0
+        },
+        "model": "none",
+        "code_version": "1.00",
+        "group_name": "team-bet",
+        "sub_game_number": 1,
+        "github_commit": "b2e70001de2de2de2de2de2de2de2de2de2de271",
+        "num_games_declared": 6
+      },
+      "nonce": "a766e1793df06dd541ee4347069946ba",
+      "commit": "4b359aa027fe723a057b034d65a153de5464780bf1ae9e891e8f7b20e6ed3479"
+    }
+  ]
+}

@@ -326,6 +326,77 @@ first).
 
 ---
 
+## The E2E contract — rules of engagement, in one list
+
+Everything above, compressed to the enforceable statements. A team that holds all of these is
+safe to play against; a violation of any is a finding (Stage 5 format). Book/kit anchors in
+parentheses.
+
+**Identity & derivation**
+1. `game_id` = sorted pair; `game_uid` = UUID over SHA-256 of canonical flat 14-key terms +
+   sorted group ids — derived by BOTH sides independently, compared in chat before window 1, and
+   declared at the handshake (SPEC §4, §7.3; `vectors/game_uid.json`).
+2. All hashes over canonical JSON: `sort_keys`, `ensure_ascii=False`, compact separators — except
+   the settlement consensus signature, which uses the spaced form (SPEC §2, §6).
+3. Every artifact filename derives from `game_id`; one `game_uid` spans all of them
+   (`tools/check_artifacts.py` is the gate).
+
+**Play**
+4. Moves are always pure code; the LLM writes hint text only, ≤ 15 words, free natural language —
+   never a coordinates protocol (book ch. 6; the hint may be any language and any emoji, and your
+   opponent's serializer must survive that).
+5. Commit-reveal on every step; nonces stay secret until the end-of-game audit; each side
+   re-hashes the other's revealed records with its own serializer (SPEC §3).
+6. Sub-game N launches only after N−1's log exists; the driver owning sub-game 6 closes.
+7. Token counts are truthful, including zero — zero-token play is book-sanctioned (§6.1).
+
+**Reporting**
+8. A series that did not fully settle sends **nothing** (WARNINGS §1). A settled technical-loss
+   sub-game is settled (Stage 7 row shape) — a missing one is not.
+9. Each team sends exactly ONE report per counted series, to the league alias, result file
+   attached — and nothing, ever, to any lecturer address outside a doubly-armed counted run
+   (WARNINGS §3; book §9.3.3).
+10. League fields arm with the counted run only; friendlies never bump counts or claim rewards
+    (App. E rules 37–38).
+11. The commit id that played is in the sealed step-0, the declaration, and the report — bare,
+    pushed, resolvable (App. E rule 53). No side-channel duty exists.
+12. One counted series per pairing, guarded by committed evidence, not memory (App. E rule 52).
+
+**Failure**
+13. Discard-and-rerun by mutual written agreement only; dead attempts archived, never deleted
+    (Stage 7).
+
+---
+
+## The connection contract — how a peer actually reaches us (or you)
+
+The transport surface, compressed from LEAGUE-OPS §2/§4 and SPEC App. D — this is the "how do I
+dial them" page for a team meeting this pairing (or any conformant one):
+
+| Item | Contract |
+|---|---|
+| Endpoint | `https://<host>/mcp` — MCP streamable HTTP. The path is part of the address; a bare hostname is not an endpoint |
+| Ready state | `406` to a browser-shaped GET. **Poll for 406, not 200** |
+| Not ready | `502` = edge up, no peer behind it (normal before T; permanent if the tunnel has no ingress — from outside you cannot tell, which is why the loopback gate exists) |
+| Broken | `421` = host-header guard; fix at the tunnel (`httpHostHeader` / `--host-header=rewrite`), no code change. `530`/refused = DNS or no tunnel process |
+| Topology | Declared in the Stage 1 message: one address for the series, or role-split (the address you dial changes with their role each window). Never guess — refuse ambiguity loudly |
+| Per-window readiness | Under role-split, only the FIRST counterpart must be ready at T; later windows' edges are judged by their own handshake budget (LEAGUE-OPS §4) |
+| Pre-T proof | Loopback through your OWN edge (`tools/netcheck.py --loopback`), finished BEFORE T so nothing but a real peer answers on the series path |
+| Handshake | Greeting carries the flat signed terms + nonce + signature, identity block, locked-model hashes, `sub_game_number`/`role` (+ optionally the derived `game_uid`) — see `docs/cross-team-frame.json` for a real inbound one |
+| Refusals | Terms-absent ≠ terms-differing ≠ bystander-window — three different faults, three different fixes; name which (LEAGUE-OPS §6) |
+
+**A worked, checkable example of everything the wire produces** — all four artifact kinds for a
+full six-sub-game series in the exact shape this playbook's campaign played, generated and
+verifiable with the kit's own gate — lives at
+[`examples/pairing-artifacts/`](../examples/pairing-artifacts/README.md):
+
+```bash
+python examples/gen_pairing_artifacts.py
+python tools/check_artifacts.py examples/pairing-artifacts
+```
+
+---
+
 ## Appendix — what may legitimately differ between two conformant teams
 
 Collected so the first diff against a new opponent does not read as a fault list:

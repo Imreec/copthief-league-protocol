@@ -73,7 +73,7 @@ anyone. The table below is the map, not the route.
 | [`vectors/`](vectors/) | Machine-generated fixtures, one file per construction — each declares its own tier; roster at [`vectors/INDEX.md`](vectors/INDEX.md) |
 | [`verify_vectors.py`](verify_vectors.py) | Stdlib-only reference checker — `python verify_vectors.py`; prints the roster and the totals it ran |
 | [`gen_vectors.py`](gen_vectors.py) | Regenerates every fixture from the reference constructions; CI fails on drift |
-| [`examples/`](examples/) | A worked exchange (agreement → sealed steps → audit → settlement), every hash real and regenerable |
+| [`examples/`](examples/) | A worked exchange (agreement → sealed steps → audit → settlement), every hash real and regenerable — plus [`pairing-artifacts/`](examples/pairing-artifacts/), a full six-sub-game artifact bundle in the played counted format, generated and verifiable with `check_artifacts.py` |
 | [`sparring/`](sparring/) | A practice opponent you run locally — full rulebook, no mail, simple brains. `python -m sparring.cli selfplay`, or stand one up for your peer to dial |
 | [`docs/WARNINGS.md`](docs/WARNINGS.md) | The mistakes that cost points — including the opponent's. Read before configuring any recipient |
 | [`docs/LEAGUE-OPS.md`](docs/LEAGUE-OPS.md) | How a scheduled window actually runs: the T-protocol, netcheck discipline, topologies, budget math |
