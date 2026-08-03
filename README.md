@@ -77,6 +77,7 @@ anyone. The table below is the map, not the route.
 | [`sparring/`](sparring/) | A practice opponent you run locally — full rulebook, no mail, simple brains. `python -m sparring.cli selfplay`, or stand one up for your peer to dial |
 | [`docs/WARNINGS.md`](docs/WARNINGS.md) | The mistakes that cost points — including the opponent's. Read before configuring any recipient |
 | [`docs/LEAGUE-OPS.md`](docs/LEAGUE-OPS.md) | How a scheduled window actually runs: the T-protocol, netcheck discipline, topologies, budget math |
+| [`docs/PAIRING-PLAYBOOK.md`](docs/PAIRING-PLAYBOOK.md) | The whole lifecycle of one pairing: the first-contact message, role allocation, the friendly campaign and its report-compare ritual, arming and running the one counted series, the retry agreement. Written from a completed campaign |
 | [`tools/`](tools/) | `check_artifacts.py` (your four artifacts, before anyone sees them) and `netcheck.py` (your network, before you name a start time) |
 | [`docs/EVIDENCE.md`](docs/EVIDENCE.md) | Real frames off the wire — handshake, sealed step, audit, all four artifacts. Generated, so it cannot drift |
 | [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) | What `CORE` / `PROMOTED` / `PROPOSED` / `ENH` claim, and what it takes to promote one |

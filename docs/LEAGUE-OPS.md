@@ -2,7 +2,9 @@
 
 Two conformant implementations that both pass every vector still have to *meet*. This page is
 about that half: agreeing a start time, proving the network before it, and the failure modes that
-burn a window and look like something else.
+burn a window and look like something else. For the layer above single windows — the lifecycle of
+a whole pairing, from first contact through the counted series — see
+[`PAIRING-PLAYBOOK.md`](PAIRING-PLAYBOOK.md).
 
 It is written from a real series that took **seven scheduled windows** to complete — six burned,
 one played. Every failure was a launch-time default. Every abort was clean and before any report
