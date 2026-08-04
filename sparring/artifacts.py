@@ -45,6 +45,11 @@ def _league_block() -> dict:
         "reason": "sparring",
         "authority": "book App. E rule 52 — uncounted warm-up games are permitted",
         "peer": CODE_VERSION,
+        # anrbj666's P5-5: a team templating a COUNTED report from this output must not copy
+        # the disarmed values. The counted derivation is SPEC §6.2: winner of a first-meeting
+        # counted series → diversity true; counts bumped by the run that is counted.
+        "fields_posture": "friendly-disarmed — counts unbumped, diversity all-false REGARDLESS "
+                          "of outcome. A counted report derives these instead (SPEC 6.2).",
     }
 
 
@@ -104,22 +109,33 @@ class ArtifactSet:
                "mutual_agreement": mutual}
         return _write(self.dir / f"log_{self.game_id}_g{sub_game_number:02d}.json", doc)
 
-    def result(self, groups: list[dict], sub_games: list[dict], final: dict) -> Path:
+    def result(self, groups: list[dict], sub_games: list[dict], final: dict,
+               unclaimed_counts: frozenset[str] = frozenset()) -> Path:
         # The league fields ride in the FRIENDLY posture the playbook's stage 4d prescribes:
         # present (so a team templating from this output does not forget they exist), disarmed
         # (a practice run never bumps a count, never claims a diversity reward — App. E rules
         # 37-38 make an armed field in an uncounted run a false declaration, and that bug class
         # was found in BOTH real implementations on the same day).
+        #
+        # `unclaimed_counts` (anrbj666's P5-9): a game count is each team's OWN unverifiable
+        # claim (SPEC §6.2). Against a real opponent this peer must not fabricate theirs — the
+        # first revision stamped a live rival's standing as 0 — so their entry is null:
+        # unclaimed, not asserted.
         final = {
             **final,
-            "games_played_including_this": {g["group_id"]: 0 for g in groups},
+            "games_played_including_this": {
+                g["group_id"]: (None if g["group_id"] in unclaimed_counts else 0)
+                for g in groups},
             "first_meeting_between_groups": True,
             "diversity_reward_applied": {g["group_id"]: False for g in groups},
         }
         doc = {
             **self._base(),
             "report_type": "final_game_result",
-            "groups": groups,
+            # The reference's result carries the two ids flat; identity blocks live in the
+            # declaration. The first revision emitted the blocks here too, and nothing noticed
+            # because nothing checked the shape (anrbj666's P5-15).
+            "groups": [g["group_id"] for g in groups],
             "num_sub_games": len(sub_games),
             "sub_games": sub_games,
             "final_result": final,

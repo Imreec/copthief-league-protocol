@@ -271,13 +271,14 @@ result_sparring-local-vs-sparring-local-opponent.json
   "league": {
     "authority": "book App. E rule 52 — uncounted warm-up games are permitted",
     "counted": false,
+    "fields_posture": "friendly-disarmed — counts unbumped, diversity all-false REGARDLESS of outcome. A counted report derives these instead (SPEC 6.2).",
     "peer": "copthief-sparring/0.1.0",
     "reason": "sparring"
   },
   "mail_surface": {
     "present": false,
     "ruleset": "nm-v1",
-    "scan_sha256": "b07bf6280aea8b32be9ea5d2cbfec479b665bd9fbab04c2a68c2de9e9711c633"
+    "scan_sha256": "78782c72c4edcc0d7a1e12edb9ec78d95015a2c33d403842981b723c4c7c1052"
   },
   "num_sub_games": 6,
   "schema_version": "1.1"
@@ -325,6 +326,7 @@ no mail code in it: the artifact carries its own evidence.
   "league": {
     "authority": "book App. E rule 52 — uncounted warm-up games are permitted",
     "counted": false,
+    "fields_posture": "friendly-disarmed — counts unbumped, diversity all-false REGARDLESS of outcome. A counted report derives these instead (SPEC 6.2).",
     "peer": "copthief-sparring/0.1.0",
     "reason": "sparring"
   },

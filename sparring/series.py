@@ -51,6 +51,8 @@ class SeriesResult:
     series_tie: bool = False
     artifacts: list[Path] = field(default_factory=list)
     settled: bool = True
+    # Per-sub-game OUTCOME list — not the rule-52 counted-series ledger, which a
+    # practice peer deliberately does not have (WARNINGS section 5a; anrbj666's P5-8).
     ledger: list[dict] = field(default_factory=list)
 
     @property

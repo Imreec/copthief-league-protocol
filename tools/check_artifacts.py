@@ -562,9 +562,13 @@ def main() -> int:
                       == derived_tokens,
                       f"rows sum to {derived_tokens}, declared {final['tokens_total_series']}")
             if isinstance(final.get("games_played_including_this"), dict):
+                # null is legal: a count is each team's OWN claim (SPEC §6.2), and an emitter
+                # that cannot know its opponent's standing declares nothing rather than
+                # fabricating a number (anrbj666's P5-9).
                 counts = final["games_played_including_this"]
-                check("result: game counts are non-negative integers",
-                      all(isinstance(v, int) and not isinstance(v, bool) and v >= 0
+                check("result: game counts are non-negative integers (or null: unclaimed)",
+                      all(v is None or (isinstance(v, int) and not isinstance(v, bool)
+                                        and v >= 0)
                           for v in counts.values()),
                       f"declared {counts}")
             if isinstance(final.get("diversity_reward_applied"), dict):

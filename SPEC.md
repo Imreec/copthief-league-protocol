@@ -389,6 +389,41 @@ counted T (PAIRING-PLAYBOOK Stage 6) so the two reports still agree.
 make a false declaration project-fatal, and a ledger that does not advance after every counted
 series makes the *next* series declare a false first meeting automatically.
 
+**Definitions the fields depend on** (each was undefined until anrbj666's pass-five audit
+proved two readings existed — every one of these is a rule-35 contradiction waiting for the
+pair that splits it):
+
+- **Posture.** The derivation sentence above binds **counted** reports. An *uncounted*
+  (friendly) report carries the fields **disarmed** regardless of outcome — counts unbumped,
+  `diversity_reward_applied` all-false, `first_meeting_between_groups` declared truthfully —
+  because arming them in a game that does not count is a false declaration under rules 37–38
+  (PAIRING-PLAYBOOK stage 4d). A winner beside an unclaimed reward in a friendly is therefore
+  correct, not a contradiction.
+- **Where the two App. F awards land is asymmetric.** The **+2 tie** award is ADDED into
+  `total_score` (above). The **+10 diversity** award is **not**: it is applied by the league
+  table *from* the `diversity_reward_applied` flag and never enters the report's totals — the
+  played counted series' result carries the pure sum (90) beside `diversity_reward_applied:
+  true`, and `tools/check_artifacts.py` refuses a +10 baked into totals, with a diagnosis.
+- **`counted_games_played` vs `games_played_including_this`.** The first (declaration /
+  greeting identity) is the count of counted games **before** this one — exclusive. The second
+  (result) **includes** this one. For a counted report the identity is
+  `games_played_including_this == counted_games_played + 1`; two teams splitting the
+  exclusive/inclusive reading declare counts off by one under rules 37–38.
+- **`ties`** is the count of sub-games *scored as a tie* (the course's own example scores one
+  2/2). A **zeroed** sub-game (timeout, technical loss, tamper forfeit) is a sanction, not a
+  tie, and is credited to nobody — so the row-accounting identity is
+  `sub_games_won[a] + sub_games_won[b] + ties + zeroed == num_sub_games`, and the naive
+  identity without the zeroed term fails any series with a technical loss. `ties` sits inside
+  the consensus preimage, so a pair that reads it differently breaks
+  `mutual_agreement.sha256` with no document to resolve it — this paragraph is that document.
+  (The kit's sparring peer's own outcome set cannot produce a tie-scored sub-game and its
+  `ties` is honestly always 0 — disclosed here per WARNINGS §5b.)
+- **`tokens_total_series`** is the per-group sum of the per-sub-game `tokens` rows beside it —
+  an internal identity `check_artifacts` now enforces. The *declaration's*
+  `max_tokens_per_game` carries a genuine ambiguity the book does not settle (per sub-game or
+  per series — a 6× difference): state your pair's reading in the Stage-1 exchange rather than
+  discovering it at an audit.
+
 ## 7. Locked-model declarations
 
 The book leaves several choices to inter-team agreement but freezes the signed terms as a flat
