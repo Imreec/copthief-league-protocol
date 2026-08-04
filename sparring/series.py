@@ -33,7 +33,7 @@ from sparring.policies import REGISTRY
 from sparring.preflight import assert_sparring_ready
 from sparring.rules.engine import IllegalMove
 from sparring.rules.outcome import (SUB_GAMES_PER_SERIES, TIE_SCORE, Outcome, Role, is_tie_row,
-                                    role_for, score_for)
+                                    role_for, score_for, settled_outcome)
 from sparring.state import IllegalTransition, PeerState
 from sparring.transport.loopback import pair
 from sparring.turnloop import SubGamePeer, SubGameResult
@@ -238,11 +238,17 @@ def run_series(cfg: SparConfig, out_dir: Path, *, clock: Clock | None = None,
                     "sha256": kitref.canonical_hash({"sub_game": n, "result": res.outcome.value}),
                     "confirmed": bool(res.our_audit and res.our_audit.passed)}))
 
-        score_a = score_for(ra.outcome, ra.role)
-        score_b = score_for(rb.outcome, rb.role)
+        audits_present = bool(ra.our_audit and not ra.our_audit.skipped
+                              and rb.our_audit and not rb.our_audit.skipped)
+        audits_passed = bool(audits_present and ra.our_audit.passed and rb.our_audit.passed)
+        outcome, row_settled = settled_outcome(ra.outcome, audits_present, audits_passed)
+        result.settled = result.settled and row_settled
+
+        score_a = score_for(outcome, ra.role)
+        score_b = score_for(outcome, rb.role)
         totals[ours] += score_a
         totals[theirs] += score_b
-        row_tie = is_tie_row(ra.outcome, score_a, score_b)
+        row_tie = is_tie_row(outcome, score_a, score_b)
         if score_a > score_b:
             won[ours] += 1
         elif score_b > score_a:
@@ -252,21 +258,16 @@ def run_series(cfg: SparConfig, out_dir: Path, *, clock: Clock | None = None,
             # branch: 0-0 is a sanction, not a tie, and it counts for nobody.
             result.ties += 1
 
-        verified = bool(ra.our_audit and ra.our_audit.passed
-                        and rb.our_audit and rb.our_audit.passed)
-        if not verified:
-            result.settled = result.settled and ra.outcome is not Outcome.TECHNICAL_LOSS
-
         result.sub_games.append({
             "sub_game_number": n,
             "roles": {ours: ra.role.value, theirs: rb.role.value},
-            "result": ra.outcome.value,
+            "result": outcome.value,
             "winner_group": ours if score_a > score_b else (theirs if score_b > score_a else None),
             "tie": row_tie,
             "score": {ours: score_a, theirs: score_b},
             "tokens": {ours: 0, theirs: 0},
-            "audit": {"log_verified": verified,
-                      "tampered": bool(ra.our_audit and ra.our_audit.failed_steps)},
+            "audit": {"log_verified": audits_passed,
+                      "tampered": bool(audits_present and not audits_passed)},
         })
         result.ledger.append({
             "sub_game_number": n, "role": ra.role.value, "outcome": ra.outcome.value,
