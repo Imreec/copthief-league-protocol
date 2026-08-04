@@ -156,6 +156,26 @@ class TestHostileTransportChangesNothing(unittest.TestCase):
             self.assertEqual(clean.ledger, rough.ledger, msg=f"policy={policy}")
             self.assertTrue(rough.clean)
 
+    def test_a_tied_series_awards_the_tie_score_into_the_totals(self):
+        # N1 (imreeyal dogfood, 2026-08-04): the reference ADDS the App. F tie score into each
+        # side's total; the first revision declared the raw sum beside a separate
+        # tie_score_each, so the two sides of one tied match reported different numbers.
+        import json
+        import tempfile
+        from pathlib import Path
+        from sparring.config import SparConfig
+        from sparring.deadlines import FakeClock
+        from sparring.series import run_series
+        with tempfile.TemporaryDirectory() as td:
+            result = run_series(SparConfig(seed=1234, policy="random"), Path(td),
+                                clock=FakeClock(), check_vectors=False)
+            self.assertTrue(result.series_tie, "seed 1234 random-vs-random should tie")
+            doc = json.loads(next(Path(td).rglob("result_*.json")).read_text(encoding="utf-8"))
+        final = doc["final_result"]
+        for group, total in final["total_score"].items():
+            raw = sum(sg["score"][group] for sg in doc["sub_games"])
+            self.assertEqual(total, raw + final["tie_score_each"])
+
     def test_a_capture_still_happens_somewhere(self):
         # Guards against a series that "passes" only because nothing interesting ever occurs:
         # the capture path, the claim/response exchange and the 20/5 scoring row all need to run.

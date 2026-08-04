@@ -232,12 +232,14 @@ def play_series(cfg: SparConfig, client, inboxes, artifacts_dir: Path,
                           "tampered": row.get("tampered", False)},
             })
         series_tie = totals[ours] == totals[theirs]
+        # Tie award INTO the totals — the reference's aggregate behaviour (see series.py; N1).
+        awarded = ({g: v + TIE_SCORE for g, v in totals.items()} if series_tie else totals)
         result.artifacts.append(artifacts.result(
             [{"group_id": ours, "group_name": cfg.group_name,
               "repos": {"cop": KIT_REPO_URL, "thief": KIT_REPO_URL}},
              {"group_id": theirs, "group_name": ""}],
             rows,
-            {"total_score": totals,
+            {"total_score": awarded,
              "sub_games_won": won,
              "ties": ties,
              "winner_group": None if series_tie else max(totals, key=lambda k: totals[k]),

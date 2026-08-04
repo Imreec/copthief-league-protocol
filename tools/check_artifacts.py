@@ -108,6 +108,26 @@ def _check_many(directories: list[str], terms: str | None) -> int:
                       "report until it is resolved:\n    two counted reports naming one match by "
                       "two uids zero BOTH teams (App. E r.35).")
 
+    # The values a grader actually diffs between two reports. The join used to compare only the
+    # ids, so two bundles describing one match with DIFFERENT scores passed it silently —
+    # found by imreeyal's dogfood verification (N2, 2026-08-04), where a tied series was
+    # reported as 77 by one side and 75 by the other and the join said ALL SETS AGREE.
+    outcomes: dict[str, set[str]] = {}
+    for directory in directories:
+        for path in Path(directory).rglob("result_*.json"):
+            try:
+                final = json.loads(path.read_text(encoding="utf-8")).get("final_result") or {}
+            except (ValueError, UnicodeDecodeError):
+                continue
+            for key in ("total_score", "sub_games_won", "winner_group"):
+                if key in final:
+                    outcomes.setdefault(key, set()).add(
+                        json.dumps(final[key], sort_keys=True, ensure_ascii=False))
+    for key, values in outcomes.items():
+        if not check(f"all results agree on final_result.{key}", len(values) <= 1,
+                     f"found {sorted(values)} — the contradictory-report shape rule 35 zeroes"):
+            worst = 1
+
     print(f"\n{'ALL SETS AGREE' if worst == 0 else 'CROSS-TEAM JOIN FAILED'}")
     return 1 if worst else 0
 
@@ -197,6 +217,14 @@ def _selftest() -> int:
         fr["total_score"] = {a: 22, b: 7}
         fr["series_tie"] = False
 
+    def divergent_totals(data):
+        """N2 (imreeyal dogfood): two bundles of ONE match whose results disagree on the
+        values a grader diffs — must fail the JOIN even though each is internally consistent
+        (this one keeps its own totals-sum identity by adjusting a sub-game row too)."""
+        fr = data[f"result_{gid}.json"]
+        fr["sub_games"] = [{"sub_game_number": 1, "score": {a: 10, b: 5}}]
+        fr["final_result"] = {"total_score": {a: 10, b: 5}, "winner_group": a}
+
     cases = [("a clean set", None, 0),
              ("a minted game_uid in the result", mint, 1),
              ("a CONSISTENT uid derived from the wrong input", wrong_input, 1),
@@ -217,6 +245,7 @@ def _selftest() -> int:
         join_cases = [
             ("two sides of one match join", None, 0),
             ("two sides whose uids diverge refuse the join", mint, 1),
+            ("two sides whose RESULTS disagree refuse the join", divergent_totals, 1),
         ]
         for i, (label, mutate, want) in enumerate(join_cases):
             d1 = build(Path(td) / f"join{i}a", None)

@@ -291,8 +291,14 @@ def run_series(cfg: SparConfig, out_dir: Path, *, clock: Clock | None = None,
         result.artifacts = written
         return result
 
+    # On a series tie the App. F tie score is ADDED into each side's total — the reference's
+    # own aggregate behaviour, observed live against it. A result carrying the raw sum beside
+    # a separate tie field describes the same match with different numbers than a
+    # reference-shaped opponent's report — the rule-35 contradiction (imreeyal's dogfood
+    # verification, N1, 2026-08-04). `tie_score_each` stays as documentation of the addend.
+    awarded = ({g: v + TIE_SCORE for g, v in totals.items()} if result.series_tie else totals)
     final = {
-        "total_score": totals,
+        "total_score": awarded,
         "sub_games_won": won,
         "ties": result.ties,
         "winner_group": result.winner,
