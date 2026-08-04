@@ -53,12 +53,13 @@ under `runs/`. Exit code `0`.
 That command runs a full series with **no dependencies at all** — it is the sparring peer playing
 itself, so you can read exactly what a conformant series looks like before you build one.
 
-To play it with *your* implementation:
+To play it with *your* implementation — note that **both sides dial each other** (MCP pushes one
+way per session, so a served peer with no `--peer` answers tools and plays nothing):
 
 ```bash
 pip install -r sparring/requirements.txt
-python -m sparring.cli serve --port 8931 --await-peer
-# then point your peer at http://localhost:8931/mcp
+python -m sparring.cli serve --port 8931 --peer http://localhost:<your-port>/mcp --role thief
+# and point your peer at http://localhost:8931/mcp
 ```
 
 It will refuse you for the same reasons a real team would, and say which — a greeting with no

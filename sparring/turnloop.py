@@ -8,10 +8,14 @@ and the other just re-hashes them — so keeping wall-clock out of the preimage 
 buys a seeded run that reproduces byte-for-byte. That reproducibility is what makes the golden
 test able to detect behavioural drift.
 
-**Police move first.** The book does not settle turn order anywhere in its binding table; the
-only signal is the ``commit_order: police_first`` recorded in one of the kit's wire-shape
-registrations. So this is a documented assumption, printed in the banner and written into the
-declaration artifact, rather than a fact. A pair that has not agreed it explicitly should.
+**The thief moves first.** The book does not settle turn order anywhere in its binding table,
+but the reference implementation does — its runtime takes the thief's turn before entering the
+receive loop, observed live against it — and a peer declaring ``wire_shape: reference-v3`` must
+play what it names. (This module shipped police-first, sourced from ``commit_order:
+police_first`` — which lives in the *bookletter-v3* registration, a different wire. The
+2026-08-04 dogfood run paid for that with a mutual deadlock after a fully successful handshake.)
+The order is printed in the banner; a pair that has not stated it explicitly should — the
+wire_shape lock does not cover it.
 """
 
 from __future__ import annotations
@@ -61,6 +65,7 @@ class SubGamePeer:
         self.budgets = budgets
         self.rng = random.Random(f"{seed}:{sub_game_number}:{role.value}")
         self.machine = PeerStateMachine()
+        self.clock = clock
         self.deadline = DeadlineTracker(clock)
         self.inbox = Inbox(window=budgets.inbound_buffer_limit)
         self.hints = TemplateHintProvider(cfg.board_size, cfg.hint_max_words, cfg.hint_lang,
@@ -147,6 +152,7 @@ class SubGamePeer:
 
         message = TurnMessage(
             step=self.step, sender=self.role.value, commit=record["commit"], hint=hint,
+            timestamp=self.clock.stamp(),
             smell_grid=field_now,
             barrier_placed=list(action.barrier) if action.barrier else None,
             capture_claim=(list(self.engine.position) if self.role is Role.POLICE else None),
@@ -184,7 +190,13 @@ class SubGamePeer:
         })
         message = TurnMessage(
             step=self.step, sender=self.role.value, commit=record["commit"], hint="",
-            smell_grid={}, claim_response=self.pending_answer,
+            timestamp=self.clock.stamp(),
+            # The terminal step is a real turn (STAY), so the field advances with it — the
+            # reference's own send path does the same on a caught final. Sending {} here
+            # reads, to a strict physics checker, as a scent field that vanished for one
+            # step (dogfood finding 4); {} is the not-transmitted convention, not "done".
+            smell_grid=self.engine.trail.full_turn(self.engine.position),
+            claim_response=self.pending_answer,
             win_claim=({"type": "survival"} if self.engine.survived() else None))
         self.pending_answer = None
         return message

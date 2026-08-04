@@ -15,6 +15,7 @@ refuses to load rather than losing a counted game.
 
 from __future__ import annotations
 
+import datetime
 import time
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -25,6 +26,8 @@ class Clock(Protocol):
 
     def sleep(self, seconds: float) -> None: ...
 
+    def stamp(self) -> str: ...
+
 
 class MonotonicClock:
     def now(self) -> float:
@@ -32,6 +35,18 @@ class MonotonicClock:
 
     def sleep(self, seconds: float) -> None:
         time.sleep(seconds)
+
+    def stamp(self) -> str:
+        """An ISO-8601 UTC stamp for the wire (`TurnMessage.timestamp`).
+
+        Lives here because purity rule P-3 makes this the only module allowed to know the
+        time — the first attempt to stamp messages where they are built was (correctly)
+        refused by the preflight. The stamp rides the message and never enters a sealed
+        payload, so it cannot move a commit. Found by the 2026-08-04 dogfood run: nothing
+        ever set the field, every outbound turn carried "", and a receiver pinned to the
+        reference's ISO stamp refused the frame.
+        """
+        return datetime.datetime.now(datetime.timezone.utc).isoformat()
 
 
 def poll_until(predicate, budget: float, interval: float, clock: Clock):
@@ -70,6 +85,16 @@ class FakeClock:
     def advance(self, seconds: float) -> float:
         self._t += seconds
         return self._t
+
+    def stamp(self) -> str:
+        """Deterministic, and obviously synthetic: the fake epoch plus the fake seconds.
+
+        Self-play, the golden, and the generated EVIDENCE all run on this clock, so their
+        frames stay byte-reproducible under a seed while live play (MonotonicClock) stamps
+        real wall-clock time.
+        """
+        return datetime.datetime.fromtimestamp(
+            self._t, tz=datetime.timezone.utc).isoformat()
 
 
 class BudgetError(Exception):

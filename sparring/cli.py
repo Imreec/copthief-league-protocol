@@ -35,9 +35,10 @@ BANNER = (
 )
 
 ASSUMPTIONS = (
-    "  assumption: police move first. The book does not settle turn order in its binding table;\n"
-    "  the only signal is `commit_order: police_first` in a kit wire-shape registration. Agree it\n"
-    "  explicitly with a real opponent."
+    "  turn order: THIEF moves first — the reference implementation's own behaviour, which is\n"
+    "  what wire=reference-v3 implies. The book's binding table does not settle it and the\n"
+    "  wire_shape lock does not cover it: state it explicitly with a real opponent\n"
+    "  (docs/PAIRING-PLAYBOOK.md stage 1)."
 )
 
 

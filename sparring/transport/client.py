@@ -90,13 +90,24 @@ class McpClient:
         return asyncio.run_coroutine_threadsafe(coro, self._loop).result(self.timeout)
 
     def _call(self, tool: str, argument: dict) -> dict:
-        self._ensure_session()
+        # A held session can die legitimately mid-series: an opponent that plays each sub-game
+        # in its OWN process (the rolling-window topology — how both real league teams drive a
+        # series) tears the session down at every sub-game boundary. That is an ordinary
+        # boundary event, not an unreachable peer, so a dead session is re-established once
+        # before this call gives up. Found by the 2026-08-04 dogfood run, where the unpatched
+        # client aborted a whole series at the first boundary with "Session terminated".
         arg_name = "payload" if tool == "submit_audit" else "message"
-        try:
-            self._await(self._client.call_tool(tool, {arg_name: argument}))
-        except Exception as exc:                       # noqa: BLE001
-            raise PeerUnreachable(f"{tool} -> {type(exc).__name__}: {exc}") from exc
-        return {"ok": True}
+        last: Exception | None = None
+        for attempt in (0, 1):
+            self._ensure_session()
+            try:
+                self._await(self._client.call_tool(tool, {arg_name: argument}))
+                return {"ok": True}
+            except Exception as exc:                   # noqa: BLE001
+                last = exc
+                self._entered = False
+                self._client = None
+        raise PeerUnreachable(f"{tool} -> {type(last).__name__}: {last}") from last
 
     def close(self) -> None:
         if self._entered and self._client is not None:

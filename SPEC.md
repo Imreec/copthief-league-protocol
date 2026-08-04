@@ -532,6 +532,19 @@ behaviour: a lock should not claim to bind what it does not.
 > here** — the doc underneath it is unknown to us, and registering a family whose field set we
 > have not seen would reintroduce exactly the ad-hoc-dict problem this section exists to remove.
 
+**What the `wire_shape` lock does *not* cover: turn order.** Under `reference-v3` the thief
+takes the first game turn of every sub-game — that is the reference implementation's own
+behaviour, observed live against it, not a rule the book's binding table states anywhere. The
+lock hashes a doc that never mentions intra-turn order (`bookletter-v3` negotiates it
+explicitly as `commit_order`; `reference-v3` inherits the reference's behaviour), so **two
+peers can match on every declared hash and still deadlock**, each waiting for the other's
+first move — both time out, both blame the other, and rule 35 zeroes contradictory reports.
+This is not hypothetical: the kit's own sparring peer shipped playing police-first under a
+`reference-v3` declaration and was caught exactly this way on 2026-08-04, after a handshake in
+which every lock matched. State turn order in your first-contact message
+([PAIRING-PLAYBOOK](docs/PAIRING-PLAYBOOK.md) stage 1); a matching lock that hides a fatal
+disagreement is worse than no lock.
+
 ### 7.1 At-least-once delivery — the receiver contract (PROMOTED)
 
 Status is **PROMOTED** (2026-07-26). It was implemented independently by two teams on 2026-07-22

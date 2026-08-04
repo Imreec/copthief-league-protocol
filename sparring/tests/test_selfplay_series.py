@@ -159,7 +159,10 @@ class TestHostileTransportChangesNothing(unittest.TestCase):
     def test_a_capture_still_happens_somewhere(self):
         # Guards against a series that "passes" only because nothing interesting ever occurs:
         # the capture path, the claim/response exchange and the 20/5 scoring row all need to run.
-        result, _ = play("random")
+        # Seed 1, not the default: the thief-first correction (dogfood finding 1) legitimately
+        # reshuffled the seeded trajectories, and 1234's random-vs-random series became six
+        # survivals — this test needs a capture to exist, not a particular seed.
+        result, _ = play("random", seed=1)
         self.assertIn("capture", [row["outcome"] for row in result.ledger])
 
 

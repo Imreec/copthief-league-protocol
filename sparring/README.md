@@ -10,9 +10,10 @@ instead of during someone else's window.
 # a full six-sub-game series against itself — no dependencies, a few seconds
 python -m sparring.cli selfplay
 
-# stand up a real peer for your implementation to dial
-docker compose -f sparring/docker-compose.await.yml up
-# then point your peer at http://localhost:8931/mcp
+# play a series against YOUR implementation: both sides dial each other
+# (MCP pushes one way per session, so serving alone answers tools but plays nothing)
+python -m sparring.cli serve --port 8931 --peer http://localhost:<your-port>/mcp --role thief
+# and point your peer at http://localhost:8931/mcp
 ```
 
 ## Status: what is verified
@@ -90,7 +91,9 @@ See [`../docs/WARNINGS.md`](../docs/WARNINGS.md) §3.
 
 ```
 python -m sparring.cli selfplay                    # zero dependencies
-python -m sparring.cli serve  --peer <url>         # a real peer over MCP
+python -m sparring.cli serve  --peer <url>         # a real peer over MCP — --peer is what makes
+                                                   #   it PLAY; without it, tools answer and
+                                                   #   nothing else happens (the banner says so)
 python -m sparring.cli doctor --peer <url>         # classify their edge before you agree a T
 python -m sparring.cli replay <dir>                # Verified OK / TAMPERED
 ```
