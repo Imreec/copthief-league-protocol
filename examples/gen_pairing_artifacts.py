@@ -74,10 +74,15 @@ def sealed(payload: dict, tag: str) -> dict:
     return {"payload": payload, "nonce": n, "commit": ref.ref_commit(payload, n)}
 
 
-def group_block(gid: str, role_repo_order: tuple[str, str]) -> dict:
+def group_block(gid: str) -> dict:
     """A declaration group block in the played shape; signature is sign-then-insert
-    over the block's canonical form (the block hashed BEFORE its own signature key)."""
-    cop_c, thief_c = role_repo_order
+    over the block's canonical form (the block hashed BEFORE its own signature key).
+
+    The headline `github_commit` is the emitting repo's HEAD — a two-repo team emits
+    one declaration per role repo, each carrying its own. The per-role, per-sub-game
+    commits (which is what rule 53 binds) live in the result's sub-game rows, where
+    they alternate with the roles; see sub_game_row().
+    """
     block = {
         "group_id": gid, "group_name": gid,
         "members": [f"{gid}-member-1", f"{gid}-member-2"],
@@ -87,7 +92,7 @@ def group_block(gid: str, role_repo_order: tuple[str, str]) -> dict:
         "llm_model": "template",
         "hardware_spec": HARDWARE[gid],
         "hardware_spec_sha256": ref.canonical_hash(HARDWARE[gid]),
-        "github_commit": cop_c,  # the block's headline commit: this team's cop repo HEAD
+        "github_commit": COMMITS[gid]["cop"],  # this bundle is the COP repo's copy
         "counted_games_played": 0,
         "code_version": "1.00",
     }
@@ -128,7 +133,9 @@ def log_doc(n: int) -> dict:
         "group_id": A, "role": my_role, "sub_game_number": n, "github_commit": my_commit,
     }, f"g{n}-own-step0")
     first_move = sealed({  # non-ASCII on purpose — see START-HERE gate 2
-        "step": 1, "state": "grid=7x7;self=[0,0];barriers=[]", "position": [0, 1],
+        # `state` is self-only and its encoding is the reference's — note the space
+        # after the comma in the list repr (SPEC section 3).
+        "step": 1, "state": "grid=7x7;self=[0, 0];barriers=[]", "position": [0, 1],
         "move": "MOVE:E", "intent": "truth",
         "hint": "מתחיל לנוע מזרחה ברחובות — בהצלחה 🚔",
         "tokens_step": 0, "tokens_total": 0, "response_seconds": 0.4, "random_move": False,
@@ -180,8 +187,7 @@ def build() -> dict[str, dict]:
         "game_started_at": T0.isoformat(),
         "game_ended_at": rows[-1]["ended_at"],
         "num_sub_games": 6, "max_tokens_per_game": 200000,
-        "groups": {"group_1": group_block(A, (COMMITS[A]["cop"], COMMITS[A]["thief"])),
-                   "group_2": group_block(B, (COMMITS[B]["cop"], COMMITS[B]["thief"]))},
+        "groups": {"group_1": group_block(A), "group_2": group_block(B)},
     }
     result = {
         "_schema": "Final series result, PAIRING-PLAYBOOK example: the emailed binding "
@@ -229,11 +235,12 @@ def build() -> dict[str, dict]:
 
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
-    for name, doc in sorted(build().items()):
+    bundle = build()
+    for name, doc in sorted(bundle.items()):
         (OUT / name).write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n",
                                 encoding="utf-8")
         print(f"wrote {name}")
-    print(f"\n{len(build())} artifacts -> {OUT}")
+    print(f"\n{len(bundle)} artifacts -> {OUT}")
     print("verify: python tools/check_artifacts.py examples/pairing-artifacts")
     return 0
 

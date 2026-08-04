@@ -38,7 +38,7 @@
     {
       "payload": {
         "step": 1,
-        "state": "grid=7x7;self=[0,0];barriers=[]",
+        "state": "grid=7x7;self=[0, 0];barriers=[]",
         "position": [
           0,
           1
@@ -52,7 +52,7 @@
         "random_move": false
       },
       "nonce": "4fa3ce624ea7bdf070e9e9bd032623cd",
-      "commit": "56a62bf39addeb1cb16b3b0c8a28950e561754e4cbe0df75d1632eca9c586b26"
+      "commit": "f1620724ecdbb8faad31670e9ee9e47882124b2e1f35de64ddbf2264ec278876"
     }
   ],
   "opponent_records": [

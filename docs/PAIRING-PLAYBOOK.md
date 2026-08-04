@@ -159,6 +159,63 @@ Derived duties, so nothing is owned by "whoever notices":
 Declare `sub_game_number` and `role` alongside the greeting (SPEC §7.2) — it is what turns a
 leftover instance from a previous window into a named refusal instead of a wrong game.
 
+### The window map — who dials whom, spelled out
+
+The single most "obvious to us, opaque to a stranger" fact in the whole lifecycle. Each agent
+runs its **own** MCP server and dials the **opponent role's** endpoint — so under role-split
+topology the URL you must dial changes every window. For the example pairing (`team-aleph`
+first-sorted, so cop on odds; endpoints as in
+[`examples/pairing-artifacts/`](../examples/pairing-artifacts/README.md)):
+
+| Window | team-aleph runs → dials | team-bet runs → dials |
+|---|---|---|
+| g01 | its **cop** → `https://thief.team-bet.example/mcp` | its **thief** → `https://cop.team-aleph.example/mcp` |
+| g02 | its **thief** → `https://cop.team-bet.example/mcp` | its **cop** → `https://thief.team-aleph.example/mcp` |
+| g03 | its **cop** → `https://thief.team-bet.example/mcp` | its **thief** → `https://cop.team-aleph.example/mcp` |
+| g04 | its **thief** → `https://cop.team-bet.example/mcp` | its **cop** → `https://thief.team-aleph.example/mcp` |
+| g05 | its **cop** → `https://thief.team-bet.example/mcp` | its **thief** → `https://cop.team-aleph.example/mcp` |
+| g06 | its **thief** → `https://cop.team-bet.example/mcp` | its **cop** → `https://thief.team-aleph.example/mcp` |
+
+Rules of the map:
+
+- **Both sides dial.** There is no client team and no server team — each peer pushes its own
+  messages at the other's endpoint. A team that only listens plays nobody.
+- Under **single-address topology** (LEAGUE-OPS §4) a team's two columns collapse to its one URL;
+  the role alternation is unchanged.
+- Put this table — with the real URLs — **in the Stage-1 exchange**, filled in by both sides.
+  Every burned-window cause in the LEAGUE-OPS ledger that involved "dialed the wrong thing" dies
+  on this table.
+- The wire enforces what the table promises: `role` must be complementary and `sub_game_number`
+  equal (SPEC §7.2), so a wrong-row dial is refused in seconds, by name.
+
+### What a healthy series looks like on the clock
+
+From the campaign's counted run (T = 01:00:00), so a third team knows what "normal" is and when
+to worry — the whole series is **under two minutes**:
+
+```
+01:00:00  both sides' runners fire (nobody waits for the other's confirmation)
+01:00:01  g01 handshakes and starts        01:00:20  g01 settles (~19s)
+01:00:18  g02 starts (tempo gate: g01's LOG exists — see below)
+01:00:33  g02 settles · g03 starts         01:00:40  g03 settles (~8s)
+01:00:39  g04 starts                       01:00:53  g04 settles
+01:00:52  g05 starts                       01:01:00  g05 settles
+01:00:59  g06 starts                       01:01:14  g06 settles
+01:01:17  the sub-game-6 owner aggregates, emails ONE report, writes the ledger
+```
+
+**Why windows appear to overlap by a second or two:** the tempo gate is the previous
+sub-game's **log file existing**, not the previous runner *process exiting*. A window writes
+its log, then spends a second or two on its own closing bookkeeping before it prints
+"settled" — so the next window legitimately starts before the previous one's settle line.
+Reading the gate as "wait for the process to exit" serializes the series and adds a dead
+second per window for nothing.
+
+Sub-games run 8–20 seconds each; a window that shows **no handshake ~60 seconds after its turn**
+is not slow, it is stuck — check the map row you are on, then the refusal taxonomy (connection
+contract below). A *failed* handshake ends in ~60s while a real sub-game takes minutes only when
+LLM hints are armed; with template hints the whole series should finish inside two minutes.
+
 ---
 
 ## Stage 4 — the friendly campaign (not "a friendly")
@@ -182,6 +239,21 @@ structural (Stage 0) this is not a discipline problem.
 
 **4b. The T-protocol** exactly as LEAGUE-OPS §1, per window. Probe your own edge with the
 loopback **before** T, not during.
+
+**4b′. The minimum ladder — what each friendly is FOR.** A campaign is not the same friendly
+repeated; each rung has its own pass criterion, and you climb only on a pass:
+
+| Rung | Goal | Pass criterion |
+|---|---|---|
+| F1 — smoke | one window handshakes and settles | one sub-game, both audits clean |
+| F2 — full series | all six windows + both closes | 6/6 settled, one report each (to the teams only), compare ritual (4c) diffs clean |
+| F3 — verification | re-prove the stack after ANY change (code, config, layout) | same as F2, on the exact bytes the counted series will run |
+| F(n) — drills, optional | whatever you want observed live: a deliberate uid-mismatch refusal, a kill-and-resume, a chaos flap | the drill's own observable, on the record |
+
+The counted T is named only from the top of the ladder: **the last friendly before counted runs
+the identical committed stack, and nothing changes after it** except the arming (Stage 6). Our
+counted series was byte-for-byte the previous night's F3 plus `--counted` — which is why it was
+boring, and boring is the goal.
 
 **4c. The report-compare ritual.** After every settled friendly, both teams put their result
 files and the email bodies side by side and diff. This ritual — tedious the first time, ninety
