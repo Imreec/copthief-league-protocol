@@ -307,6 +307,78 @@ Both teams independently build the final result JSON, and both email it — the 
 > release's fourth serialization variant — pinned as-is because it is what the lecturer's own
 > tooling computes.
 
+**The consensus *scope* — what the `mutual_agreement` hash is computed over.** The vector above
+pins the serialization; the preimage is a choice the book leaves open, and the wrong choice can
+*never* match. The scope that works, settled by the imreeyal↔anrbj666 pairing (two-team
+convention, offered as the default — it is the reference's own `symmetric_outcome`, verbatim):
+
+```
+{ game_id,
+  aggregate,                      # total_score, sub_games_won, ties, winner_group, series_tie
+  sub_games: [trimmed rows] }     # each row keeps ONLY sub_game_number, roles, result,
+                                  #   winner_group, tie, score
+```
+
+— everything two honest teams must agree on and **nothing they may legitimately differ on**. A
+whole-body-minus-signature scope is per-side *by construction* (its own timestamps and token
+counts sit inside), so two conformant teams computing it can never produce equal hashes. The
+trimmed scope was proven live on 2026-08-03/04: both implementations emitted **byte-identical**
+`mutual_agreement.sha256` values across a validation window and the counted series, and the hash
+moved when the outcome pattern moved — behaving as a consensus, not a cache. Enriching the
+preimage with `game_uid` and the `github_commit` columns was agreed by both teams as worth doing
+and is **PROPOSED** — no implementation computes it yet; until one does, the trimmed scope above
+is the interoperable default.
+
+### 6.1 One report per team, result-only (settled convention, documented tension)
+
+What the report email *contains* is a two-team convention with evidence, not a book quote — say
+so in your docs and match it rather than re-deriving it the hard way:
+
+- **One email per team per counted series**, to the league address, containing the **result JSON
+  as the body and the same file as the single named attachment** (body = rule 34's text reading,
+  attachment = its file reading; WARNINGS §6). The reference's own `emit_series` returns only the
+  result "for emailing", and its sender puts exactly that in the body.
+- **The other three artifact types — declaration, configs, logs — are published in the repos,
+  never mailed.** The result's `links.github` (rule 49) is how the grader reaches them.
+- **The documented tension:** the book's §9.3.3 prose describes the emailed JSON as carrying
+  identity and hardware, which the results template does not — those live in the declaration
+  artifact. Both league teams read the results file (whose full example §9.3.3 itself provides)
+  as the emailed report and resolved the prose against it, under the academic-freedom clause.
+  This is a settled choice with the contradiction on record — not an unread section.
+
+Both teams' counted-series mails (2026-08-04) had this shape, verified by diffing the received
+mails in both directions.
+
+### 6.2 The league fields inside the result
+
+Three fields in `final_result` are **graded inputs** to the league standings — the lecturer
+weighs them, and rule 35 punishes two reports that disagree on them exactly as it punishes a
+score mismatch:
+
+| Field | Shape (as played) | Meaning |
+|---|---|---|
+| `games_played_including_this` | per-group map, e.g. `{"<gid>": 1, …}` | each team's own counted-game count, **including** this series |
+| `first_meeting_between_groups` | boolean | whether this pairing has a prior *counted* series (rule 52: only the first counts) |
+| `diversity_reward_applied` | per-group map of booleans | whether the App. F diversity reward attaches — see below |
+
+What the book fixes (App. F, table 18 — binding): the diversity reward is **10 points for a
+victory over a group not previously played** — *"ניקוד על ניצחון מול יריבה חדשה"* — a reward for
+**winning** against a new opponent, not for merely meeting one; a team passes the league
+component with a **minimum of 2 counted games against different groups** and may count **at most
+10**. So `diversity_reward_applied` is derived: winner of a first-meeting series → `true`, loser
+→ `false`, and both teams derive the same values from the same outcome (§6's derived-never-
+declared rule).
+
+What feeds the other two fields is each team's **own committed ledger** of counted games — and
+the fields sit deliberately **outside** the `mutual_agreement` scope (§6 above): your count is
+your own declared claim, your opponent cannot verify it, and a consensus hash over unverifiable
+claims would manufacture disagreements. Exchange the counts you will declare *before* the
+counted T (PAIRING-PLAYBOOK Stage 6) so the two reports still agree.
+
+**The disqualification hazard** is the ledger, not the fields: see WARNINGS §5a. Rules 37–38
+make a false declaration project-fatal, and a ledger that does not advance after every counted
+series makes the *next* series declare a false first meeting automatically.
+
 ## 7. Locked-model declarations
 
 The book leaves several choices to inter-team agreement but freezes the signed terms as a flat
@@ -610,6 +682,12 @@ ship such a check today; both know it is evidence-grade at best.
 `smell_binding` is a fourth locked-model family (§7's envelope, §7's truth table:
 both-declare-and-differ refuses, omission never refuses). It answers *is this field authenticated?*
 `vectors/smell_binding.json` pins the digest, the sealed record and the audit rule.
+
+**If you are onboarding today, the thing to do about this section is: nothing.** Play unbound —
+every cross-team game played so far has been, **zero implementations exist**
+([GOVERNANCE](docs/GOVERNANCE.md)), declaring nothing refuses nothing, and no opponent may treat
+your silence as a fault. This section is a design for a first and a second implementation to
+build to *later*; it is not a requirement of anyone.
 
 **`smell_binding:none`** — `params: {}`. The unbound default: byte-identical to today's wire, and
 registered only so that "unbound" is a state a peer can **declare** rather than a silence that
