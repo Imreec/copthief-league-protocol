@@ -4,7 +4,7 @@ import unittest
 
 from sparring.rules.board import Board
 from sparring.rules.engine import IllegalMove, SubGameEngine
-from sparring.rules.outcome import Outcome, Role, role_for, score_for
+from sparring.rules.outcome import Outcome, Role, is_tie_row, role_for, score_for
 from sparring.rules.scent import REFERENCE_MODEL, Trail
 
 
@@ -115,6 +115,16 @@ class TestScoring(unittest.TestCase):
     def test_roles_alternate_across_the_series(self):
         got = [role_for(Role.POLICE, n).value for n in range(1, 7)]
         self.assertEqual(got, ["police", "thief"] * 3)
+
+    def test_a_zeroed_sub_game_is_a_sanction_not_a_tie(self):
+        # The published technical-loss row shape (PAIRING-PLAYBOOK stage 7): 0-0 with
+        # `tie: false` and `winner_group: null`. Two zeroes mean nobody won.
+        for outcome in (Outcome.TIMEOUT, Outcome.TECHNICAL_LOSS, Outcome.TAMPER_FORFEIT):
+            self.assertFalse(is_tie_row(outcome, 0, 0))
+
+    def test_an_equal_score_on_a_played_outcome_still_ties(self):
+        self.assertTrue(is_tie_row(Outcome.SURVIVAL, 7, 7))
+        self.assertFalse(is_tie_row(Outcome.CAPTURE, 20, 5))
 
 
 if __name__ == "__main__":

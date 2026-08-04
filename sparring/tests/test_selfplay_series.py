@@ -108,6 +108,39 @@ class TestArtifactsAreUnmistakablyUncounted(unittest.TestCase):
         for key in doc:
             self.assertNotIn("signature", key.lower())
             self.assertNotIn("consensus", key.lower())
+        self.assertNotIn("mutual_agreement", doc)
+
+    def test_the_result_league_fields_ride_in_the_friendly_posture(self):
+        # Present, so a team templating from this output cannot forget they exist; disarmed, so
+        # a practice run never claims a counted record (SPEC section 6.2, App. E rules 37-38).
+        result = next(self.root.rglob("result_*.json"))
+        doc = json.loads(result.read_text(encoding="utf-8"))
+        final = doc["final_result"]
+        self.assertTrue(all(v == 0 for v in final["games_played_including_this"].values()))
+        self.assertTrue(all(v is False for v in final["diversity_reward_applied"].values()))
+        self.assertIn("first_meeting_between_groups", final)
+
+    def test_the_result_links_both_sides_repos(self):
+        # Rule 49: the result reaches the repos on its own. The sparring peer's cop and thief
+        # both live in this kit, and it says so rather than inventing two repos.
+        result = next(self.root.rglob("result_*.json"))
+        doc = json.loads(result.read_text(encoding="utf-8"))
+        github = doc["links"]["github"]
+        self.assertEqual(len(github), 2)
+        for repos in github.values():
+            self.assertTrue(repos["cop"].startswith("https://github.com/"))
+            self.assertEqual(repos["cop"], repos["thief"])
+
+    def test_every_handshake_declared_the_derived_uid_and_the_promoted_locks(self):
+        # Self-play knows both sides a priori, so every greeting declares the derived game_uid
+        # (SPEC section 7.3) and the info_mode doc hash (SPEC section 7, PROMOTED form) — and
+        # verify_peer checked them on every sub-game, or this series would not have settled.
+        from sparring.identity import info_mode_doc
+        from sparring import kitref
+        result = next(self.root.rglob("result_*.json"))
+        doc = json.loads(result.read_text(encoding="utf-8"))
+        self.assertTrue(doc["game_uid"])  # derived and joined — the declaration path ran
+        self.assertEqual(kitref.lock_hash(info_mode_doc())[:8], "020947da")
 
     def test_artifacts_are_canonical_bytes_not_pretty_printed(self):
         # Rehearses SPEC section 6: what you emit is what you hashed.

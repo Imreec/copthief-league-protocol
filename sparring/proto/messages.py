@@ -94,7 +94,11 @@ class Negotiation:
     identity: dict = field(default_factory=dict)
     scent_model_sha256: str | None = None   # SPEC section 7
     wire_shape_sha256: str | None = None
-    info_mode: str | None = None
+    info_mode_sha256: str | None = None     # SPEC section 7 — the comparable (PROMOTED) form
+    info_mode: str | None = None            # bare-string form: kept for inbound tolerance; a
+                                            # string and a hash are uncomparable, so it is silence
+    game_uid: str | None = None             # SPEC section 7.3 — declared when the opponent is
+                                            # known, so a wrong-input uid refuses at the handshake
 
     def to_wire(self) -> dict:
         return {k: v for k, v in asdict(self).items() if v is not None}

@@ -26,3 +26,8 @@ CODE_VERSION = f"copthief-sparring/{__version__}"
 # pairing at a glance — see sparring.artifacts.
 GROUP_PREFIX = "sparring-"
 DEFAULT_GROUP_ID = "sparring-local"
+
+# The repos a sparring peer truthfully declares (identity block, declaration artifact, and the
+# result's rule-49 `links.github`): its cop and its thief both live in this kit. A real team
+# declares two implementation repos here; the sparring peer has exactly one, twice.
+KIT_REPO_URL = "https://github.com/Imreec/copthief-league-protocol"

@@ -19,10 +19,10 @@ Three structural rules, all of which cost a real team a window at some point:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
-from sparring import kitref
+from sparring import KIT_REPO_URL, kitref
 from sparring.artifacts import ArtifactSet, assert_uncounted_group
 from sparring.config import SparConfig
 from sparring.deadlines import Clock, FakeClock, MonotonicClock
@@ -32,8 +32,8 @@ from sparring.negotiate import Refused, our_greeting, verify_peer
 from sparring.policies import REGISTRY
 from sparring.preflight import assert_sparring_ready
 from sparring.rules.engine import IllegalMove
-from sparring.rules.outcome import (SUB_GAMES_PER_SERIES, TIE_SCORE, Outcome, Role, role_for,
-                                    score_for)
+from sparring.rules.outcome import (SUB_GAMES_PER_SERIES, TIE_SCORE, Outcome, Role, is_tie_row,
+                                    role_for, score_for)
 from sparring.state import IllegalTransition, PeerState
 from sparring.transport.loopback import pair
 from sparring.turnloop import SubGamePeer, SubGameResult
@@ -180,6 +180,9 @@ def run_series(cfg: SparConfig, out_dir: Path, *, clock: Clock | None = None,
     ours, theirs = cfg.group_id, f"{cfg.group_id}-opponent"
     game_id = kitref.game_id(ours, theirs)
     game_uid = kitref.game_uid(cfg.terms(), ours, theirs)
+    # The opponent side of a self-play run is a real config with its own group id, so both
+    # verification directions see an honest (own, opponent) pair.
+    cfg_b = replace(cfg, group_id=theirs)
 
     # The handshake runs per sub-game, exactly as it does against a real peer — and is verified
     # both ways, so a self-play run exercises the refusal paths rather than skipping them.
@@ -187,10 +190,11 @@ def run_series(cfg: SparConfig, out_dir: Path, *, clock: Clock | None = None,
     natural = Role(cfg.natural_role)
 
     artifacts = ArtifactSet(out_dir, game_id, game_uid, report.mail_scan_sha256)
+    spar_repos = {"cop": KIT_REPO_URL, "thief": KIT_REPO_URL}
     groups = [{"group_id": ours, "group_name": cfg.group_name, "llm_model": "template",
-               "members": [], "repos": {}, "mcp_servers": {}},
+               "members": [], "repos": spar_repos, "mcp_servers": {}},
               {"group_id": theirs, "group_name": f"{cfg.group_name} (opponent side)",
-               "llm_model": "template", "members": [], "repos": {}, "mcp_servers": {}}]
+               "llm_model": "template", "members": [], "repos": spar_repos, "mcp_servers": {}}]
     written = [artifacts.declaration(groups, count)]
 
     result = SeriesResult(game_id=game_id, game_uid=game_uid)
@@ -201,11 +205,17 @@ def run_series(cfg: SparConfig, out_dir: Path, *, clock: Clock | None = None,
         a_role = role_for(natural, n)
         t_a, t_b = transport_factory(f"{ours}#{n}", f"{theirs}#{n}")
 
-        greeting_a = our_greeting(cfg, a_role.value, n, f"{n:032x}", lock_hashes)
-        greeting_b = our_greeting(cfg, a_role.other.value, n, f"{n + 500:032x}", lock_hashes)
+        # Self-play knows both sides a priori, so each greeting declares the derived game_uid
+        # (SPEC section 7.3) and verify_peer's uid check is exercised on every handshake. The
+        # opponent side is a real config with its own group id — a wire-level group_id override
+        # would leave the reverse verification deriving a uid over (ours, ours), and the uid
+        # declaration would then (correctly) refuse the degenerate pair.
+        greeting_a = our_greeting(cfg, a_role.value, n, f"{n:032x}", lock_hashes, theirs)
+        greeting_b = our_greeting(cfg_b, a_role.other.value, n, f"{n + 500:032x}", lock_hashes,
+                                  ours)
         try:
-            verify_peer(cfg, greeting_a, {**greeting_b.to_wire(), "group_id": theirs})
-            verify_peer(cfg, greeting_b, {**greeting_a.to_wire(), "group_id": ours})
+            verify_peer(cfg, greeting_a, greeting_b.to_wire())
+            verify_peer(cfg_b, greeting_b, greeting_a.to_wire())
         except Refused as exc:
             result.settled = False
             result.ledger.append({"sub_game_number": n, "refused": exc.code, "note": exc.message})
@@ -228,11 +238,14 @@ def run_series(cfg: SparConfig, out_dir: Path, *, clock: Clock | None = None,
         score_b = score_for(rb.outcome, rb.role)
         totals[ours] += score_a
         totals[theirs] += score_b
+        row_tie = is_tie_row(ra.outcome, score_a, score_b)
         if score_a > score_b:
             won[ours] += 1
         elif score_b > score_a:
             won[theirs] += 1
-        else:
+        elif row_tie:
+            # A zeroed sub-game (timeout / technical loss / tamper forfeit) reaches neither
+            # branch: 0-0 is a sanction, not a tie, and it counts for nobody.
             result.ties += 1
 
         verified = bool(ra.our_audit and ra.our_audit.passed
@@ -245,7 +258,7 @@ def run_series(cfg: SparConfig, out_dir: Path, *, clock: Clock | None = None,
             "roles": {ours: ra.role.value, theirs: rb.role.value},
             "result": ra.outcome.value,
             "winner_group": ours if score_a > score_b else (theirs if score_b > score_a else None),
-            "tie": score_a == score_b,
+            "tie": row_tie,
             "score": {ours: score_a, theirs: score_b},
             "tokens": {ours: 0, theirs: 0},
             "audit": {"log_verified": verified,
