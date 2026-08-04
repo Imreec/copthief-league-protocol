@@ -213,6 +213,26 @@ it happened is pushed.
 
 ---
 
+## 5b. A verdict your schema advertises must be producible by your code
+
+If your audit can fail, something must be able to say so out loud. The hazard: an outcome that
+is *defined* in your schema, *scored* in your tables, and *reachable by no code path* — so the
+one time it matters, your settlement writes a healthy-shaped row instead.
+
+This is not hypothetical, and this repo is the example: until 2026-08-04 the sparring peer
+defined `tamper_forfeit`, scored it 0–0, and **assigned it nowhere** — a failed audit produced a
+`log_verified: false` buried in a row whose `result` still said `capture`. (Found as a corollary
+of anrbj666's audit; their framing of why it matters is the right one — *an outcome reachable by
+no code path is worse than an unimplemented check, because the artifact schema advertises a
+verdict the peer cannot render.*)
+
+The check is mechanical: for every value your `result` field can carry, find the line that
+assigns it. An outcome with zero assignment sites means the failure it names will be reported as
+something else — and under rule 35, two teams describing one failure differently is the
+contradiction that zeroes both.
+
+---
+
 ## 6. Report format traps
 
 - **Rule 34 says JSON attachment; the book's own listing sends a text body.** The rule requires the
