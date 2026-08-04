@@ -59,14 +59,36 @@ VERDICTS = {
 }
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse to follow redirects — classifying THIS url is the whole job.
+
+    The default opener follows a 30x silently, so a redirector in front of a healthy peer used
+    to classify as `PEER LISTENING` **attributed to the wrong URL** — and real tool calls there
+    still fail, because urllib turns a redirected POST into a GET (anrbj666's E5). A redirect
+    is now its own loud verdict.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: N803
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def classify(url: str, timeout: float) -> tuple[str, str, str]:
     """Return (label, status_or_error, explanation) for a bare GET."""
     req = urllib.request.Request(url, method="GET", headers={"User-Agent": "copthief-netcheck/1"})
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _OPENER.open(req, timeout=timeout) as resp:
             code = resp.status
     except urllib.error.HTTPError as exc:
         code = exc.code
+        if 300 <= code < 400:
+            return ("REDIRECT", str(code),
+                    f"this URL answers with a redirect to {exc.headers.get('Location')!r} — it "
+                    f"is a forwarder, not the peer. A redirected POST becomes a GET, so tool "
+                    f"calls through it fail even though a probe that follows redirects would "
+                    f"call it healthy. Point at the real endpoint.")
     except urllib.error.URLError as exc:
         reason = exc.reason
         if isinstance(reason, socket.timeout) or "timed out" in str(reason).lower():
@@ -254,6 +276,26 @@ def _selftest() -> int:
                        (421, "HOST HEADER NOT REWRITTEN"), (404, "WRONG PATH")]:
         label, _, _ = classify(f"http://127.0.0.1:{serve(code)}/mcp", 5.0)
         expect(f"{code} classifies as {want}", label, want)
+
+    # A redirector in front of a healthy peer must be its own verdict, never followed into a
+    # false PEER LISTENING attributed to the wrong URL (anrbj666's E5).
+    behind = serve(406)
+    port = free_port()
+
+    class Redirector(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            self.send_response(302)
+            self.send_header("Location", f"http://127.0.0.1:{behind}/mcp")
+            self.end_headers()
+        do_POST = do_GET
+
+        def log_message(self, *_a):
+            pass
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", port), Redirector)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    expect("a 302 in front of a healthy peer classifies as REDIRECT, not PEER LISTENING",
+           classify(f"http://127.0.0.1:{port}/mcp", 5.0)[0], "REDIRECT")
     # Either verdict is correct here: a closed loopback port refuses on most platforms and
     # silently drops on some. The property that matters is that it is never mistaken for a peer.
     expect("a closed port is not mistaken for a listening peer",

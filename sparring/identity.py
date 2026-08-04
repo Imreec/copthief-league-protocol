@@ -101,10 +101,27 @@ def info_mode_doc() -> dict:
     })
 
 
+def smell_binding_doc() -> dict:
+    """``smell_binding: none`` — the registered doc, mirrored byte-exactly.
+
+    Declaring the UNBOUND state out loud is the registration's whole purpose (SPEC §7.4): a
+    silence cannot be told apart from never having heard of the family. Until this mirror
+    existed the family was in ``LOCK_FAMILIES`` but ``Negotiation`` had no field for it, so the
+    kit's own peer could not declare the fourth family it registers (anrbj666's E13).
+    """
+    return kitref.lock_doc("smell_binding", "none", {}, {
+        "note": "the default and the whole of today's wire: the transmitted grid is "
+                "unauthenticated. Registered so that `unbound` is a state a peer can "
+                "declare rather than a silence it cannot distinguish from ignorance.",
+        "sealed_record_keys_added": [],
+    })
+
+
 def locks(scent_model: str) -> dict[str, str]:
     """The hashes that actually cross the wire."""
     return {
         "scent_model": kitref.lock_hash(scent_doc(scent_model)),
         "wire_shape": kitref.lock_hash(wire_doc()),
         "info_mode": kitref.lock_hash(info_mode_doc()),
+        "smell_binding": kitref.lock_hash(smell_binding_doc()),
     }

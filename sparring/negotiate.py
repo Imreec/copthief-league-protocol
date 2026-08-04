@@ -60,6 +60,7 @@ def our_greeting(cfg: SparConfig, role: str, sub_game_number: int, nonce: str,
         scent_model_sha256=locks.get("scent_model"),
         wire_shape_sha256=locks.get("wire_shape"),
         info_mode_sha256=locks.get("info_mode"),
+        smell_binding_sha256=locks.get("smell_binding"),
         info_mode=cfg.info_mode,
         # The uid is a pure function of the terms and the two sorted group ids, so it can only
         # be declared once the opponent is known — sub-game 2 onward, or a configured pairing.
@@ -118,7 +119,8 @@ def verify_peer(cfg: SparConfig, ours: Negotiation, raw: dict) -> Agreed:
     # a string and a doc hash are uncomparable, and uncomparable is silence.
     for family, theirs_key in (("scent_model", "scent_model_sha256"),
                                ("wire_shape", "wire_shape_sha256"),
-                               ("info_mode", "info_mode_sha256")):
+                               ("info_mode", "info_mode_sha256"),
+                               ("smell_binding", "smell_binding_sha256")):
         ours_hash = getattr(ours, theirs_key)
         if kitref.lock_decision(ours_hash, raw.get(theirs_key)) == "refuse":
             raise Refused(

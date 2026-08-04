@@ -65,6 +65,7 @@ breaks the signature (SPEC §4, §7, §7.2).
   "scent_model_sha256": "81ebee59640e80eae8ca9ee5f86abd26e7edf5cdbb27d15925cb6ee45ca6ddf4",
   "wire_shape_sha256": "229ae6487a418c3fcb6da9be404de2f2533c288ebc228811bff6dedc4164d6f7",
   "info_mode_sha256": "020947daeeb3f73494af9b04201326791742c7184085456e3517d21981ee1202",
+  "smell_binding_sha256": "f471af61ad178939e528b1346f996ed52f46fb06c9f420d913bf26dec524c5a6",
   "info_mode": "belief"
 }
 ```
@@ -276,7 +277,7 @@ result_sparring-local-vs-sparring-local-opponent.json
   "mail_surface": {
     "present": false,
     "ruleset": "nm-v1",
-    "scan_sha256": "7b82183976b6371c3ee56138804beefe3f8b30e677f107f0787e5305c7c90edf"
+    "scan_sha256": "ad1e144b89a49214c22ddddd6a87cdca6418d47d5f6fc621297fc627a2b8ec47"
   },
   "num_sub_games": 6,
   "schema_version": "1.1"
