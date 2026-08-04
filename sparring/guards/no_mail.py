@@ -31,16 +31,24 @@ from pathlib import Path
 PKG = Path(__file__).resolve().parent.parent
 KIT = PKG.parent
 
-# NM-1: nothing that speaks mail, and nothing that authorizes speaking it.
+# NM-1: nothing that speaks mail, and nothing that authorizes speaking it. `subprocess` and
+# `importlib` ride the same rule: neither speaks mail itself, but a shell-out reaches any
+# binary on the machine and a dynamic import defeats this scan's static premise — anrbj666's
+# C1/C2 (2026-08-04) showed both escapes were open. No sparring module needs either.
 BANNED_IMPORTS = {
     "smtplib", "imaplib", "poplib", "email", "mailbox", "aiosmtplib", "exchangelib",
     "yagmail", "sendgrid", "mailgun", "googleapiclient", "google", "google_auth_oauthlib",
     "oauth2client", "msal", "O365",
+    "subprocess", "importlib",
 }
-# NM-2: the vocabulary, wherever it hides (a string, a comment, a config key).
+# NM-2: the vocabulary, wherever it hides (a string, a comment, a config key). Library names
+# appear beside their bare protocol tokens because \b(smtp)\b does NOT match inside "smtplib" —
+# the word-boundary trap anrbj666's C2 probe demonstrated — and os-level shell-outs are named
+# here because `os` itself cannot be banned.
 BANNED_TOKENS = re.compile(
-    r"\b(smtp|imap|sendgrid|mailgun|rfc822|sendmail|starttls)\b"
-    r"|@gmail\.com|messages\(\)\.send|users\(\)\.drafts",
+    r"\b(smtp|smtplib|imap|imaplib|poplib|sendgrid|mailgun|rfc822|sendmail|starttls)\b"
+    r"|@gmail\.com|messages\(\)\.send|users\(\)\.drafts"
+    r"|os\.system|os\.popen|os\.spawn|os\.exec",
     re.IGNORECASE,
 )
 # NM-3: the ports. 25 is excluded — too plausible as an ordinary integer to mean anything.
@@ -124,10 +132,24 @@ def scan(check_env: bool = False) -> list[tuple[str, Path, int, str]]:
                 roots = [node.module.split(".")[0]]
             for root in roots:
                 if root in BANNED_IMPORTS:
+                    if root == "importlib" and path.name == "no_mail.py":
+                        continue  # the env scan itself reads importlib.metadata — the same
+                        # self-exemption NM-2 and NM-4 already grant the file that names things
                     _report(bad, "NM-1", rel, node.lineno, root)
                 if (root in NETWORK_MODULES and path not in NETWORK_ALLOWED
                         and not any(d in path.parents for d in NETWORK_ALLOWED_DIRS)):
                     _report(bad, "NM-5", rel, node.lineno, root)
+            # NM-1 also covers the dynamic forms: `__import__(...)` and `*.import_module(...)`
+            # are Calls, not Import nodes, so the static walk above cannot see what they load —
+            # which is exactly why their PRESENCE is the violation, regardless of argument
+            # (anrbj666's C2: the AST walk returned [] for a dynamic smtplib import).
+            if isinstance(node, ast.Call):
+                dynamic = (isinstance(node.func, ast.Name) and node.func.id == "__import__") or \
+                          (isinstance(node.func, ast.Attribute)
+                           and node.func.attr == "import_module")
+                if dynamic and path.name != "no_mail.py":
+                    _report(bad, "NM-1", rel, node.lineno,
+                            "dynamic import — defeats the static scan by construction")
             if isinstance(node, ast.FunctionDef) and BANNED_FUNCS.match(node.name):
                 _report(bad, "NM-4", rel, node.lineno, node.name)
             # This file lists the banned ports in order to ban them; every other file may not

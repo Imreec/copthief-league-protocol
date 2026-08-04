@@ -130,42 +130,73 @@ class McpClient:
         return self._call("receive_control", message)
 
 
+def _get(url: str, timeout: float) -> int:
+    """A browser-shaped GET — no Accept: text/event-stream — the request 406 exists to refuse."""
+    req = urllib.request.Request(url, method="GET",
+                                 headers={"User-Agent": "sparring-doctor/1"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status
+    except urllib.error.HTTPError as exc:
+        return exc.code
+    except (urllib.error.URLError, OSError) as exc:
+        raise PeerUnreachable(str(exc)) from exc
+
+
+def classify_probe(get_status: int | None, post_status: int | None,
+                   post_text: str) -> tuple[int, str]:
+    """(exit code, message) from the two probes' raw results. Pure, so it is testable.
+
+    An earlier revision sent ONLY the MCP initialize POST — whose Accept header already
+    includes `text/event-stream`, so a healthy FastMCP peer answered 200 and the 406 branch,
+    the very state the banner teaches you to poll for, was unreachable by the probe's own
+    request (anrbj666's E6). The browser-shaped GET is what actually elicits 406.
+    """
+    if 421 in (get_status, post_status):
+        return 7, ("HOST HEADER NOT REWRITTEN (421). Their MCP server's DNS-rebinding guard "
+                   "rejects\n  any Host that is not its bind address — which is every request "
+                   "through a tunnel.\n  Fix at the tunnel, no code change:\n"
+                   "    Cloudflare  originRequest.httpHostHeader: 127.0.0.1:<port>\n"
+                   "    ngrok       --host-header=rewrite\n"
+                   "  (SPEC Appendix D, kit issue #4.)")
+    if 502 in (get_status, post_status):
+        return 7, ("EDGE UP, NOTHING BEHIND IT (502). Their peer has not started, or their "
+                   "connector\n  is running with no ingress. Those look identical from here — "
+                   "ask them to run\n  `python tools/netcheck.py --loopback <port> <their "
+                   "hostnames>`.")
+    healthy_get = get_status == 406
+    answered_mcp = bool(post_text) and ("protocolVersion" in post_text or "result" in post_text)
+    if healthy_get and answered_mcp:
+        return 0, ("PEER LISTENING — 406 to a browser-shaped GET (the state to poll for before "
+                   "a scheduled start)\n  AND a real answer to an MCP initialize.\n"
+                   f"  tools this peer must expose: {', '.join(TOOLS)}\n"
+                   "  note submit_audit takes `payload`; the other three take `message`.")
+    if healthy_get:
+        return 7, ("406 to a GET but NO valid answer to an MCP initialize "
+                   f"(status {post_status}) — something MCP-shaped is listening and not "
+                   "speaking. Check the path and the server logs.")
+    if answered_mcp:
+        return 0, (f"answered an MCP initialize (GET gave {get_status}, not the usual 406 — "
+                   "an unusual but serving stack).\n"
+                   f"  tools this peer must expose: {', '.join(TOOLS)}")
+    return 7, (f"neither probe got a peer-shaped answer (GET {get_status}, "
+               f"POST {post_status}). Check you are pointing at the right path — MCP peers "
+               "usually mount at /mcp.")
+
+
 def diagnose(url: str, timeout: float = 10.0) -> int:
     """Classify a peer URL and say what to do about it. Returns a CLI exit code."""
     print(f"probing {url}")
     try:
-        status, text = _post(url, {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-                                   "params": {"protocolVersion": "2024-11-05", "capabilities": {},
-                                              "clientInfo": {"name": "sparring-doctor",
-                                                             "version": "1"}}}, timeout)
+        get_status = _get(url, timeout)
+        post_status, post_text = _post(
+            url, {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+                  "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                             "clientInfo": {"name": "sparring-doctor", "version": "1"}}}, timeout)
     except PeerUnreachable as exc:
         print(f"  UNREACHABLE — {exc}\n"
               f"  Nothing accepted a connection. Check the URL, the tunnel process, and DNS.")
         return 7
-
-    if status == 421:
-        print("  HOST HEADER NOT REWRITTEN (421). Their MCP server's DNS-rebinding guard rejects\n"
-              "  any Host that is not its bind address — which is every request through a tunnel.\n"
-              "  Fix at the tunnel, no code change:\n"
-              "    Cloudflare  originRequest.httpHostHeader: 127.0.0.1:<port>\n"
-              "    ngrok       --host-header=rewrite\n"
-              "  (SPEC Appendix D, kit issue #4.)")
-        return 7
-    if status == 502:
-        print("  EDGE UP, NOTHING BEHIND IT (502). Their peer has not started, or their connector\n"
-              "  is running with no ingress. Those look identical from here — ask them to run\n"
-              "  `python tools/netcheck.py --loopback <port> <their hostnames>`.")
-        return 7
-    if status == 406:
-        print("  PEER LISTENING (406) — an MCP streamable-HTTP server refused a browser-shaped\n"
-              "  request, which is the healthy answer. This is the state to poll for before a\n"
-              "  scheduled start.")
-        return 0
-
-    ok = "protocolVersion" in text or "result" in text
-    print(f"  {status} — {'answered an MCP initialize' if ok else text[:160]}")
-    if not ok:
-        return 7
-    print(f"  tools this peer must expose: {', '.join(TOOLS)}\n"
-          f"  note submit_audit takes `payload`; the other three take `message`.")
-    return 0
+    code, message = classify_probe(get_status, post_status, post_text)
+    print(f"  {message}")
+    return code

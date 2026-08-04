@@ -28,6 +28,8 @@ jobs:
         run: |
           python tools/check_artifacts.py --selftest
           python tools/netcheck.py --selftest
+      - name: anrbj666's audit probes stay green (a red probe = a fixed finding regressed)
+        run: python tools/probes/run_all.py .
       - name: Sparring peer — guarantees about its own source
         # Both guards run here, in the job that installs NOTHING, so the claims hold even on a
         # change that never touches the peer.

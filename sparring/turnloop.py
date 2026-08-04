@@ -83,6 +83,7 @@ class SubGamePeer:
         self.step = 0
         self.outcome: Outcome | None = None
         self.last_hint: str | None = None
+        self.hint_cap_noted = False
         #: The thief's obligatory answer to a capture claim, waiting to ride the next message
         #: out. It has to actually travel: the cop cannot see the board, so an answer computed
         #: and discarded means the cop can never learn it captured anyone, and the sub-game runs
@@ -215,6 +216,15 @@ class SubGamePeer:
                     f"barriers, so this message is not a legal turn of either role")
             self.engine.observe_barrier(msg.barrier_placed)
             self.engine.observe_scent(msg.smell_grid)
+            if (msg.hint and len(msg.hint.split()) > self.cfg.hint_max_words
+                    and not self.hint_cap_noted):
+                # The cap is the SENDER's rule (book ch.6); the receiver records the breach as
+                # evidence rather than ending an honest game over prose (anrbj666's E14). Once
+                # per sub-game — a chatty opponent should not flood our own console.
+                self.hint_cap_noted = True
+                print(f"  note: opponent hint exceeds the signed cap "
+                      f"({len(msg.hint.split())} words > {self.cfg.hint_max_words}) — recorded, "
+                      f"not enforced; their rule to keep")
             self.last_hint = msg.hint
             applied.append(msg)
         return applied

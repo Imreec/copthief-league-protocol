@@ -12,7 +12,7 @@ from pathlib import Path
 from sparring import kitref
 from sparring.config import SparConfig
 from sparring.deadlines import Budgets, BudgetError, DeadlineTracker, FakeClock
-from sparring.identity import info_mode_doc, locks, scent_doc, wire_doc
+from sparring.identity import info_mode_doc, locks, scent_doc, smell_binding_doc, wire_doc
 from sparring.inbox import Equivocation, Inbox, ProtocolViolation
 from sparring.negotiate import Refused, our_greeting, verify_peer
 from sparring.rules.scent import BOOK_MODEL, REFERENCE_MODEL, Trail
@@ -76,6 +76,7 @@ class TestLockedModelDeclarations(unittest.TestCase):
         self.assertEqual(kitref.lock_hash(scent_doc(BOOK_MODEL)), registered[BOOK_MODEL])
         self.assertEqual(kitref.lock_hash(wire_doc()), registered["reference-v3"])
         self.assertEqual(kitref.lock_hash(info_mode_doc()), registered["belief"])
+        self.assertEqual(kitref.lock_hash(smell_binding_doc()), registered["none"])
 
     def test_we_declare_what_a_second_implementation_declared_live(self):
         live = vector("locked_model.json")["live_reproduction"][
@@ -307,6 +308,14 @@ class TestHandshakeRefusals(unittest.TestCase):
         self.assertEqual(onwire["game_uid"],
                          kitref.game_uid(self.cfg.terms(), self.cfg.group_id, "sparring-other"))
         self.assertEqual(onwire["info_mode_sha256"], kitref.lock_hash(info_mode_doc()))
+        # The fourth family: `unbound` is declared out loud (SPEC section 7.4, anrbj666's E13).
+        self.assertEqual(onwire["smell_binding_sha256"], kitref.lock_hash(smell_binding_doc()))
+
+    def test_a_smell_binding_mismatch_refuses(self):
+        with self.assertRaises(Refused) as ctx:
+            verify_peer(self.cfg, self.ours, self.wire(smell_binding_sha256="0" * 64))
+        self.assertEqual(ctx.exception.code, "SPAR-N05")
+        self.assertIn("smell_binding", ctx.exception.message)
 
     def test_omission_never_refuses_in_either_direction(self):
         # The rule that keeps the unmodified reference peer — which declares none of these —

@@ -95,6 +95,7 @@ class Negotiation:
     scent_model_sha256: str | None = None   # SPEC section 7
     wire_shape_sha256: str | None = None
     info_mode_sha256: str | None = None     # SPEC section 7 — the comparable (PROMOTED) form
+    smell_binding_sha256: str | None = None  # SPEC section 7.4 — declaring `unbound` out loud
     info_mode: str | None = None            # bare-string form: kept for inbound tolerance; a
                                             # string and a hash are uncomparable, so it is silence
     game_uid: str | None = None             # SPEC section 7.3 — declared when the opponent is
