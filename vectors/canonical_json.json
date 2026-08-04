@@ -65,6 +65,24 @@
       "note": "JSON literals + int array",
       "canonical": "{\"a\":true,\"b\":null,\"c\":[1,2,3]}",
       "sha256": "6e96c2da7b746f9e47d1bd8ee49e5e385de926c51e3a7f3fe9886ca02a29d351"
+    },
+    {
+      "object": {
+        "🙂": "astral key",
+        "～": "high-BMP key"
+      },
+      "note": "KEY SORT is by Unicode CODE POINT: U+FF5E sorts before U+1F642. A UTF-16 code-unit sort (JS Object.keys().sort(), Java, C#) orders these two the OTHER way — surrogate 0xD83D < 0xFF5E — so a team on such a runtime must sort by code point explicitly (found by anrbj666)",
+      "canonical": "{\"～\":\"high-BMP key\",\"🙂\":\"astral key\"}",
+      "sha256": "46193c64b2be01fac9662e4f211b64ff39a95d0c5f803b6971e4415186f3f146"
+    },
+    {
+      "object": {
+        "tiny": 1e-07,
+        "huge": 1e+16
+      },
+      "note": "float repr at the exponent cliff is PYTHON'S shortest-repr, exactly: '1e-07' (not '1e-7') and '1e+16' (not '10000000000000000'). Other languages' shortest-repr rules differ here; game values never reach these magnitudes, but the canonical form is pinned to these bytes regardless (found by anrbj666)",
+      "canonical": "{\"huge\":1e+16,\"tiny\":1e-07}",
+      "sha256": "e4d847a30f5a6af84ea0b57471959195ad037f50a30f34534c1ee101e1b1cfc6"
     }
   ]
 }

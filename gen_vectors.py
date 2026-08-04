@@ -112,6 +112,19 @@ def gen_canonical_json() -> None:
         ({"decay_per_step": 0.1, "emit_intensity": 0.9, "min_center_intensity": 0.5,
           "ram_gb": 31.8, "vram_gb": 6.0}, "floats permitted; must be shortest round-trip repr"),
         ({"a": True, "b": None, "c": [1, 2, 3]}, "JSON literals + int array"),
+        # The two cases below close gaps anrbj666's 2026-08-04 audit found: every earlier case
+        # had ASCII (or BMP-only) KEYS, so key-sort order was never exercised where languages
+        # disagree — and no float ever reached an exponent representation.
+        ({"🙂": "astral key", "～": "high-BMP key"},
+         "KEY SORT is by Unicode CODE POINT: U+FF5E sorts before U+1F642. A UTF-16 code-unit "
+         "sort (JS Object.keys().sort(), Java, C#) orders these two the OTHER way — surrogate "
+         "0xD83D < 0xFF5E — so a team on such a runtime must sort by code point explicitly "
+         "(found by anrbj666)"),
+        ({"tiny": 1e-07, "huge": 1e16},
+         "float repr at the exponent cliff is PYTHON'S shortest-repr, exactly: '1e-07' (not "
+         "'1e-7') and '1e+16' (not '10000000000000000'). Other languages' shortest-repr rules "
+         "differ here; game values never reach these magnitudes, but the canonical form is "
+         "pinned to these bytes regardless (found by anrbj666)"),
     ]
     _write("canonical_json.json", {
         "description": "The one canonical form every hash uses: json.dumps(obj, sort_keys=True, "
@@ -193,9 +206,14 @@ def gen_terms_signature() -> None:
 
 
 def gen_game_uid() -> None:
+    # The FULL 14-key flat signed set. An earlier revision of this fixture used a 12-key dict
+    # (no axis_origin_corner / axis_start_index) — and a team treating that worked example as
+    # "the flat terms" would reproduce exactly the wrong-input uid failure this kit warns about
+    # (WARNINGS section 2). Found by anrbj666's 2026-08-04 audit.
     terms = {"board_size": 7, "smell_grid_size": 5, "decay_per_step": 0.1, "emit_intensity": 0.9,
              "min_center_intensity": 0.5, "max_steps": 35, "barriers_max": 14, "setting": "Haifa",
-             "hint_max_words": 15, "thief_start": [3, 3], "cop_start": [0, 0], "num_games": 1}
+             "hint_max_words": 15, "axis_origin_corner": "top-left", "axis_start_index": 0,
+             "thief_start": [3, 3], "cop_start": [0, 0], "num_games": 1}
     a, b = "team-aleph", "team-bet"
     _write("game_uid.json", {
         "description": "The two deterministic match ids both peers reproduce with no round-trip. "
@@ -807,6 +825,13 @@ def gen_delivery_contract() -> None:
         ({"step": 5, "commit": "c5"}, "at the window bound -> still buffered"),
         ({"step": 6, "commit": "c6"}, "past the window -> violation. Let the window BE the flood "
                                       "rule; a second threshold beside it is unreachable"),
+        ({"step": 0, "commit": "c0"}, "below `next` and never played -> discard. `next` only "
+                                      "advances past accepted steps, so this can never become "
+                                      "applicable; buffering it holds it forever and two "
+                                      "conformant receivers could diverge on it. NOTE: this row "
+                                      "postdates the 2026-07-25/08-04 promotions and is not yet "
+                                      "reproduced by a second implementation (anrbj666's audit, "
+                                      "2026-08-04)"),
     ]
     zero_window = {"played": played, "window": 0, "next": 3}
     deadline_cases = [

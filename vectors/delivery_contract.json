@@ -62,6 +62,14 @@
       },
       "note": "past the window -> violation. Let the window BE the flood rule; a second threshold beside it is unreachable",
       "decision": "violation"
+    },
+    {
+      "arrival": {
+        "step": 0,
+        "commit": "c0"
+      },
+      "note": "below `next` and never played -> discard. `next` only advances past accepted steps, so this can never become applicable; buffering it holds it forever and two conformant receivers could diverge on it. NOTE: this row postdates the 2026-07-25/08-04 promotions and is not yet reproduced by a second implementation (anrbj666's audit, 2026-08-04)",
+      "decision": "discard"
     }
   ],
   "no_reorder_window": {

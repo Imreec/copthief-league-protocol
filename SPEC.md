@@ -289,10 +289,15 @@ Both teams independently build the final result JSON, and both email it — the 
   document called that uid "minted", which was wrong — the correction is anrbj666's.)* The
   divergence was silent for six sub-games because the uid never crosses the wire; §7.3 proposes
   closing that.
-- **Stage / draft interlock.** The reference's `email.mode = "draft"` is the safety gate: nothing
-  reaches the lecturer's real inbox until intended. Under the diversity rule (only the *first*
-  meeting with an opponent counts), an accidental early real send can burn your one counted game —
-  so keep drafts until a deliberate human send.
+- **Stage interlock — gate on the RECIPIENT, not on draft mode.** Under the diversity rule (only
+  the *first* meeting with an opponent counts), an accidental early real send can burn your one
+  counted game. The reference's own gate is `email.mode = "draft"` — but rule 30's **send-only**
+  scope cannot create drafts, so a safety gate that depends on drafting depends on a broader
+  permission than the rules allow (the contradiction anrbj666's audit caught between this
+  bullet's earlier wording and WARNINGS §6). The gate that works under rule 30 is structural and
+  recipient-shaped: the lecturer's address is *unreachable* outside a doubly-armed counted run,
+  and a run that owes a report refuses to start with nowhere to send it (WARNINGS §3; the
+  playbook's Stage 0).
 
 > **The consensus signature uses a second canonical form** (found by Alon's team —
 > alonengel / anrbj666 — and verified against the reference at sha `960499fd`,
@@ -499,9 +504,9 @@ reading, and the cross-checks against both implementations. Settled jointly, Rou
 
 **Every registration now carries its own `status` and the evidence for it**, on the terms in
 [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md) — read them off `vectors/locked_model.json` rather than
-from prose. In summary: `subtractive_chebyshev_v1` is `CORE`; `multiplicative_book_v1` and
-`reference-v3` are `PROMOTED`; `bookletter-v3`, `belief`, `exact`, `none` and `commit_grid_v1` are
-`PROPOSED`.
+from prose. (A summary sentence here once restated the tiers and went stale within a week —
+anrbj666's audit caught it contradicting the fixture, the checker and this very section 25 lines
+apart. The fixture is the register; prose is not.)
 
 `bookletter-v3` is a **documented deviation** from the book's formal model that a pair may lock by
 explicit mutual sign-off. Its commit layer reproduces under §3 over the full 7-field payload, but
@@ -775,7 +780,9 @@ A team is **interop-ready** when:
 1. **Core vectors pass** — `python verify_vectors.py` reproduces every `[CORE]` fixture, and your
    own implementation reproduces them too (port the checks into your suite): canonical JSON with
    `ensure_ascii=False`, the commit construction, the terms signature, `game_uid` and `game_id`,
-   the pheromone math, and — if you declare any locked model — the doc schema and the refusal rule.
+   the pheromone math, **the report consensus signature** (§6 — the one that fails settlement at
+   the exact moment both teams must agree; this list once omitted it, caught by anrbj666's
+   audit), and — if you declare any locked model — the doc schema and the refusal rule.
 2. **The behaviour tables answer the same way** — your receiver's verdict on every row of
    `delivery_contract.json` and `pairing_declaration.json`. These cost games exactly as byte
    mismatches do, and unlike bytes they cannot be caught by comparing a hash with a partner.

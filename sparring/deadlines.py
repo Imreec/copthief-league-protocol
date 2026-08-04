@@ -109,6 +109,11 @@ class Budgets:
     configuration is fixed in one pass or not at all.
     """
 
+    # 180s is DELIBERATE PRACTICE-PEER LENIENCY, not the book's number: the book fixes a 30s
+    # response timeout for real play. A sparring partner that classified TIMEOUT at 30s would
+    # punish a team mid-debugging for reading a stack trace; waiting longer costs only this
+    # peer's own wall clock (LEAGUE-OPS §5 — budgets are yours). Calibrating for a counted
+    # game? Run with --turn-timeout 30. (Named as deliberate after anrbj666's audit, B6.)
     turn_timeout: float = 180.0
     watchdog_timeout: float = 60.0
     poll_interval: float = 0.5

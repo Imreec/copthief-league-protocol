@@ -5,11 +5,13 @@ scheduled window. This page is the layer above both: **the whole lifecycle of on
 messages two teams exchange, in what order, with what in them, and the checks between them — so
 that the single counted series at the end is a 90-second formality instead of a first date.
 
-It is written from a completed campaign: the anrbj666 ↔ imreeyal pairing, 2026-08-01 → 2026-08-04.
-Seven scheduled friendly windows (the ledger in LEAGUE-OPS), then five clean friendly series in one
-day, two mutual repo audits with written dispositions, and a counted series that played six
-sub-games in 78 seconds with every audit clean, one report per team, and byte-identical
-`mutual_agreement` hashes. Every stage below exists because skipping it cost one of us an evening —
+It is written from a completed campaign: the anrbj666 ↔ imreeyal pairing, 2026-07-24 → 2026-08-04.
+Seven scheduled windows to the first clean friendly (2026-07-25 — that run is the ledger in
+LEAGUE-OPS), then five clean friendly series in one day (2026-08-03), two mutual repo audits with
+written dispositions, and a counted series (2026-08-04) that played six sub-games in 78 seconds
+with every audit clean, one report per team, and byte-identical `mutual_agreement` hashes.
+*(An earlier revision compressed all of this into "2026-08-01 → 04", leaving the seven-window
+ledger attributed to two different runs — caught in anrbj666's own audit of their own text.)* Every stage below exists because skipping it cost one of us an evening —
 or would have cost both of us the counted game.
 
 Everything here fits the reference-v3 wire and the four-artifact format
