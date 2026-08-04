@@ -67,6 +67,7 @@ class NetworkTransport:
 class NetResult:
     game_id: str = ""
     game_uid: str = ""
+    # Per-sub-game OUTCOME list — not the rule-52 ledger (WARNINGS section 5a).
     ledger: list[dict] = field(default_factory=list)
     settled: bool = True
     artifacts: list[Path] = field(default_factory=list)
@@ -248,7 +249,8 @@ def play_series(cfg: SparConfig, client, inboxes, artifacts_dir: Path,
              "tokens_total_series": {ours: 0, theirs: 0},
              "_remark": "one side's view, both columns derived from the settled outcomes. A "
                         "counted series settles the result WITH the opponent before either "
-                        "reports; this is a practice run and reports nothing."}))
+                        "reports; this is a practice run and reports nothing."},
+            unclaimed_counts=frozenset({theirs})))
     elif artifacts is not None:
         print("\n  no result artifact: a sub-game did not settle. A report that quietly drops a "
               "game\n  is what rule 35 punishes, on both teams — so the guard refuses the whole "

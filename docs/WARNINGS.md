@@ -211,6 +211,12 @@ it — never a calendar or a human), and the post-series commit that archives th
 commits the advanced ledger with them. A counted series is not over until the ledger that proves
 it happened is pushed.
 
+One disambiguation, because a grep will mislead you (anrbj666's P5-8): **the kit's sparring peer
+deliberately has no rule-52 ledger** — it cannot play a counted game, so the mechanism this
+section describes belongs in *your* implementation, not here. The `ledger` you will find in the
+sparring source is its per-sub-game outcome list, an unrelated object that happens to share the
+word.
+
 ---
 
 ## 5b. A verdict your schema advertises must be producible by your code

@@ -323,13 +323,17 @@ def build() -> dict[str, dict]:
         files[f"config_{GID}_g{n:02d}.json"] = {
             "_schema": "Per-sub-game config artifact: the flat 14-key terms inline, which is "
                        "what lets tools/check_artifacts.py RE-DERIVE the game_uid rather than "
-                       "merely check it is consistent (WARNINGS section 2). `terms_sha256` is "
+                       "merely check it is consistent (WARNINGS section 2). `config_sha256` is "
                        "the canonical hash of those terms; the pre-game AGREEMENT SIGNATURE is "
                        "a different construction (it binds a nonce, SPEC section 4) and rides "
                        "the wire, not this artifact.",
             "schema_version": "1.1", "game_id": GID, "game_uid": GUID, "links": LINKS,
             "league": LEAGUE, "sub_game_number": n, "terms": TERMS,
-            "terms_sha256": ref.canonical_hash(TERMS),
+            # config_sha256 — the REFERENCE's key name, which the played artifacts and the
+            # sparring peer both use. An earlier revision said `terms_sha256`: same hash,
+            # different key, and a third team could not know which its opponent reads
+            # (anrbj666's P5-14; converged here).
+            "config_sha256": ref.canonical_hash(TERMS),
         }
         files[f"log_{GID}_g{n:02d}.json"] = log_doc(n)
     return files

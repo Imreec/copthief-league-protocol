@@ -151,6 +151,24 @@ def _check_many(directories: list[str], terms: str | None) -> int:
         results = [doc for s in sides.values() for name, doc in s[gid].items()
                    if name.startswith("result_")]
         for key in JOIN_FIELDS:
+            if key == "games_played_including_this":
+                # A game count is each team's OWN claim (SPEC §6.2), and an emitter that
+                # cannot know its opponent's standing declares null. So two reports JOIN when
+                # their non-null claims are COMPATIBLE — {a:0, b:null} beside {a:null, b:0}
+                # is two teams each claiming their own count, not a contradiction. Only two
+                # different non-null numbers for the SAME group conflict.
+                claims: dict[str, set] = {}
+                for doc in results:
+                    for group, v in ((doc.get("final_result") or {})
+                                     .get(key, {}) or {}).items():
+                        if v is not None:
+                            claims.setdefault(group, set()).add(v)
+                if not check(f"[{gid}] results' non-null game-count claims are compatible",
+                             all(len(v) <= 1 for v in claims.values()),
+                             f"conflicting claims: "
+                             f"{ {g: sorted(v) for g, v in claims.items() if len(v) > 1} }"):
+                    worst = 1
+                continue
             values = {json.dumps((doc.get("final_result") or {}).get(key),
                                  sort_keys=True, ensure_ascii=False)
                       for doc in results if key in (doc.get("final_result") or {})}
@@ -322,6 +340,29 @@ def _selftest() -> int:
         for i, (label, mutate, want) in enumerate(join_cases):
             d1 = build(Path(td) / f"join{i}a", None)
             d2 = build(Path(td) / f"join{i}b", mutate)
+            got = verdict2(d1, d2)
+            ok = got == want
+            bad += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  {label} -> exit {got} (want {want})")
+
+        # Per-side count claims: complementary nulls join; conflicting numbers refuse.
+        def complementary_counts(data):
+            data[f"result_{gid}.json"]["final_result"]["games_played_including_this"] = \
+                {a: None, b: 0}
+
+        def conflicting_counts(data):
+            data[f"result_{gid}.json"]["final_result"]["games_played_including_this"] = \
+                {a: 4, b: 0}
+
+        def base_counts(data):
+            data[f"result_{gid}.json"]["final_result"]["games_played_including_this"] = \
+                {a: 0, b: None}
+
+        for label, m1, m2, want in [
+                ("complementary null count claims join", base_counts, complementary_counts, 0),
+                ("conflicting count claims refuse the join", base_counts, conflicting_counts, 1)]:
+            d1 = build(Path(td) / f"cnt-{want}a", m1)
+            d2 = build(Path(td) / f"cnt-{want}b", m2)
             got = verdict2(d1, d2)
             ok = got == want
             bad += not ok
@@ -562,9 +603,13 @@ def main() -> int:
                       == derived_tokens,
                       f"rows sum to {derived_tokens}, declared {final['tokens_total_series']}")
             if isinstance(final.get("games_played_including_this"), dict):
+                # null is legal: a count is each team's OWN claim (SPEC §6.2), and an emitter
+                # that cannot know its opponent's standing declares nothing rather than
+                # fabricating a number (anrbj666's P5-9).
                 counts = final["games_played_including_this"]
-                check("result: game counts are non-negative integers",
-                      all(isinstance(v, int) and not isinstance(v, bool) and v >= 0
+                check("result: game counts are non-negative integers (or null: unclaimed)",
+                      all(v is None or (isinstance(v, int) and not isinstance(v, bool)
+                                        and v >= 0)
                           for v in counts.values()),
                       f"declared {counts}")
             if isinstance(final.get("diversity_reward_applied"), dict):

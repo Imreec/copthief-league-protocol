@@ -1,5 +1,5 @@
 {
-  "_schema": "Per-sub-game config artifact: the flat 14-key terms inline, which is what lets tools/check_artifacts.py RE-DERIVE the game_uid rather than merely check it is consistent (WARNINGS section 2). `terms_sha256` is the canonical hash of those terms; the pre-game AGREEMENT SIGNATURE is a different construction (it binds a nonce, SPEC section 4) and rides the wire, not this artifact.",
+  "_schema": "Per-sub-game config artifact: the flat 14-key terms inline, which is what lets tools/check_artifacts.py RE-DERIVE the game_uid rather than merely check it is consistent (WARNINGS section 2). `config_sha256` is the canonical hash of those terms; the pre-game AGREEMENT SIGNATURE is a different construction (it binds a nonce, SPEC section 4) and rides the wire, not this artifact.",
   "schema_version": "1.1",
   "game_id": "team-aleph-vs-team-bet",
   "game_uid": "da4f6f1e-c9b0-6051-1485-b02030c5b1e6",
@@ -48,5 +48,5 @@
     ],
     "num_games": 6
   },
-  "terms_sha256": "a284082dfb1572236f1b614d29295a99625539c7d33a096f7f8921bafbc3d08d"
+  "config_sha256": "a284082dfb1572236f1b614d29295a99625539c7d33a096f7f8921bafbc3d08d"
 }

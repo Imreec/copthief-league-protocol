@@ -269,6 +269,7 @@ what may legitimately differ:
 | both audits `log_verified: true, tampered: false` | per-sub-game timestamps (different clocks, different start/end definitions — **provably outside the consensus scope**, since the hashes match anyway) |
 | all four `github_commit` values, byte-for-byte | email subject wording |
 | aggregate: `total_score`, `sub_games_won`, `ties`, `winner_group`, `series_tie` | which side's driver reported first |
+| all three league fields (`games_played_including_this`, `first_meeting_between_groups`, `diversity_reward_applied`) — definitions in SPEC §6.2 | — |
 | **`mutual_agreement.sha256`** — the machine-checkable consensus (SPEC §6, `vectors/report_consensus.json`) | — |
 
 If the mutual hash differs, do not negotiate prose — diff the **canonical consensus strings**
@@ -286,7 +287,9 @@ diff passes both ways, no counted game: the counted series is the pairing's one 
 it on.
 
 **4d. League fields stay truthful in friendlies.** `games_played_including_this` unbumped,
-`diversity_reward_applied` all-false, `first_meeting_between_groups` informational. A friendly
+`diversity_reward_applied` all-false, `first_meeting_between_groups` declared truthfully
+(the disarmed posture — SPEC §6.2's counted derivation does not apply to a game that does
+not count). A friendly
 that fabricates a counted record is not a rehearsal, it is a false declaration with a rehearsal's
 excuse (App. E rules 37–38 — this is the bug class both our teams found in each other's repos on
 the same day, from opposite directions).
@@ -422,7 +425,8 @@ first).
 
 1. **Both sides verify before either celebrates:** every audit `Verified OK`, mutual hashes
    byte-equal, all four `github_commit` values resolve, league fields truthful
-   (`games_played` bumped by exactly one, diversity per your documented reading, ledger written).
+   (`games_played` bumped by exactly one, diversity DERIVED — winner of a first-meeting
+   counted series → true, SPEC §6.2 — ledger written).
 2. **One report per team** went to the league alias — result JSON as body + the result file as
    the attachment. §9.3.3 names the results file as the emailed report's full example; the other
    three artifact types reach the lecturer via the repos, so **commit and push everything**:
