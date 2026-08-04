@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -57,6 +58,10 @@ HARDWARE = {
         "gpu_cores_or_cuda": "cuda", "vram_gb": 12.0},
 }
 TZ = "Asia/Jerusalem"
+# Fixed synthetic series clock: T0 + 10s per sub-game, 9s of play each. Real datetime
+# arithmetic, not string formatting — sub-game 6 crosses a minute boundary, and a formatted
+# seconds field would overflow to ":60" (the bug the first cut of this generator shipped).
+T0 = datetime(2026, 8, 4, 1, 0, 0, tzinfo=timezone(timedelta(hours=3)))
 
 
 def nonce(tag: str) -> str:
@@ -98,11 +103,12 @@ def sub_game_row(n: int) -> dict:
     score = {A: 20 if odd else 10, B: 5}
     commits = {A: COMMITS[A]["cop" if odd else "thief"],
                B: COMMITS[B]["thief" if odd else "cop"]}
+    started = T0 + timedelta(seconds=10 * n)
     return {
         "sub_game_number": n,
         "roles": {cop: "police", thief: "thief"},
-        "started_at": f"2026-08-04T01:00:{10 * n:02d}+03:00",
-        "ended_at": f"2026-08-04T01:00:{10 * n + 9:02d}+03:00",
+        "started_at": started.isoformat(),
+        "ended_at": (started + timedelta(seconds=9)).isoformat(),
         "result": result, "winner_group": winner, "tie": False,
         "github_commit": commits,
         "tokens": {A: 0, B: 0},
@@ -171,8 +177,8 @@ def build() -> dict[str, dict]:
         "schema_version": "1.1", "declaration_type": "pre_game_declaration",
         "report_type": "declaration",
         "game_id": GID, "game_uid": GUID, "links": LINKS, "timezone": TZ,
-        "game_started_at": "2026-08-04T01:00:00+03:00",
-        "game_ended_at": "2026-08-04T01:01:18+03:00",
+        "game_started_at": T0.isoformat(),
+        "game_ended_at": rows[-1]["ended_at"],
         "num_sub_games": 6, "max_tokens_per_game": 200000,
         "groups": {"group_1": group_block(A, (COMMITS[A]["cop"], COMMITS[A]["thief"])),
                    "group_2": group_block(B, (COMMITS[B]["cop"], COMMITS[B]["thief"]))},
@@ -182,7 +188,14 @@ def build() -> dict[str, dict]:
                    "report (book §9.3.3 — its full example IS the results file). Static team "
                    "metadata is NOT repeated here; it lives in the declaration.",
         "schema_version": "1.1", "report_type": "final_game_result",
-        "game_id": GID, "game_uid": GUID, "links": LINKS, "timezone": TZ,
+        "game_id": GID, "game_uid": GUID,
+        # The result additionally carries both teams' repo links (book rule 49) — the one
+        # artifact the lecturer reads must be able to reach all four repos on its own.
+        "links": {**LINKS,
+                  "github": {g: {"cop": f"https://github.com/{g}/cop",
+                                 "thief": f"https://github.com/{g}/thief"}
+                             for g in (A, B)}},
+        "timezone": TZ,
         "groups": [A, B], "num_sub_games": 6,
         "sub_games": rows,
         "final_result": {

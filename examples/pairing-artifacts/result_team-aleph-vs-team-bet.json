@@ -8,7 +8,17 @@
     "declaration": "declaration_team-aleph-vs-team-bet.json",
     "config": "config_team-aleph-vs-team-bet_g<NN>.json",
     "log": "log_team-aleph-vs-team-bet_g<NN>.json",
-    "result": "result_team-aleph-vs-team-bet.json"
+    "result": "result_team-aleph-vs-team-bet.json",
+    "github": {
+      "team-aleph": {
+        "cop": "https://github.com/team-aleph/cop",
+        "thief": "https://github.com/team-aleph/thief"
+      },
+      "team-bet": {
+        "cop": "https://github.com/team-bet/cop",
+        "thief": "https://github.com/team-bet/thief"
+      }
+    }
   },
   "timezone": "Asia/Jerusalem",
   "groups": [
@@ -183,8 +193,8 @@
         "team-bet": "police",
         "team-aleph": "thief"
       },
-      "started_at": "2026-08-04T01:00:60+03:00",
-      "ended_at": "2026-08-04T01:00:69+03:00",
+      "started_at": "2026-08-04T01:01:00+03:00",
+      "ended_at": "2026-08-04T01:01:09+03:00",
       "result": "survival",
       "winner_group": "team-aleph",
       "tie": false,
