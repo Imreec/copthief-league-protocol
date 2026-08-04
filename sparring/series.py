@@ -74,12 +74,17 @@ def _await_step(other, mover, cfg: SparConfig, clock: Clock) -> Outcome | None:
     while True:
         raw = other.transport.poll_turn()
         if raw is not None:
-            for applied in other.receive(raw):
-                answer = other.answer(applied)
-                if answer is not None:
-                    applied.claim_response = answer
-                found = other.adjudicate(applied, answer)
-                verdict = verdict or found
+            applied = other.receive(raw)
+            if applied:
+                # The WHOLE drained batch is answered and adjudicated. The first revision
+                # returned from inside this loop after one message, so when the inbox drained
+                # a buffered pair, the second message's capture claim or win claim was never
+                # answered (anrbj666's B5).
+                for msg in applied:
+                    answer = other.answer(msg)
+                    if answer is not None:
+                        msg.claim_response = answer
+                    verdict = verdict or other.adjudicate(msg, answer)
                 other.deadline.clear()
                 return verdict
             # Nothing became ready: absorbed as a duplicate, or buffered ahead of a gap. Either

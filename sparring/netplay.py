@@ -30,7 +30,8 @@ from sparring.preflight import assert_sparring_ready
 from sparring.rules.outcome import (TIE_SCORE, Outcome, Role, is_tie_row, role_for, score_for,
                                     settled_outcome)
 from sparring.state import PeerState
-from sparring.turnloop import SubGamePeer
+from sparring.turnloop import (Equivocation, IllegalMove, IllegalTransition, ProtocolViolation,
+                               SubGamePeer)
 
 
 class NetworkTransport:
@@ -129,6 +130,17 @@ def play_series(cfg: SparConfig, client, inboxes, artifacts_dir: Path,
             result.note = str(exc)
             break
 
+        if known_opponent is not None and agreed.opponent_group != known_opponent:
+            # One series, one opponent. Identical signed terms make a third team's greeting
+            # PASS the pairing and uid checks (both derive from terms + group ids they supply),
+            # so without this pin its sub-games would be aggregated into the first opponent's
+            # artifact set (anrbj666's E12).
+            result.settled = False
+            result.note = (f"sub-game {n}: a DIFFERENT group ({agreed.opponent_group!r}) "
+                           f"answered a series opened with {known_opponent!r} — refusing to "
+                           f"mix two opponents into one artifact set")
+            print(f"  {result.note}")
+            break
         known_opponent = agreed.opponent_group
         if artifacts is None:
             result.game_id, result.game_uid = agreed.game_id, agreed.game_uid
@@ -259,27 +271,35 @@ def _play_one(peer: SubGamePeer, role: Role, cfg: SparConfig, budgets, clock) ->
     """
     our_move_first = role is Role.THIEF
     saw_their_turn = False
-    for _ in range(cfg.max_steps * 2):
-        if our_move_first:
-            own = _take_own_turn(peer, role)
-            if own is not None:
-                return own
+    try:
+        for _ in range(cfg.max_steps * 2):
+            if our_move_first:
+                own = _take_own_turn(peer, role)
+                if own is not None:
+                    return own
 
-        raw = poll_until(peer.transport.poll_turn, budgets.turn_timeout,
-                         budgets.poll_interval, clock)
-        if raw is None:
-            if not saw_their_turn:
-                print("  no turn was EVER exchanged after a successful handshake. That pattern "
-                      "is almost never a dead peer —\n  it is a TURN-ORDER disagreement: "
-                      "reference-v3 plays thief-first (the reference's own behaviour),\n  and a "
-                      "peer that plays police-first will wait here forever while we do the same. "
-                      "The wire_shape lock\n  does not cover turn order — state it with your "
-                      "opponent (PAIRING-PLAYBOOK stage 1).")
-            return Outcome.TIMEOUT
-        saw_their_turn = True
-        for applied in peer.receive(raw):
-            answer = peer.answer(applied)
-            verdict = peer.adjudicate(applied, answer)
+            # ONE deadline per EXPECTED message (LEAGUE-OPS §5) — an absorbed duplicate or a
+            # buffered-ahead arrival proves the opponent is alive but does not discharge what
+            # it owes, so it renews nothing and, critically, never lets us move again on stale
+            # state. The first revision was discharged by ANY raw message: a redelivery could
+            # make this peer take two consecutive own turns (anrbj666's B2 — the exact failure
+            # `series._await_step` was built to prevent, absent from the driver that meets
+            # strangers).
+            applied = _await_applied(peer, budgets, clock)
+            if applied is None:
+                if not saw_their_turn:
+                    print("  no turn was EVER exchanged after a successful handshake. That "
+                          "pattern is almost never a dead peer —\n  it is a TURN-ORDER "
+                          "disagreement: reference-v3 plays thief-first (the reference's own "
+                          "behaviour),\n  and a peer that plays police-first will wait here "
+                          "forever while we do the same. The wire_shape lock\n  does not cover "
+                          "turn order — state it with your opponent (PAIRING-PLAYBOOK stage 1).")
+                return Outcome.TIMEOUT
+            saw_their_turn = True
+            verdict = None
+            for msg in applied:
+                answer = peer.answer(msg)
+                verdict = verdict or peer.adjudicate(msg, answer)
             if verdict is not None:
                 # Deliver what we owe before we stop talking. The opponent cannot see the board;
                 # if we walk away holding the answer, it waits out its budget and settles a game
@@ -289,11 +309,33 @@ def _play_one(peer: SubGamePeer, role: Role, cfg: SparConfig, budgets, clock) ->
                     peer.transport.send_turn(final.to_wire())
                 return verdict
 
-        if not our_move_first:
-            own = _take_own_turn(peer, role)
-            if own is not None:
-                return own
+            if not our_move_first:
+                own = _take_own_turn(peer, role)
+                if own is not None:
+                    return own
+    except (Equivocation, ProtocolViolation, IllegalMove, IllegalTransition) as exc:
+        # An inbound message that breaks the rules is CLASSIFIED, exactly as self-play
+        # classifies it — the first revision let it unwind the whole series, so against a live
+        # opponent an equivocation was a crash instead of a refusal (anrbj666's B1).
+        print(f"  technical loss — {type(exc).__name__}: {exc}")
+        return peer.fail(str(exc))
     return Outcome.SURVIVAL
+
+
+def _await_applied(peer: SubGamePeer, budgets, clock):
+    """Wait for the message we are OWED — not merely for traffic. None means our deadline ran
+    out; tolerated traffic (duplicates, buffered-ahead arrivals) never renews it."""
+    peer.deadline.expect(f"turn {peer.inbox.next_step}", budgets.turn_timeout)
+    while True:
+        raw = peer.transport.poll_turn()
+        if raw is not None:
+            applied = peer.receive(raw)
+            if applied:
+                peer.deadline.clear()
+                return applied
+        if peer.deadline.expired():
+            return None
+        clock.sleep(budgets.poll_interval)
 
 
 def _take_own_turn(peer: SubGamePeer, role: Role) -> Outcome | None:
@@ -307,6 +349,14 @@ def _take_own_turn(peer: SubGamePeer, role: Role) -> Outcome | None:
     for a turn that would never come, and timed out a sub-game it had won; its opponent's audit
     poll then starved too. CI's two-container series caught it within the hour.
     """
+    if peer.step >= peer.cfg.max_steps:
+        # The ceiling binds BOTH roles. The thief's ceiling produces a survival claim before
+        # this line can be reached; the cop's did not exist at all — a cop facing a thief that
+        # never claimed sealed steps 36..70 past the signed max_steps and then settled the
+        # sub-game as SURVIVAL unconditionally (anrbj666's B3). Past the ceiling we stop
+        # sealing and only wait: for the claim, or for our own deadline to classify a silent
+        # opponent by rule.
+        return None
     message = peer.take_turn()
     peer.transport.send_turn(message.to_wire())
     peer.machine.to(PeerState.VERIFYING)
