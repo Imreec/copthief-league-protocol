@@ -164,7 +164,8 @@ Run it before you agree a start time, not during one.
 | **the audit** | At the end of a sub-game each side reveals every record and nonce, and the **opponent** re-hashes them with its own serializer. |
 | **`tamper_forfeit`** | What a failed audit produces. It is not a penalty on the guilty side; a serialization mismatch between two *honest* peers ends the game for both. |
 | **technical loss** | A crash, a timeout, an illegal move. Scores **0 for both sides**, deliberately. |
-| **counted vs warm-up** | Only the first meeting with an opponent counts (App. E rule 52). Uncounted warm-ups are explicitly permitted, and are what the sparring peer is for. |
+| **counted vs warm-up** | Only the first meeting with an opponent counts (App. E rule 52). Uncounted warm-ups are explicitly permitted — the book even recommends them (ch. 9.2.1) — and are what the sparring peer is for. |
+| **friendly** | The league's word for a warm-up against a real team, played as if it counted: same six sub-games, same locked stack, same auto-fired report — only the counting and the lecturer's inbox differ. [`PAIRING-PLAYBOOK.md`](PAIRING-PLAYBOOK.md) Stage 4. |
 | **the four artifacts** | `declaration_<game_id>.json`, `config_<game_id>_g<NN>.json`, `log_<game_id>_g<NN>.json`, `result_<game_id>.json` — all sharing one `game_uid`. |
 
 ---

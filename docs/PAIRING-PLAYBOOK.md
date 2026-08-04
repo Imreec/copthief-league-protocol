@@ -58,16 +58,26 @@ IDENTITY
   repos:           cop <URL> / thief <URL>
   MCP endpoints:   cop <https://.../mcp> / thief <https://.../mcp>
   topology:        role-split services (address changes with role) | single service
-  wire shape:      reference-v3 (flat 14-key terms + nonce + signature)
+  wire shape:      reference-v3 (flat 14-key terms + nonce + signature),
+                   wire_shape_sha256 <hash of the registered doc — SPEC §7>
 
 CONSTITUTION (proposed shared game.json, attached)
   - flat terms exactly as in the attachment; note max_moves == survival_threshold
     (the flat form carries ONE step field — a config where they diverge cannot be
     represented and must be refused, not approximated)
+  - schema_version: <e.g. "1.1"> — byte-identical in every artifact both sides emit
   - agreed_between: ["<first-group>", "<second-group>"]  (sorted; see Stage 2)
   - scent model: <model id>, sha256 <hash> — our implementation file + golden
     vectors attached; run the file or prove your implementation reproduces the
     vectors (book ch. 4.5: sharing is "permitted and even recommended")
+  - info_mode: <belief | exact>, info_mode_sha256 <hash> — the posture lock
+    (SPEC §7; both-declare-and-differ refuses, so compare hashes in chat first)
+
+MAIL & FAILURE POSTURE
+  friendly reports: <our inbox(es)> + <yours> ONLY — never any lecturer address
+  counted reports:  <the league alias> (confirmed before the counted T, Stage 6)
+  retry policy:     discard-and-rerun by mutual written agreement (Stage 7)
+                    unless you propose otherwise — pick one BEFORE any T
 
 DERIVED (verify independently, do not take our word)
   game_id:   <sorted pair joined -vs->
@@ -93,6 +103,11 @@ Three rules about this message:
    ([WARNINGS §2](WARNINGS.md#2-derive-the-game_uid-from-the-flat-negotiated-terms--not-from-your-config)).
 3. **Name the topology explicitly.** A driver that assumes one-address-for-the-series is wrong
    half the time against a role-split opponent (LEAGUE-OPS §4).
+
+**Where to send it:** an issue on this repo reaches the maintainer teams — the
+[proposal or operational-report templates](../CONTRIBUTING.md) both work. First contact on the
+record beats first contact in a DM: almost every line of the message above is a checkable claim,
+and an issue thread is where the checking naturally happens.
 
 ---
 
@@ -145,8 +160,18 @@ leftover instance from a previous window into a named refusal instead of a wrong
 
 ## Stage 4 — the friendly campaign (not "a friendly")
 
+This stage is not a courtesy the pair extends to itself — it is the book's own recommendation.
+Ch. 9.2.1: warm-up games that are not counted are *"מותרים ואף מומלצים, לצורך בדיקה וכיול לפני
+המשחק הנספר"* — permitted and even recommended, for testing and calibration before the counted
+game (the same permission App. E rule 52 grants; WARNINGS §7 carries the operating shape). A
+"friendly" is that warm-up, played under full counted discipline — the two words name one thing.
+
 One friendly is a smoke test. A campaign is what actually de-risks the counted series. Ours took
-five series in one day and each one caught something the previous had not:
+five series in one day and each one caught something the previous had not. Set expectations
+honestly before you start: our pairing needed **seven scheduled windows** to complete its first
+clean friendly (six burned on launch-time defaults — the LEAGUE-OPS ledger has the row-by-row),
+and about five more settled series before both sides called the counted T. That is what "ready"
+cost two teams that both passed every vector; budget for it.
 
 **4a. Posture.** Every friendly runs uncounted: reports to the two teams' own inboxes **only**,
 league fields disarmed (see 4d), `--counted` absent, config `counted = false`. If your guard is
@@ -173,6 +198,15 @@ If the mutual hash differs, do not negotiate prose — diff the **canonical cons
 (the scope is `{game_id, aggregate, trimmed sub-game rows}` — `sort_keys`, `ensure_ascii=False`)
 and the differing key names itself. Ours converged in one exchange this way; arguing about the
 envelope would have taken a week.
+
+**The exit criterion** — the convention our pairing used (two-team convention, offered as the
+default; the book fixes no bar here): the friendly campaign is over when, **in both directions**,
+each team's report arrives at the other and a field-by-field diff agrees on every must-match row
+above — `mutual_agreement.sha256`, all scores, all league fields, `game_uid`, `links.github`,
+and both `github_commit` columns — with nothing but per-peer timestamps differing. Until that
+diff passes both ways, no counted game: the counted series is the pairing's one scoring shot
+(App. E rule 52), and a diff you have not yet seen pass in a friendly is a diff you are gambling
+it on.
 
 **4d. League fields stay truthful in friendlies.** `games_played_including_this` unbumped,
 `diversity_reward_applied` all-false, `first_meeting_between_groups` informational. A friendly

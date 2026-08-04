@@ -189,6 +189,28 @@ by delivering to your next peer.
 
 ---
 
+## 5a. The first-meeting ledger must advance — and must be committed
+
+The result's league fields (`games_played_including_this`, `first_meeting_between_groups`,
+`diversity_reward_applied` — SPEC §6.2) are fed by a ledger of counted games that only your own
+repo keeps. Two ways it silently rots, **both observed** — each of the first two league teams
+found one of them in the other's tree during the pre-counted mutual audit:
+
+- **The ledger lives in a git-ignored file.** Then a fresh clone — a grader's clone — cannot
+  prove the pairing already played, and rule 52's one-counted-game-per-opponent is guarded by
+  nothing but memory. Committed evidence or it is not evidence.
+- **Nothing advances it.** A run that reports a counted series but never writes the ledger makes
+  the *next* counted series declare `first_meeting_between_groups: true` against a repeat
+  opponent — a false declaration under **rules 37–38**, which are project-disqualification
+  rules, produced automatically by an honest team.
+
+So: the ledger write is part of the counted run's settlement path (arming the run is what bumps
+it — never a calendar or a human), and the post-series commit that archives the artifacts
+commits the advanced ledger with them. A counted series is not over until the ledger that proves
+it happened is pushed.
+
+---
+
 ## 6. Report format traps
 
 - **Rule 34 says JSON attachment; the book's own listing sends a text body.** The rule requires the
@@ -197,6 +219,13 @@ by delivering to your next peer.
   rule literally and whatever the grader's tooling actually reads. Over-satisfying a contradiction
   is cheaper than picking the wrong side of it — and per the book's academic-freedom clause, say so
   in your documentation rather than choosing silently.
+- **And "both" means the result, twice — not the whole artifact set.** One email per team per
+  series: the result JSON as the body and the same file as the single named attachment. The other
+  three artifact types are published in the repos and reached via the result's `links.github`
+  (rule 49), never mailed. Both league teams flip-flopped on this in a single day (a 14-attachment
+  reading of the §9.3.3 template list looked equally defensible) before settling it with evidence —
+  SPEC §6.1 has the convention, the evidence, and the documented tension with §9.3.3's prose, so
+  read it there instead of re-fighting it with your opponent by email.
 - **The emailed bytes must be the exact canonical bytes that were hashed** — never a pretty-printed
   re-serialization. Two teams once matched on every hash while one team's *email* was a
   re-serialization, and it nearly scored zero (SPEC §6).
@@ -234,5 +263,6 @@ That permission comes with a shape:
 | configure the lecturer's address in a non-counted run | it is then one flag from being used |
 | name the pair self-first in `game_id` | one match, two names, two sets of files |
 | reuse a log directory between attempts | attempts share a deterministic uid; appended dead records reach settlement |
+| keep the counted-games ledger uncommitted, or forget to advance it | the next counted series declares a false first meeting on its own (rules 37–38, 52) |
 | assume the shell you killed took its children | an orphan will play a sub-game and settle it |
 | trust a bare `502` check | it cannot tell a healthy idle tunnel from one with no ingress ([LEAGUE-OPS](LEAGUE-OPS.md)) |

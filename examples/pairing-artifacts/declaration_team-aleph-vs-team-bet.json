@@ -13,7 +13,7 @@
   },
   "timezone": "Asia/Jerusalem",
   "game_started_at": "2026-08-04T01:00:00+03:00",
-  "game_ended_at": "2026-08-04T01:01:18+03:00",
+  "game_ended_at": "2026-08-04T01:01:09+03:00",
   "num_sub_games": 6,
   "max_tokens_per_game": 200000,
   "groups": {
