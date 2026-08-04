@@ -17,6 +17,25 @@ from sparring import kitref
 from sparring.audit import audit_records
 
 
+def _terms_beside(path: Path) -> dict:
+    """The signed terms from a config artifact in the same directory, if one is there.
+
+    Arms the audit's physics layer offline: board bound, barrier quota, step ceiling. The
+    BINDING layer (revealed vs received commits) is inherently in-play knowledge and cannot be
+    reconstructed from artifacts — replay is integrity + physics; the live audit is all three.
+    """
+    import json
+
+    for cfg_path in sorted(path.parent.glob("config_*.json")):
+        try:
+            terms = json.loads(cfg_path.read_text(encoding="utf-8")).get("terms")
+        except (ValueError, UnicodeDecodeError):
+            continue
+        if isinstance(terms, dict):
+            return terms
+    return {}
+
+
 def verify_log(path: Path) -> tuple[bool, str]:
     """Return (ok, human-readable report) for one log artifact."""
     import json
@@ -26,7 +45,11 @@ def verify_log(path: Path) -> tuple[bool, str]:
     if not records:
         return False, f"{path.name}: no records — the game left nothing to verify"
 
-    result = audit_records(records)
+    terms = _terms_beside(path)
+    result = audit_records(records,
+                           board_size=terms.get("board_size"),
+                           barriers_max=terms.get("barriers_max"),
+                           max_steps=terms.get("max_steps"))
     if result.passed:
         return True, (f"{path.name}: Verified OK — {result.verified_steps} records re-hashed "
                       f"against their commitments")

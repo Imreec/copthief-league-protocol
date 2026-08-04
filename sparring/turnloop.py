@@ -207,6 +207,12 @@ class SubGamePeer:
         applied: list[TurnMessage] = []
         for message in ready:
             msg = TurnMessage.from_wire(message)
+            if msg.barrier_placed is not None and msg.sender != Role.POLICE.value:
+                # Only the cop places barriers (book ch.3). A thief-sent barrier entering our
+                # physics would corrupt the shared board — anrbj666's A3; refuse it loudly.
+                raise ProtocolViolation(
+                    f"a barrier arrived from sender {msg.sender!r} — only the cop places "
+                    f"barriers, so this message is not a legal turn of either role")
             self.engine.observe_barrier(msg.barrier_placed)
             self.engine.observe_scent(msg.smell_grid)
             self.last_hint = msg.hint
@@ -264,12 +270,21 @@ class SubGamePeer:
         self.transport.send_audit(mine.to_wire())
         return mine
 
+    def _audit(self, theirs: dict) -> AuditResult:
+        """The armed form: integrity + binding against what we actually received in play +
+        physics under the signed terms (SPEC §3; anrbj666's A1-A3)."""
+        return audit_records(AuditPayload.from_wire(theirs).records,
+                             played=self.inbox.played,
+                             board_size=self.cfg.board_size,
+                             barriers_max=self.cfg.barriers_max,
+                             max_steps=self.cfg.max_steps)
+
     def verify_audit(self) -> AuditResult:
         """Re-hash whatever the opponent revealed, with OUR serializer."""
         theirs = self.transport.poll_audit()
         if theirs is None:
             return skipped()
-        return audit_records(AuditPayload.from_wire(theirs).records)
+        return self._audit(theirs)
 
     def verify_audit_if_ready(self) -> AuditResult | None:
         """Poll-friendly form: None while the opponent has not revealed yet.
@@ -280,7 +295,7 @@ class SubGamePeer:
         theirs = self.transport.poll_audit()
         if theirs is None:
             return None
-        return audit_records(AuditPayload.from_wire(theirs).records)
+        return self._audit(theirs)
 
     def fail(self, note: str) -> Outcome:
         self.machine.fail()

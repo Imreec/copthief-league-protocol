@@ -55,6 +55,7 @@ class SubGameEngine:
     barriers: list[Cell] = field(default_factory=list)
     rival_scent: dict[str, float] = field(default_factory=dict)
     barriers_placed: int = 0
+    opponent_barriers: int = 0
     step: int = 0
 
     # --- what we are allowed to do ---------------------------------------------------------
@@ -92,7 +93,15 @@ class SubGameEngine:
         if not self.board.in_bounds(cell):
             raise IllegalMove(f"declared barrier {cell} is off the board")
         if cell not in self.barriers:
+            # The signed quota binds the OPPONENT's declarations exactly as it binds our own
+            # placements — an earlier revision absorbed 20 declared barriers against a quota of
+            # 14 without noticing (anrbj666's A3).
+            if self.opponent_barriers >= self.barriers_max:
+                raise IllegalMove(
+                    f"opponent barrier #{self.opponent_barriers + 1} at {cell} exceeds the "
+                    f"signed quota of {self.barriers_max}")
             self.barriers.append(cell)
+            self.opponent_barriers += 1
 
     def observe_scent(self, grid: dict[str, float] | None) -> None:
         if grid:

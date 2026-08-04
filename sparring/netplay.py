@@ -27,7 +27,8 @@ from sparring.identity import locks
 from sparring.negotiate import Refused, our_greeting, verify_peer
 from sparring.policies import REGISTRY
 from sparring.preflight import assert_sparring_ready
-from sparring.rules.outcome import TIE_SCORE, Outcome, Role, is_tie_row, role_for, score_for
+from sparring.rules.outcome import (TIE_SCORE, Outcome, Role, is_tie_row, role_for, score_for,
+                                    settled_outcome)
 from sparring.state import PeerState
 from sparring.turnloop import SubGamePeer
 
@@ -149,9 +150,15 @@ def play_series(cfg: SparConfig, client, inboxes, artifacts_dir: Path,
         peer.send_audit(outcome.value)
         audit = poll_until(peer.verify_audit_if_ready, budgets.turn_timeout,
                            budgets.poll_interval, clock)
-        verified = bool(audit and audit.passed)
+        audit_present = bool(audit and not audit.skipped)
+        audit_passed = bool(audit_present and audit.passed)
+        # ONE settlement rule, shared with self-play (rules/outcome.settled_outcome): a failed
+        # audit settles as tamper_forfeit rather than refusing the series, a classified zeroed
+        # sub-game settles without an audit, and only an unverifiable PLAYED game unsettles.
+        outcome, row_settled = settled_outcome(outcome, audit_present, audit_passed)
+        result.settled = result.settled and row_settled
         print(f"  settled: {outcome.value} after {peer.step} steps; "
-              f"opponent audit {'Verified OK' if verified else 'NOT verified'}")
+              f"opponent audit {'Verified OK' if audit_passed else 'NOT verified'}")
 
         result.artifacts.append(artifacts.config(n, cfg.terms()))
         result.artifacts.append(artifacts.log(n, {
@@ -161,12 +168,11 @@ def play_series(cfg: SparConfig, client, inboxes, artifacts_dir: Path,
         }, peer.records, {"opponent_group_id": agreed.opponent_group,
                           "sha256": kitref.canonical_hash({"sub_game": n,
                                                            "result": outcome.value}),
-                          "confirmed": verified}))
+                          "confirmed": audit_passed}))
         result.ledger.append({"sub_game_number": n, "role": role.value,
                               "outcome": outcome.value, "steps": peer.step,
-                              "score": score_for(outcome, role), "audit_ok": verified})
-        if not verified:
-            result.settled = False
+                              "score": score_for(outcome, role), "audit_ok": audit_passed,
+                              "tampered": bool(audit_present and not audit_passed)})
 
         # Drain anything the opponent's NEXT peer pushed while we were settling: it belongs to
         # the next sub-game's handshake, not this one.
@@ -207,7 +213,11 @@ def play_series(cfg: SparConfig, client, inboxes, artifacts_dir: Path,
                 "tie": row_tie,
                 "score": {ours: score_ours, theirs: score_theirs},
                 "tokens": {ours: 0, theirs: 0},
-                "audit": {"log_verified": row["audit_ok"], "tampered": not row["audit_ok"]},
+                # tampered means an audit that RAN and failed — a zeroed row that settled
+                # without an audit is log_verified false, tampered false (the pair-agreed
+                # technical-loss shape, PAIRING-PLAYBOOK stage 7).
+                "audit": {"log_verified": row["audit_ok"],
+                          "tampered": row.get("tampered", False)},
             })
         series_tie = totals[ours] == totals[theirs]
         result.artifacts.append(artifacts.result(

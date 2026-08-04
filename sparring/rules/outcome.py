@@ -50,6 +50,30 @@ def is_tie_row(outcome: Outcome, score_a: int, score_b: int) -> bool:
     return outcome not in ZEROED and score_a == score_b
 
 
+def settled_outcome(outcome: Outcome, audits_present: bool,
+                    audits_passed: bool) -> tuple[Outcome, bool]:
+    """(final outcome, settled?) — ONE settlement rule for both drivers.
+
+    Before this function existed the two drivers disagreed (anrbj666's B4: selfplay kept a
+    failed-audit capture settled; netplay refused any unverified sub-game) and — the sharper
+    corollary — nothing anywhere ever ASSIGNED ``TAMPER_FORFEIT``: the outcome the book defines
+    for a failed audit could not occur. The published model, now in one place:
+
+    - audits exchanged and clean → the played outcome stands, settled;
+    - audits exchanged and FAILED → **``TAMPER_FORFEIT``**, settled: the failed audit *is* the
+      settlement, zeroing both sides (book ch.5 — the iron rule has no partial verdicts);
+    - no audit on a **zeroed** outcome (timeout / technical loss) → settled: a classified dead
+      sub-game owes no reveal, and the pair-agreed technical-loss row shape
+      (PAIRING-PLAYBOOK stage 7) is exactly this case — reportable, `log_verified: false`,
+      `tampered: false`;
+    - no audit on a **played** outcome (capture / survival) → NOT settled: a game someone won
+      but nobody can verify is the report WARNINGS §1 refuses to send.
+    """
+    if audits_present:
+        return (outcome, True) if audits_passed else (Outcome.TAMPER_FORFEIT, True)
+    return (outcome, outcome in ZEROED)
+
+
 #: Points to each side when the CUMULATIVE score across a whole series ends level (App. F).
 TIE_SCORE = 2
 

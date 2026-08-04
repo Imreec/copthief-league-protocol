@@ -276,7 +276,7 @@ result_sparring-local-vs-sparring-local-opponent.json
   "mail_surface": {
     "present": false,
     "ruleset": "nm-v1",
-    "scan_sha256": "4a3978bc87cb9d419039608e2e5d708f6791fb00dbe7d750d53be771579665d4"
+    "scan_sha256": "8e546d75d3b77b90b42568641116d964af48146cfb6c2f030da90530a2f2e2ba"
   },
   "num_sub_games": 6,
   "schema_version": "1.1"

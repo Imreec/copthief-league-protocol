@@ -36,10 +36,36 @@ class AuditResult:
                 "failed_steps": list(self.failed_steps), "skipped": self.skipped}
 
 
-def audit_records(records: list[dict]) -> AuditResult:
-    """Re-hash every revealed record with OUR serializer. This is the cross-team check."""
+#: The five legal wire actions. Anything else in a revealed record — a diagonal, a typo — is a
+#: move the physics forbid, revealed only now because moves are sealed during play.
+_LEGAL_MOVES = frozenset({"MOVE:N", "MOVE:S", "MOVE:W", "MOVE:E", "STAY"})
+
+
+def audit_records(records: list[dict], *, played: dict[int, str] | None = None,
+                  board_size: int | None = None, barriers_max: int | None = None,
+                  max_steps: int | None = None) -> AuditResult:
+    """Re-hash every revealed record with OUR serializer — and CLOSE the commit-reveal loop.
+
+    Three layers, each optional args arm the next (anrbj666's audit, findings A1-A3, proved the
+    first revision hollow: a wholly fabricated log — a game never played, with diagonal moves at
+    off-board coordinates — passed, because the only check was re-hashing each record against
+    the commit embedded in that same record):
+
+    1. **Integrity** (always): every revealed record re-hashes to its own commit.
+    2. **Binding** (``played`` given — the step→commit map of what actually arrived in play):
+       for every step up to the last one we consumed, the revealed commit must EQUAL the commit
+       received at the time, and every received step must be revealed. Steps past our consumed
+       frontier are tolerated — the game legitimately ends before the receiver drains the
+       sender's final messages. This is the comparison the docstring always promised.
+    3. **Physics** (board/quota/ceiling given): revealed positions must be on the board, moves
+       must be the five legal actions and consistent with the position trail, barrier placements
+       must fit the signed quota, and steps must not exceed the ceiling (+1 for a terminal).
+    """
     failed: list[int] = []
     notes: list[str] = []
+    revealed_by_step: dict[int, dict] = {}
+    prev_pos: tuple[int, int] | None = None
+    barriers_seen = 0
     for record in records:
         payload, nonce, claimed = record.get("payload"), record.get("nonce"), record.get("commit")
         if payload is None or nonce is None or claimed is None:
@@ -47,15 +73,70 @@ def audit_records(records: list[dict]) -> AuditResult:
             notes.append("a revealed record is missing payload, nonce or commit")
             continue
         recomputed = kitref.commit(payload, nonce)
+        step = int(payload.get("step", -1))
         if recomputed != claimed:
-            step = int(payload.get("step", -1))
             failed.append(step)
             if len(notes) < 3:      # enough to diagnose; not the whole log
                 notes.append(
                     f"step {step}: they committed {claimed}, we recompute {recomputed}\n"
                     f"      our canonical form of their payload:\n"
                     f"      {kitref.canonical_str(payload)}")
-    result = AuditResult(passed=not failed, verified_steps=len(records) - len(failed),
+            continue
+        if step >= 1:
+            revealed_by_step[step] = record
+        # --- physics: only game-turn payloads (step-0 declarations carry no position) --------
+        if step < 1 or "position" not in payload:
+            continue
+        pos = payload.get("position")
+        move = payload.get("move")
+        problems: list[str] = []
+        try:
+            r, c = int(pos[0]), int(pos[1])
+        except (TypeError, ValueError, IndexError):
+            problems.append(f"position {pos!r} is not a cell")
+            r = c = -1
+        if board_size is not None and not (0 <= r < board_size and 0 <= c < board_size):
+            problems.append(f"position {pos} is off the {board_size}x{board_size} board")
+        if move is not None and move not in _LEGAL_MOVES:
+            problems.append(f"move {move!r} is not one of the five legal actions")
+        if prev_pos is not None and abs(r - prev_pos[0]) + abs(c - prev_pos[1]) > 1:
+            problems.append(f"position jumps {prev_pos} -> {(r, c)}: more than one orthogonal "
+                            f"step between consecutive revealed records")
+        prev_pos = (r, c)
+        if payload.get("verdict") == "placed_barrier":
+            barriers_seen += 1
+            if barriers_max is not None and barriers_seen > barriers_max:
+                problems.append(f"barrier placement #{barriers_seen} exceeds the signed quota "
+                                f"of {barriers_max}")
+        if max_steps is not None and step > max_steps + 1:
+            problems.append(f"step {step} is past the ceiling ({max_steps} + a terminal)")
+        if problems:
+            failed.append(step)
+            if len(notes) < 6:
+                notes.append(f"step {step} PHYSICS: " + "; ".join(problems))
+
+    # --- binding: the revealed game must be the game we received --------------------------
+    if played:
+        frontier = max(played)
+        for step in sorted(int(s) for s in played):
+            received = played.get(step, played.get(str(step)))
+            revealed = revealed_by_step.get(step)
+            if revealed is None:
+                failed.append(step)
+                notes.append(f"step {step} BINDING: received in play (commit {received}) but "
+                             f"missing from the reveal — a withheld turn")
+            elif revealed.get("commit") != received:
+                failed.append(step)
+                notes.append(f"step {step} BINDING: revealed under commit "
+                             f"{revealed.get('commit')} but PLAYED under {received} — the "
+                             f"revealed log is a different game than the one on the wire")
+        for step in sorted(revealed_by_step):
+            if step <= frontier and step not in played and str(step) not in played:
+                failed.append(step)
+                notes.append(f"step {step} BINDING: revealed, inside our consumed range, but "
+                             f"never received in play")
+    failed = sorted(set(failed))
+    result = AuditResult(passed=not failed, verified_steps=max(0, len(records) - len(failed)),
                          failed_steps=failed)
     if failed:
         result.detail = (
