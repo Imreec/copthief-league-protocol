@@ -497,10 +497,13 @@ dial them" page for a team meeting this pairing (or any conformant one):
 | Turn order | **Thief moves first each sub-game** (reference behaviour). The wire_shape lock does not cover this, so a disagreement survives a perfect handshake and then deadlocks both sides into mutual timeouts — state it in the Stage 1 message, never assume it |
 | Refusals | Terms-absent ≠ terms-differing ≠ bystander-window — three different faults, three different fixes; name which (LEAGUE-OPS §6) |
 
-**A worked, checkable example of everything the wire produces** — all four artifact kinds for a
-full six-sub-game series in the exact shape this playbook's campaign played, generated and
-verifiable with the kit's own gate — lives at
-[`examples/pairing-artifacts/`](../examples/pairing-artifacts/README.md):
+**A worked, checkable example of the four ARTIFACT kinds** — a full six-sub-game series in the
+counted shape this playbook's campaign played, generated, replayable, and verifiable with both
+of the kit's gates — lives at
+[`examples/pairing-artifacts/`](../examples/pairing-artifacts/README.md). Its README names what
+it does *not* cover (no technical-loss row, no series tie, no second team's copy, so nothing to
+join); for those, and for the wire frames rather than the artifacts, run the sparring peer and
+read [`EVIDENCE.md`](EVIDENCE.md):
 
 ```bash
 python examples/gen_pairing_artifacts.py
