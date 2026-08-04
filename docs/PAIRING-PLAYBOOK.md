@@ -193,13 +193,20 @@ to worry — the whole series is **under two minutes**:
 ```
 01:00:00  both sides' runners fire (nobody waits for the other's confirmation)
 01:00:01  g01 handshakes and starts        01:00:20  g01 settles (~19s)
-01:00:18  g02 starts (tempo gate: g01's log exists)
+01:00:18  g02 starts (tempo gate: g01's LOG exists — see below)
 01:00:33  g02 settles · g03 starts         01:00:40  g03 settles (~8s)
 01:00:39  g04 starts                       01:00:53  g04 settles
 01:00:52  g05 starts                       01:01:00  g05 settles
 01:00:59  g06 starts                       01:01:14  g06 settles
 01:01:17  the sub-game-6 owner aggregates, emails ONE report, writes the ledger
 ```
+
+**Why windows appear to overlap by a second or two:** the tempo gate is the previous
+sub-game's **log file existing**, not the previous runner *process exiting*. A window writes
+its log, then spends a second or two on its own closing bookkeeping before it prints
+"settled" — so the next window legitimately starts before the previous one's settle line.
+Reading the gate as "wait for the process to exit" serializes the series and adds a dead
+second per window for nothing.
 
 Sub-games run 8–20 seconds each; a window that shows **no handshake ~60 seconds after its turn**
 is not slow, it is stuck — check the map row you are on, then the refusal taxonomy (connection
