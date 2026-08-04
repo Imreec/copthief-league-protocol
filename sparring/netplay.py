@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from sparring import kitref
+from sparring import KIT_REPO_URL, kitref
 from sparring.artifacts import ArtifactSet, assert_uncounted_group
 from sparring.config import SparConfig
 from sparring.deadlines import MonotonicClock, poll_until
@@ -72,9 +72,9 @@ class NetResult:
 
 
 def handshake(cfg: SparConfig, transport, role: Role, n: int, lock_hashes,
-              budget: float, poll: float, clock):
+              budget: float, poll: float, clock, opponent_group: str | None = None):
     """Exchange greetings for one sub-game. Refuses a bystander on the record and keeps waiting."""
-    mine = our_greeting(cfg, role.value, n, f"{n:032x}", lock_hashes)
+    mine = our_greeting(cfg, role.value, n, f"{n:032x}", lock_hashes, opponent_group)
     transport.send_agreement(mine.to_wire())
 
     deadline = clock.now() + budget
@@ -112,25 +112,31 @@ def play_series(cfg: SparConfig, client, inboxes, artifacts_dir: Path,
     result = NetResult()
     artifacts: ArtifactSet | None = None
 
+    known_opponent: str | None = None
     for n in range(1, sub_games + 1):
         role = role_for(natural, n)
         print(f"\n  sub-game {n}: we are {role.value}")
         try:
+            # From sub-game 2 onward the opponent is known, so the greeting declares the derived
+            # game_uid (SPEC section 7.3). Sub-game 1 declares none — omission never refuses.
             agreed = handshake(cfg, transport, role, n, lock_hashes,
-                               budgets.turn_timeout, budgets.poll_interval, clock)
+                               budgets.turn_timeout, budgets.poll_interval, clock,
+                               opponent_group=known_opponent)
         except Refused as exc:
             print(f"  {exc}")
             result.settled = False
             result.note = str(exc)
             break
 
+        known_opponent = agreed.opponent_group
         if artifacts is None:
             result.game_id, result.game_uid = agreed.game_id, agreed.game_uid
             artifacts = ArtifactSet(artifacts_dir, agreed.game_id, agreed.game_uid,
                                     report.mail_scan_sha256)
             result.artifacts.append(artifacts.declaration(
                 [{"group_id": cfg.group_id, "group_name": cfg.group_name,
-                  "llm_model": "template", "members": [], "repos": {}, "mcp_servers": {}},
+                  "llm_model": "template", "members": [],
+                  "repos": {"cop": KIT_REPO_URL, "thief": KIT_REPO_URL}, "mcp_servers": {}},
                  {"group_id": agreed.opponent_group, "group_name": "", "llm_model": "",
                   "members": [], "repos": {}, "mcp_servers": {}}], sub_games))
 
@@ -182,7 +188,8 @@ def play_series(cfg: SparConfig, client, inboxes, artifacts_dir: Path,
             "audit": {"log_verified": row["audit_ok"], "tampered": not row["audit_ok"]},
         } for row in result.ledger]
         result.artifacts.append(artifacts.result(
-            [{"group_id": ours, "group_name": cfg.group_name},
+            [{"group_id": ours, "group_name": cfg.group_name,
+              "repos": {"cop": KIT_REPO_URL, "thief": KIT_REPO_URL}},
              {"group_id": theirs, "group_name": ""}],
             sub_games_block,
             {"total_score": totals,

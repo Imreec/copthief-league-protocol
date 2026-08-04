@@ -12,7 +12,7 @@ from pathlib import Path
 from sparring import kitref
 from sparring.config import SparConfig
 from sparring.deadlines import Budgets, BudgetError, DeadlineTracker, FakeClock
-from sparring.identity import locks, scent_doc, wire_doc
+from sparring.identity import info_mode_doc, locks, scent_doc, wire_doc
 from sparring.inbox import Equivocation, Inbox, ProtocolViolation
 from sparring.negotiate import Refused, our_greeting, verify_peer
 from sparring.rules.scent import BOOK_MODEL, REFERENCE_MODEL, Trail
@@ -75,6 +75,7 @@ class TestLockedModelDeclarations(unittest.TestCase):
                          registered[REFERENCE_MODEL])
         self.assertEqual(kitref.lock_hash(scent_doc(BOOK_MODEL)), registered[BOOK_MODEL])
         self.assertEqual(kitref.lock_hash(wire_doc()), registered["reference-v3"])
+        self.assertEqual(kitref.lock_hash(info_mode_doc()), registered["belief"])
 
     def test_we_declare_what_a_second_implementation_declared_live(self):
         live = vector("locked_model.json")["live_reproduction"][
@@ -82,6 +83,7 @@ class TestLockedModelDeclarations(unittest.TestCase):
         ours = locks(BOOK_MODEL)
         self.assertEqual(ours["scent_model"], live["scent_model_sha256"])
         self.assertEqual(ours["wire_shape"], live["wire_shape_sha256"])
+        self.assertEqual(ours["info_mode"], live["info_mode_sha256"])
 
 
 class TestReceiverContract(unittest.TestCase):
@@ -225,11 +227,52 @@ class TestHandshakeRefusals(unittest.TestCase):
             verify_peer(self.cfg, self.ours, self.wire(scent_model_sha256="0" * 64))
         self.assertEqual(ctx.exception.code, "SPAR-N05")
 
+    def test_an_info_mode_lock_mismatch_refuses(self):
+        with self.assertRaises(Refused) as ctx:
+            verify_peer(self.cfg, self.ours, self.wire(info_mode_sha256="0" * 64))
+        self.assertEqual(ctx.exception.code, "SPAR-N05")
+        self.assertIn("info_mode", ctx.exception.message)
+
+    def test_a_bare_string_info_mode_is_silence_not_a_mismatch(self):
+        # The pre-2026-08-01 form: `info_mode` as a plain string. It rides a different key than
+        # the doc hash, so even a *contradictory* string never reaches the lock comparison —
+        # uncomparable is silence, and silence never refuses.
+        raw = self.wire(info_mode="exact")
+        raw.pop("info_mode_sha256", None)
+        self.assertTrue(verify_peer(self.cfg, self.ours, raw).game_uid)
+
+    def test_a_matching_uid_declaration_plays(self):
+        uid = kitref.game_uid(self.cfg.terms(), self.cfg.group_id, "sparring-other")
+        self.assertEqual(verify_peer(self.cfg, self.ours, self.wire(game_uid=uid)).game_uid, uid)
+
+    def test_a_wrong_input_uid_refuses_at_the_handshake(self):
+        # The WARNINGS §2 failure: a uid derived from a WIDER input than the flat terms is
+        # stable, self-consistent, and wrong only cross-team. Declared at negotiate, it surfaces
+        # here — the only moment before two reports are diffed.
+        wrong = kitref.game_uid({**self.cfg.terms(), "extra_key": True},
+                                self.cfg.group_id, "sparring-other")
+        with self.assertRaises(Refused) as ctx:
+            verify_peer(self.cfg, self.ours, self.wire(game_uid=wrong))
+        self.assertEqual(ctx.exception.code, "SPAR-N10")
+        self.assertIn("WIDER input", ctx.exception.message)
+
+    def test_an_uncomparable_uid_is_silence(self):
+        self.assertTrue(verify_peer(self.cfg, self.ours, self.wire(game_uid=12345)).game_uid)
+
+    def test_the_greeting_declares_uid_and_info_mode_when_opponent_is_known(self):
+        mine = our_greeting(self.cfg, "police", 2, "2" * 32, locks(self.cfg.scent_model),
+                            opponent_group="sparring-other")
+        onwire = mine.to_wire()
+        self.assertEqual(onwire["game_uid"],
+                         kitref.game_uid(self.cfg.terms(), self.cfg.group_id, "sparring-other"))
+        self.assertEqual(onwire["info_mode_sha256"], kitref.lock_hash(info_mode_doc()))
+
     def test_omission_never_refuses_in_either_direction(self):
         # The rule that keeps the unmodified reference peer — which declares none of these —
         # playable. A guard that fail-fasts on silence forfeits that game to itself.
         raw = self.wire()
-        for key in ("role", "sub_game_number", "scent_model_sha256", "wire_shape_sha256"):
+        for key in ("role", "sub_game_number", "scent_model_sha256", "wire_shape_sha256",
+                    "info_mode_sha256", "info_mode", "game_uid"):
             raw.pop(key, None)
         self.assertTrue(verify_peer(self.cfg, self.ours, raw).game_uid)
 

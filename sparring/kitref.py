@@ -66,6 +66,7 @@ lock_doc = _kit.ref_lock_doc                 # SPEC §7
 lock_hash = _kit.ref_lock_hash
 lock_decision = _kit.ref_lock_decision
 pairing_decision = _kit.ref_pairing_decision      # SPEC §7.2
+uid_declaration_decision = _kit.ref_uid_declaration_decision  # SPEC §7.3
 delivery_decision = _kit.ref_delivery_decision    # SPEC §7.1
 deadline_decision = _kit.ref_deadline_decision
 LOCK_FAMILIES = _kit.LOCK_FAMILIES

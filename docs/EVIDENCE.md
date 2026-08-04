@@ -56,11 +56,15 @@ breaks the signature (SPEC §4, §7, §7.2).
     "group_name": "Sparring Peer (uncounted)",
     "llm_model": "template",
     "mcp_servers": {},
-    "repos": {},
+    "repos": {
+      "cop": "https://github.com/Imreec/copthief-league-protocol",
+      "thief": "https://github.com/Imreec/copthief-league-protocol"
+    },
     "members": []
   },
   "scent_model_sha256": "81ebee59640e80eae8ca9ee5f86abd26e7edf5cdbb27d15925cb6ee45ca6ddf4",
   "wire_shape_sha256": "229ae6487a418c3fcb6da9be404de2f2533c288ebc228811bff6dedc4164d6f7",
+  "info_mode_sha256": "020947daeeb3f73494af9b04201326791742c7184085456e3517d21981ee1202",
   "info_mode": "belief"
 }
 ```
@@ -272,7 +276,7 @@ result_sparring-local-vs-sparring-local-opponent.json
   "mail_surface": {
     "present": false,
     "ruleset": "nm-v1",
-    "scan_sha256": "b84f534c08247d04b7325626a7b8e73383cbf252d6331033f99c3fd5136e4e59"
+    "scan_sha256": "4bf0ef7eccf8ffd33e80f0984255814890359a4a1a35e64a9c5646698fd2c34f"
   },
   "num_sub_games": 6,
   "schema_version": "1.1"
@@ -289,6 +293,15 @@ no mail code in it: the artifact carries its own evidence.
 ```json
 {
   "final_result": {
+    "diversity_reward_applied": {
+      "sparring-local": false,
+      "sparring-local-opponent": false
+    },
+    "first_meeting_between_groups": true,
+    "games_played_including_this": {
+      "sparring-local": 0,
+      "sparring-local-opponent": 0
+    },
     "series_tie": false,
     "sub_games_won": {
       "sparring-local": 4,

@@ -55,7 +55,14 @@ A conformant opponent that will refuse you for the same reasons a real team woul
 - a signed-terms handshake that distinguishes **terms absent** (a wire-shape fault on the sender's
   side) from **terms differing** (a constitution disagreement) — and prints the canonical strings,
   because a float that differs only in `repr` is invisible in a value diff and fatal to a signature;
-- locked-model declarations, pairing declarations, and the at-least-once receiver contract;
+- locked-model declarations in all three families a real pairing exchanges — `scent_model`,
+  `wire_shape`, and `info_mode` as a **doc hash** (`020947da…`, byte-identical to the kit's
+  PROMOTED `belief` registration) — plus pairing declarations and the at-least-once receiver
+  contract;
+- the **derived `game_uid` declared at negotiate** (SPEC §7.3) whenever the opponent is known,
+  and refused by name on mismatch — derive yours from the wrong input on purpose and this peer
+  is the only opponent that will tell you *at the handshake* instead of in a report diff the
+  next morning;
 - commit-reveal with a real end-of-game **mutual audit** that will call you tampered if your bytes
   differ from the kit's — which is exactly what a real opponent's audit would do;
 - all four artifacts under one `game_uid`, named by the book's App. F grammar.
@@ -72,7 +79,7 @@ without discovering it. Use `--hint-lang en` if you want that off.
 | | |
 |---|---|
 | **No mail. At all.** | Not "disabled" — absent. `python -m sparring.guards.no_mail` scans the source and refuses to let the peer start if a mail surface exists, and the manifest hash of that scan is written into the declaration artifact. Seven rules, including outbound-network confinement, because a package could import no mail library and still open a socket to port 587. |
-| **No report.** | Sparring is an uncounted warm-up (App. E rule 52), so nothing is owed by either side. The result artifact carries **no signature key at all**, only `"settlement": "not_owed"` — a label can be edited, but a missing preimage cannot be emailed. |
+| **No report.** | Sparring is an uncounted warm-up (App. E rule 52), so nothing is owed by either side. The result artifact carries **no signature key at all**, only `"settlement": "not_owed"` — a label can be edited, but a missing preimage cannot be emailed. Its league fields ride in the **friendly posture** (present but disarmed: counts unbumped, diversity all-false — SPEC §6.2), and the counted shape with a real `mutual_agreement` is demonstrated by [`examples/pairing-artifacts/`](../examples/pairing-artifacts/README.md) instead. |
 | **No tuned anything.** | Random and greedy, public-knowledge and shallow. `guards/purity.py` holds `policies/` to an import surface with no file reads and no weights formats, so a brain here physically cannot load a trained model. |
 | **No counted mode.** | `RunMode.SPARRING` is the only value that exists. A mode whose preflight demanded a deliverable would make this host refuse itself at startup, so the modes that would demand one are not in the code. |
 

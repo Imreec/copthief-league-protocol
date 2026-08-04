@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sparring import kitref
+from sparring import KIT_REPO_URL, kitref
 from sparring.config import TERMS_KEYS, SparConfig
 from sparring.proto.messages import Negotiation
 
@@ -45,7 +45,7 @@ class Agreed:
 
 
 def our_greeting(cfg: SparConfig, role: str, sub_game_number: int, nonce: str,
-                 locks: dict[str, str]) -> Negotiation:
+                 locks: dict[str, str], opponent_group: str | None = None) -> Negotiation:
     terms = cfg.terms()
     return Negotiation(
         terms=terms,
@@ -55,10 +55,18 @@ def our_greeting(cfg: SparConfig, role: str, sub_game_number: int, nonce: str,
         role=role,
         sub_game_number=sub_game_number,
         identity={"group_id": cfg.group_id, "group_name": cfg.group_name,
-                  "llm_model": "template", "mcp_servers": {}, "repos": {}, "members": []},
+                  "llm_model": "template", "mcp_servers": {},
+                  "repos": {"cop": KIT_REPO_URL, "thief": KIT_REPO_URL}, "members": []},
         scent_model_sha256=locks.get("scent_model"),
         wire_shape_sha256=locks.get("wire_shape"),
+        info_mode_sha256=locks.get("info_mode"),
         info_mode=cfg.info_mode,
+        # The uid is a pure function of the terms and the two sorted group ids, so it can only
+        # be declared once the opponent is known — sub-game 2 onward, or a configured pairing.
+        # Omission never refuses (SPEC section 7.3), so declaring nothing on first contact is
+        # legal in both directions.
+        game_uid=(kitref.game_uid(terms, cfg.group_id, opponent_group)
+                  if opponent_group else None),
     )
 
 
@@ -105,9 +113,12 @@ def verify_peer(cfg: SparConfig, ours: Negotiation, raw: dict) -> Agreed:
             "difference is in the serialization — check `ensure_ascii=False` and the compact "
             "separators (SPEC section 2), the two places a clean-room port silently diverges.")
 
-    # Locked models: refuse only when BOTH declare and disagree (SPEC section 7).
+    # Locked models: refuse only when BOTH declare and disagree (SPEC section 7). A bare-string
+    # `info_mode` (the pre-2026-08-01 form) is a different key and never reaches this comparison:
+    # a string and a doc hash are uncomparable, and uncomparable is silence.
     for family, theirs_key in (("scent_model", "scent_model_sha256"),
-                               ("wire_shape", "wire_shape_sha256")):
+                               ("wire_shape", "wire_shape_sha256"),
+                               ("info_mode", "info_mode_sha256")):
         ours_hash = getattr(ours, theirs_key)
         if kitref.lock_decision(ours_hash, raw.get(theirs_key)) == "refuse":
             raise Refused(
@@ -138,9 +149,23 @@ def verify_peer(cfg: SparConfig, ours: Negotiation, raw: dict) -> Agreed:
     if not opponent:
         raise Refused("SPAR-N08", "greeting names no group_id, so no game_id can be derived")
 
+    # The uid declaration (SPEC section 7.3). We always derive; if they also declared, the two
+    # derivations must agree — this is the ONLY moment a wrong-input uid can surface before two
+    # reports are diffed the next morning, because the uid never crosses the wire again.
+    derived_uid = kitref.game_uid(terms, ours.group_id, opponent)
+    if kitref.uid_declaration_decision(derived_uid, raw.get("game_uid")) == "refuse":
+        raise Refused(
+            "SPAR-N10",
+            f"game_uid mismatch: we derive {derived_uid} from the flat negotiated terms and the "
+            f"sorted group ids; they declared {raw.get('game_uid')}. The terms already "
+            f"value-equal, so their uid almost certainly came from a WIDER input than the "
+            f"extracted flat terms — deterministic, self-consistent across all four of their "
+            f"artifacts, and wrong only cross-team (WARNINGS section 2). Check the input to "
+            f"their derive step, not the derivation.")
+
     return Agreed(
         game_id=kitref.game_id(ours.group_id, opponent),
-        game_uid=kitref.game_uid(terms, ours.group_id, opponent),
+        game_uid=derived_uid,
         opponent_group=opponent,
         opponent_role=theirs.get("role"),
         terms=terms,

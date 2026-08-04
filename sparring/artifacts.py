@@ -105,6 +105,17 @@ class ArtifactSet:
         return _write(self.dir / f"log_{self.game_id}_g{sub_game_number:02d}.json", doc)
 
     def result(self, groups: list[dict], sub_games: list[dict], final: dict) -> Path:
+        # The league fields ride in the FRIENDLY posture the playbook's stage 4d prescribes:
+        # present (so a team templating from this output does not forget they exist), disarmed
+        # (a practice run never bumps a count, never claims a diversity reward — App. E rules
+        # 37-38 make an armed field in an uncounted run a false declaration, and that bug class
+        # was found in BOTH real implementations on the same day).
+        final = {
+            **final,
+            "games_played_including_this": {g["group_id"]: 0 for g in groups},
+            "first_meeting_between_groups": True,
+            "diversity_reward_applied": {g["group_id"]: False for g in groups},
+        }
         doc = {
             **self._base(),
             "report_type": "final_game_result",
@@ -112,9 +123,16 @@ class ArtifactSet:
             "num_sub_games": len(sub_games),
             "sub_games": sub_games,
             "final_result": final,
-            # No consensus signature, by construction. See the module docstring.
+            # No consensus signature, by construction. See the module docstring. The counted
+            # shape's `mutual_agreement` is demonstrated by examples/pairing-artifacts/ instead —
+            # adding a real preimage here would weaken the strongest not-a-league-game layer.
             "settlement": "not_owed",
         }
+        # Rule 49: the result carries the repo links. Only groups that actually declared repos
+        # appear — a real opponent that sent none is not invented for them.
+        github = {g["group_id"]: g["repos"] for g in groups if g.get("repos")}
+        if github:
+            doc["links"] = {**doc["links"], "github": github}
         return _write(self.dir / f"result_{self.game_id}.json", doc)
 
 

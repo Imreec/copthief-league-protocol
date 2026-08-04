@@ -74,9 +74,37 @@ def wire_doc() -> dict:
     })
 
 
+def info_mode_doc() -> dict:
+    """``info_mode: belief`` — the registered doc, mirrored byte-exactly.
+
+    This field set must match the kit's own registration in ``vectors/locked_model.json`` (the
+    ``belief`` entry, PROMOTED 2026-08-04), because the hash is what crosses the wire and
+    both-declare-and-differ refuses. ``test_wire_contract`` asserts the equality, so a drift
+    between this copy and the registration fails in CI rather than at a handshake.
+    """
+    return kitref.lock_doc("info_mode", "belief", {
+        "rival_position_in_observation": False,
+        "sources": ["own_state", "rival_scent", "hints"],
+        "enforcement": ("structural under wire_shape reference-v3 (the rival's position "
+                        "never crosses the wire); an honor term under bookletter-v3, where "
+                        "the wire carries it and only the brain's restraint withholds it"),
+        "artifact_provable": {
+            "mismatch": True,
+            "violation": False,
+            "why": "a mismatch is provable from the two negotiate records; a violation is "
+                   "not, because a decision record does not disclose which information "
+                   "produced it",
+        },
+    }, {
+        "note": "the observation space the brain is entitled to read",
+        "observation_keys": ["self", "barriers", "smell_grid", "hint"],
+    })
+
+
 def locks(scent_model: str) -> dict[str, str]:
     """The hashes that actually cross the wire."""
     return {
         "scent_model": kitref.lock_hash(scent_doc(scent_model)),
         "wire_shape": kitref.lock_hash(wire_doc()),
+        "info_mode": kitref.lock_hash(info_mode_doc()),
     }
