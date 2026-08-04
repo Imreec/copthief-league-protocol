@@ -27,7 +27,7 @@ from sparring.identity import locks
 from sparring.negotiate import Refused, our_greeting, verify_peer
 from sparring.policies import REGISTRY
 from sparring.preflight import assert_sparring_ready
-from sparring.rules.outcome import Outcome, Role, role_for, score_for
+from sparring.rules.outcome import TIE_SCORE, Outcome, Role, is_tie_row, role_for, score_for
 from sparring.state import PeerState
 from sparring.turnloop import SubGamePeer
 
@@ -178,26 +178,53 @@ def play_series(cfg: SparConfig, client, inboxes, artifacts_dir: Path,
     # it costs nothing to keep the habit here.
     if artifacts is not None and result.settled and len(result.ledger) == sub_games:
         ours, theirs = cfg.group_id, result.ledger and agreed.opponent_group
-        totals = {ours: sum(row["score"] for row in result.ledger)}
-        sub_games_block = [{
-            "sub_game_number": row["sub_game_number"],
-            "roles": {ours: row["role"]},
-            "result": row["outcome"],
-            "score": {ours: row["score"]},
-            "tokens": {ours: 0},
-            "audit": {"log_verified": row["audit_ok"], "tampered": not row["audit_ok"]},
-        } for row in result.ledger]
+        # Both columns are DERIVED from each settled outcome (score_for is role-symmetric), so
+        # even this one-sided view carries a full scoring table — an earlier revision emitted
+        # our column only, with `series_tie` hardcoded false, which meant the tie path of the
+        # result shape was never exercised anywhere in the kit (dogfood finding 5).
+        rows = []
+        totals = {ours: 0, theirs: 0}
+        won = {ours: 0, theirs: 0}
+        ties = 0
+        for row in result.ledger:
+            outcome, role = Outcome(row["outcome"]), Role(row["role"])
+            score_ours, score_theirs = row["score"], score_for(outcome, role.other)
+            totals[ours] += score_ours
+            totals[theirs] += score_theirs
+            row_tie = is_tie_row(outcome, score_ours, score_theirs)
+            if score_ours > score_theirs:
+                won[ours] += 1
+            elif score_theirs > score_ours:
+                won[theirs] += 1
+            elif row_tie:
+                ties += 1
+            rows.append({
+                "sub_game_number": row["sub_game_number"],
+                "roles": {ours: row["role"], theirs: role.other.value},
+                "result": row["outcome"],
+                "winner_group": (ours if score_ours > score_theirs
+                                 else (theirs if score_theirs > score_ours else None)),
+                "tie": row_tie,
+                "score": {ours: score_ours, theirs: score_theirs},
+                "tokens": {ours: 0, theirs: 0},
+                "audit": {"log_verified": row["audit_ok"], "tampered": not row["audit_ok"]},
+            })
+        series_tie = totals[ours] == totals[theirs]
         result.artifacts.append(artifacts.result(
             [{"group_id": ours, "group_name": cfg.group_name,
               "repos": {"cop": KIT_REPO_URL, "thief": KIT_REPO_URL}},
              {"group_id": theirs, "group_name": ""}],
-            sub_games_block,
+            rows,
             {"total_score": totals,
-             "sub_games_won": {ours: sum(1 for r in result.ledger if r["score"] > 5)},
-             "ties": 0, "winner_group": None, "series_tie": False,
-             "tokens_total_series": {ours: 0},
-             "_remark": "one side's view. A counted series settles the result WITH the opponent "
-                        "before either reports; this is a practice run and reports nothing."}))
+             "sub_games_won": won,
+             "ties": ties,
+             "winner_group": None if series_tie else max(totals, key=lambda k: totals[k]),
+             "series_tie": series_tie,
+             "tie_score_each": TIE_SCORE if series_tie else None,
+             "tokens_total_series": {ours: 0, theirs: 0},
+             "_remark": "one side's view, both columns derived from the settled outcomes. A "
+                        "counted series settles the result WITH the opponent before either "
+                        "reports; this is a practice run and reports nothing."}))
     elif artifacts is not None:
         print("\n  no result artifact: a sub-game did not settle. A report that quietly drops a "
               "game\n  is what rule 35 punishes, on both teams — so the guard refuses the whole "
@@ -207,19 +234,39 @@ def play_series(cfg: SparConfig, client, inboxes, artifacts_dir: Path,
 
 
 def _play_one(peer: SubGamePeer, role: Role, cfg: SparConfig, budgets, clock) -> Outcome:
-    """One sub-game against a live opponent. Police move first."""
-    our_move_first = role is Role.POLICE
+    """One sub-game against a live opponent. THE THIEF MOVES FIRST.
+
+    That order is the reference implementation's, observed live against it (its runtime takes
+    the thief's turn before entering the receive loop) — and this peer declares
+    ``wire_shape: reference-v3``, so it plays what it names. This line shipped police-first
+    until the 2026-08-04 dogfood run, where a reference-conformant opponent and this peer each
+    waited for the other after a *fully successful* handshake: terms equal, signature verified,
+    all three locks matched — then both timed out and each blamed the other, which is the
+    contradictory-reports shape App. E rule 35 zeroes. The wire_shape lock does not cover turn
+    order (`bookletter-v3` negotiates it explicitly; `reference-v3` inherits the reference's
+    behaviour), so a matching lock actively *confirmed* agreement while hiding the one
+    disagreement that mattered — hence the diagnosis below rather than a silent timeout.
+    """
+    our_move_first = role is Role.THIEF
+    saw_their_turn = False
     for _ in range(cfg.max_steps * 2):
         if our_move_first:
-            message = peer.take_turn()
-            peer.transport.send_turn(message.to_wire())
-            peer.machine.to(PeerState.VERIFYING)
-            peer.machine.to(PeerState.WAITING_FOR_OPPONENT)
+            own = _take_own_turn(peer, role)
+            if own is not None:
+                return own
 
         raw = poll_until(peer.transport.poll_turn, budgets.turn_timeout,
                          budgets.poll_interval, clock)
         if raw is None:
+            if not saw_their_turn:
+                print("  no turn was EVER exchanged after a successful handshake. That pattern "
+                      "is almost never a dead peer —\n  it is a TURN-ORDER disagreement: "
+                      "reference-v3 plays thief-first (the reference's own behaviour),\n  and a "
+                      "peer that plays police-first will wait here forever while we do the same. "
+                      "The wire_shape lock\n  does not cover turn order — state it with your "
+                      "opponent (PAIRING-PLAYBOOK stage 1).")
             return Outcome.TIMEOUT
+        saw_their_turn = True
         for applied in peer.receive(raw):
             answer = peer.answer(applied)
             verdict = peer.adjudicate(applied, answer)
@@ -233,17 +280,35 @@ def _play_one(peer: SubGamePeer, role: Role, cfg: SparConfig, budgets, clock) ->
                 return verdict
 
         if not our_move_first:
-            message = peer.take_turn()
-            peer.transport.send_turn(message.to_wire())
-            peer.machine.to(PeerState.VERIFYING)
-            peer.machine.to(PeerState.WAITING_FOR_OPPONENT)
-            own = peer.engine.self_captured()
+            own = _take_own_turn(peer, role)
             if own is not None:
-                final = peer.terminal_message()
-                if final is not None:
-                    peer.transport.send_turn(final.to_wire())
                 return own
-            if peer.engine.survived():
-                # The survival claim already rode out on the message just sent.
-                return Outcome.SURVIVAL
     return Outcome.SURVIVAL
+
+
+def _take_own_turn(peer: SubGamePeer, role: Role) -> Outcome | None:
+    """Take and send our half-turn; return an outcome if OUR OWN move ended the game.
+
+    The self-checks are the THIEF's, and they must follow the thief's move wherever it sits in
+    the turn: self-capture (walking into a barrier fold) concedes with a terminal message, and
+    reaching the survival threshold returns with the claim that already rode out on the message
+    just sent. The first thief-first cut of `_play_one` left these checks in the second-mover
+    branch — where the thief no longer was — so a surviving thief never returned, kept polling
+    for a turn that would never come, and timed out a sub-game it had won; its opponent's audit
+    poll then starved too. CI's two-container series caught it within the hour.
+    """
+    message = peer.take_turn()
+    peer.transport.send_turn(message.to_wire())
+    peer.machine.to(PeerState.VERIFYING)
+    peer.machine.to(PeerState.WAITING_FOR_OPPONENT)
+    if role is Role.THIEF:
+        own = peer.engine.self_captured()
+        if own is not None:
+            final = peer.terminal_message()
+            if final is not None:
+                peer.transport.send_turn(final.to_wire())
+            return own
+        if peer.engine.survived():
+            # The survival claim already rode out on the message just sent.
+            return Outcome.SURVIVAL
+    return None

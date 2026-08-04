@@ -95,15 +95,23 @@ def serve(cfg: SparConfig, *, host: str, port: int, peer_url: str | None,
     print("  Expect NO report from this host: sparring is not a game under App. E rules 32/35.")
     if peer_url:
         print(f"  opponent: {peer_url}")
-    elif await_peer:
-        print("  awaiting a peer to dial us.\n"
-              "  If you are exposing this through a tunnel, rewrite the Host header or fastmcp\n"
-              "  will answer 421 to every request: Cloudflare "
-              "originRequest.httpHostHeader: "
-              f"127.0.0.1:{port} · ngrok --host-header=rewrite  (SPEC Appendix D).")
+    else:
+        # Without --peer there is nothing to drive: the four tools answer, and NOTHING else
+        # happens. Say so loudly — the 2026-08-04 dogfood run followed docs that implied this
+        # mode plays a game, and greetings queued into inboxes nobody drains, which is the
+        # exact hazard the module docstring warns about.
+        print("  TOOLS ONLY — no game loop runs in this mode. This process will accept your\n"
+              "  greetings and turns into a queue and never answer with moves of its own.\n"
+              "  To actually PLAY, this peer must also dial yours: add\n"
+              "    --peer <your implementation's MCP url>   (and usually --role thief)\n"
+              "  so both sides can push to each other — MCP pushes one way per session.")
+        if await_peer:
+            print("  If you are exposing this through a tunnel, rewrite the Host header or "
+                  "fastmcp\n  will answer 421 to every request: Cloudflare "
+                  "originRequest.httpHostHeader: "
+                  f"127.0.0.1:{port} · ngrok --host-header=rewrite  (SPEC Appendix D).")
 
     if not peer_url:
-        # Nothing to drive: answer tools and wait for a peer to dial us.
         try:
             mcp.run(transport="http", host=host, port=port, show_banner=False)
         except KeyboardInterrupt:

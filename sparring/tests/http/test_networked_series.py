@@ -89,9 +89,14 @@ class TestNetworkedSubGame(unittest.TestCase):
             self.assertEqual(len(b.ledger), 1)
 
             # The property the self-play harness could not test: two independent drivers must
-            # describe the same sub-game the same way.
+            # describe the same sub-game the same way. Step counts may differ by exactly one —
+            # each side numbers its own half-turns, and the side that ends on an INBOUND
+            # terminal claim legitimately ends one short (the reference's own convention,
+            # observed cross-team in the 2026-08-04 dogfood run: 12 vs 13 on every window).
+            # Under police-first ordering the counts happened to land equal, which is why this
+            # assertion used to demand equality; thief-first (finding 1) surfaced the truth.
             self.assertEqual(a.ledger[0]["outcome"], b.ledger[0]["outcome"])
-            self.assertEqual(a.ledger[0]["steps"], b.ledger[0]["steps"])
+            self.assertLessEqual(abs(a.ledger[0]["steps"] - b.ledger[0]["steps"]), 1)
             self.assertNotEqual(a.ledger[0]["outcome"], "timeout",
                                 "a settled sub-game must not read as a timeout — that was the bug")
             self.assertTrue(a.ledger[0]["audit_ok"], "our audit of their records must verify")

@@ -7,12 +7,12 @@
         "sub_game_number": 1,
         "role": "police",
         "outcome": "survival",
-        "steps": 35,
+        "steps": 34,
         "score": {
           "sparring-local": 5,
           "sparring-local-opponent": 10
         },
-        "final_commit": "f184b12053560bb68bd589ec6df5b49ffdae32aea85dc58c4cc6a41f498dc13f"
+        "final_commit": "c0bc90e8c9e26fd0aec684acc52bd4f76f2f909311ecfa90a562b7ef6316c538"
       },
       {
         "sub_game_number": 2,
@@ -23,18 +23,18 @@
           "sparring-local": 10,
           "sparring-local-opponent": 5
         },
-        "final_commit": "9eb663095dd107e39795a14cd281acc6d5b7abac746498744a7f352f3fd38d09"
+        "final_commit": "cc8db41d6ace17b2353f8abfd850a82cecf9f5d6f29a6487bc674fddf555e876"
       },
       {
         "sub_game_number": 3,
         "role": "police",
         "outcome": "survival",
-        "steps": 35,
+        "steps": 34,
         "score": {
           "sparring-local": 5,
           "sparring-local-opponent": 10
         },
-        "final_commit": "573f37fd1c7c8ebe3fc300e6ad03b332934b1115b835d8a902db4aee4c447c03"
+        "final_commit": "f452bcf552b77871ba1cced0f88a8a3c5c5b43983edfa69aaa074da3f72eca58"
       },
       {
         "sub_game_number": 4,
@@ -45,18 +45,18 @@
           "sparring-local": 10,
           "sparring-local-opponent": 5
         },
-        "final_commit": "16afdcb006c235153e03642a02fac4763131f182a79f777e4e5a16f501c28f9f"
+        "final_commit": "1e068a2f17ea832d2fe8e5a32df6576244322f1460a60a1b59699d23e22a6916"
       },
       {
         "sub_game_number": 5,
         "role": "police",
         "outcome": "survival",
-        "steps": 35,
+        "steps": 34,
         "score": {
           "sparring-local": 5,
           "sparring-local-opponent": 10
         },
-        "final_commit": "7978a36c29fd03223a6dfa9d22b41f39c6fef8a522fc658ebf8cb094a8202715"
+        "final_commit": "974b88904ea76500ea081662a5bb867de9197755c1ca5f3d9424ed091690b894"
       },
       {
         "sub_game_number": 6,
@@ -67,7 +67,7 @@
           "sparring-local": 10,
           "sparring-local-opponent": 5
         },
-        "final_commit": "976434b9ba6e9f879cb52f7990ed1739743fd578c34def26018e6a01b008ae56"
+        "final_commit": "34e0cb3ad7ca925ecd8ad71e2833b7a1be19d093cfc65469c6c19c764ed427f4"
       }
     ],
     "random": [
@@ -75,12 +75,12 @@
         "sub_game_number": 1,
         "role": "police",
         "outcome": "survival",
-        "steps": 35,
+        "steps": 34,
         "score": {
           "sparring-local": 5,
           "sparring-local-opponent": 10
         },
-        "final_commit": "c6aeaeda585db345263c4cca176be091a28174763df5180006b5fb0987ca8813"
+        "final_commit": "d9683c2856009742d2395ccd22781b6c9485029af935eb24e6b1575980fd97d6"
       },
       {
         "sub_game_number": 2,
@@ -97,12 +97,12 @@
         "sub_game_number": 3,
         "role": "police",
         "outcome": "survival",
-        "steps": 35,
+        "steps": 34,
         "score": {
           "sparring-local": 5,
           "sparring-local-opponent": 10
         },
-        "final_commit": "a55ac0e96fc13c4fbfc9a2ce24a66a3dac9eff5233decd94b1e350e602f90835"
+        "final_commit": "baa7b27b9a9feaf6b638015c66f601dcc119c11ff2742f7d4bf8c21f7ca40b4e"
       },
       {
         "sub_game_number": 4,
@@ -118,13 +118,13 @@
       {
         "sub_game_number": 5,
         "role": "police",
-        "outcome": "capture",
-        "steps": 31,
+        "outcome": "survival",
+        "steps": 34,
         "score": {
-          "sparring-local": 20,
-          "sparring-local-opponent": 5
+          "sparring-local": 5,
+          "sparring-local-opponent": 10
         },
-        "final_commit": "b2809770d051afb5d157d6fe44af0c39e4d0764d3e1f14e26ca5dc3f771552b3"
+        "final_commit": "6d393e0e8a0c58238a52b62047a05ca82663a3becfe98f544d2fe2adb731f70d"
       },
       {
         "sub_game_number": 6,

@@ -276,7 +276,7 @@ result_sparring-local-vs-sparring-local-opponent.json
   "mail_surface": {
     "present": false,
     "ruleset": "nm-v1",
-    "scan_sha256": "4bf0ef7eccf8ffd33e80f0984255814890359a4a1a35e64a9c5646698fd2c34f"
+    "scan_sha256": "0858b97a40497e812ad1579653bde978fb8d2cb9bd2f0ac1a5f589b5169d060f"
   },
   "num_sub_games": 6,
   "schema_version": "1.1"
@@ -351,7 +351,7 @@ A counted run's result is where the signature belongs (SPEC §6).
   "group_id": "sparring-local",
   "result": "survival",
   "role": "police",
-  "steps": 35,
+  "steps": 34,
   "sub_game_number": 1
 }
 ```

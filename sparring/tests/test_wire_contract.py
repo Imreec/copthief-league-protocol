@@ -172,6 +172,47 @@ class TestStateMachine(unittest.TestCase):
             m.to(PeerState.COMPUTING_MOVE)
 
 
+class TestTurnMessageStamp(unittest.TestCase):
+    """Dogfood finding 3: nothing ever set `TurnMessage.timestamp`, so every outbound turn
+    carried "" — and a receiver pinned to the reference's ISO stamp refuses the frame. The
+    stamp comes through the clock seam (purity rule P-3), so self-play stays reproducible."""
+
+    def _peer(self, clock):
+        from sparring.policies import REGISTRY
+        from sparring.rules.outcome import Role
+        from sparring.turnloop import SubGamePeer
+        cfg = SparConfig()
+        return SubGamePeer(cfg=cfg, role=Role.POLICE, sub_game_number=1,
+                           policy=REGISTRY[cfg.policy]["police"](), transport=None,
+                           clock=clock, budgets=Budgets(), seed=1234)
+
+    def test_outbound_turns_carry_an_iso_utc_stamp(self):
+        # Asserted by shape rather than by parsing: importing datetime HERE would itself
+        # violate purity rule P-3 — the guard caught exactly that in this test's first draft.
+        msg = self._peer(FakeClock(start=42.0)).take_turn()
+        self.assertTrue(msg.timestamp)
+        self.assertIn("T", msg.timestamp)
+        self.assertTrue(msg.timestamp.endswith("+00:00"))
+
+    def test_the_fake_clock_stamp_is_deterministic(self):
+        # Two peers at the same fake instant stamp identically — which is what keeps the
+        # golden and the generated EVIDENCE byte-reproducible under a seed.
+        a = self._peer(FakeClock(start=7.0)).take_turn()
+        b = self._peer(FakeClock(start=7.0)).take_turn()
+        self.assertEqual(a.timestamp, b.timestamp)
+
+    def test_the_terminal_message_carries_the_field_not_an_empty_grid(self):
+        # Dogfood finding 4: a terminal STAY is a real turn, so the field advances with it —
+        # {} is the not-transmitted convention, not "game over".
+        peer = self._peer(FakeClock())
+        peer.take_turn()
+        peer.pending_answer = {"answer": "no", "position": None}
+        final = peer.terminal_message()
+        self.assertIsNotNone(final)
+        self.assertTrue(final.smell_grid)
+        self.assertTrue(final.timestamp)
+
+
 class TestHandshakeRefusals(unittest.TestCase):
     """Every refusal names which side's fix it is — the distinction that cost hours to see."""
 

@@ -179,11 +179,27 @@ def _selftest() -> int:
     def bad_total(data):
         data[f"result_{gid}.json"]["final_result"]["total_score"][a] = 25
 
+    def honest_tie(data):
+        """A legitimately tied series: equal sub-game scores, +2 each declared (App. F tie
+        score, the reference's own behaviour on a series tie). Must PASS — an earlier revision
+        refused it, telling honestly tied pairs not to report."""
+        fr = data[f"result_{gid}.json"]
+        fr["sub_games"] = [{"sub_game_number": 1, "score": {a: 5, b: 5}}]
+        fr["final_result"] = {"total_score": {a: 7, b: 7}, "series_tie": True}
+
+    def tie_bonus_without_tie(data):
+        """The +2 allowance must NOT leak: extra points with series_tie false stay refused."""
+        fr = data[f"result_{gid}.json"]["final_result"]
+        fr["total_score"] = {a: 22, b: 7}
+        fr["series_tie"] = False
+
     cases = [("a clean set", None, 0),
              ("a minted game_uid in the result", mint, 1),
              ("a CONSISTENT uid derived from the wrong input", wrong_input, 1),
              ("a self-first (unsorted) game_id", self_first, 1),
-             ("a declared total that is not the sum", bad_total, 1)]
+             ("a declared total that is not the sum", bad_total, 1),
+             ("an honestly tied series declaring the App. F +2", honest_tie, 0),
+             ("the +2 without a series tie", tie_bonus_without_tie, 1)]
     bad = 0
     with tempfile.TemporaryDirectory() as td:
         for i, (label, mutate, want) in enumerate(cases):
@@ -327,9 +343,19 @@ def main() -> int:
                     totals[gid] = totals.get(gid, 0) + score
         declared = (res.get("final_result") or {}).get("total_score")
         if totals and isinstance(declared, dict):
-            check("result: totals are the sum of the sub-game scores (derived, not declared)",
-                  {k: totals.get(k) for k in declared} == declared,
-                  f"summed {totals}, declared {declared}")
+            # On a SERIES tie the reference ADDS the App. F tie score (2, fixed) to each side's
+            # equal total — observed live against the reference implementation, so an honestly
+            # tied series legitimately declares summed+2 per group. An earlier revision of this
+            # check refused that, and its own docstring says "do NOT report until resolved" —
+            # telling a tied pair not to report is the rule-35 sanction this tool exists to
+            # prevent. The allowance is exactly +2 and only under a declared series_tie.
+            summed = {k: totals.get(k) for k in declared}
+            series_tie = bool((res.get("final_result") or {}).get("series_tie"))
+            tie_adjusted = {k: (None if v is None else v + 2) for k, v in summed.items()}
+            check("result: totals are the sum of the sub-game scores (derived, not declared; "
+                  "+2 each under a declared series tie, the reference's own behaviour)",
+                  summed == declared or (series_tie and tie_adjusted == declared),
+                  f"summed {totals}, declared {declared}, series_tie {series_tie}")
         listed = {sg.get("sub_game_number") for sg in subs}
         logged = {int(nn) for _, nn, _ in found["log"] if nn is not None}
         if listed and logged:

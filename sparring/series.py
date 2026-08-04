@@ -114,8 +114,12 @@ def _play_sub_game(cfg: SparConfig, n: int, a_role: Role, transports, clock: Clo
     a.seal_step_zero(cfg.group_name)
     b.seal_step_zero(f"{cfg.group_name} (opponent)")
 
-    # Police move first — a documented assumption, not a rule. See turnloop's docstring.
-    first, second = (a, b) if a_role is Role.POLICE else (b, a)
+    # THE THIEF MOVES FIRST — the reference implementation's own order, observed live against
+    # it, and what `wire_shape: reference-v3` therefore implies. Shipped police-first until the
+    # 2026-08-04 dogfood run deadlocked against a reference-conformant peer (netplay._play_one
+    # has the full story). Self-play must sequence the same way netplay plays, or a rehearsal
+    # certifies an order no real opponent uses.
+    first, second = (a, b) if a_role is Role.THIEF else (b, a)
     outcome_first = outcome_second = None
     note = ""
 

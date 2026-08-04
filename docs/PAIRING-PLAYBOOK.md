@@ -60,6 +60,9 @@ IDENTITY
   topology:        role-split services (address changes with role) | single service
   wire shape:      reference-v3 (flat 14-key terms + nonce + signature),
                    wire_shape_sha256 <hash of the registered doc — SPEC §7>
+  turn order:      thief moves first each sub-game (the reference's behaviour —
+                   NOT covered by the wire_shape lock; two peers that disagree
+                   here deadlock silently after a perfect handshake)
 
 CONSTITUTION (proposed shared game.json, attached)
   - flat terms exactly as in the attachment; note max_moves == survival_threshold
@@ -417,6 +420,7 @@ dial them" page for a team meeting this pairing (or any conformant one):
 | Per-window readiness | Under role-split, only the FIRST counterpart must be ready at T; later windows' edges are judged by their own handshake budget (LEAGUE-OPS §4) |
 | Pre-T proof | Loopback through your OWN edge (`tools/netcheck.py --loopback`), finished BEFORE T so nothing but a real peer answers on the series path |
 | Handshake | Greeting carries the flat signed terms + nonce + signature, identity block, locked-model hashes, `sub_game_number`/`role` (+ optionally the derived `game_uid`) — see `docs/cross-team-frame.json` for a real inbound one |
+| Turn order | **Thief moves first each sub-game** (reference behaviour). The wire_shape lock does not cover this, so a disagreement survives a perfect handshake and then deadlocks both sides into mutual timeouts — state it in the Stage 1 message, never assume it |
 | Refusals | Terms-absent ≠ terms-differing ≠ bystander-window — three different faults, three different fixes; name which (LEAGUE-OPS §6) |
 
 **A worked, checkable example of everything the wire produces** — all four artifact kinds for a
