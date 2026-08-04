@@ -146,6 +146,10 @@ Run it before you agree a start time, not during one.
 3. **Know what is actually agreed.** [`GOVERNANCE.md`](GOVERNANCE.md) says which constructions two
    independent implementations have reproduced and which have only one behind them. Do not assume
    an opponent implements a `PROPOSED` one.
+4. **When you are ready to actually approach a team**, follow
+   [`PAIRING-PLAYBOOK.md`](PAIRING-PLAYBOOK.md) — the message that opens a pairing, the role
+   convention, the friendly campaign that de-risks the counted series, and the retry agreement you
+   want in writing before anything counts.
 
 ---
 
