@@ -272,7 +272,12 @@ Both teams independently build the final result JSON, and both email it — the 
   re-serialization, and it nearly scored 0.
 - **Derived, not declared.** Totals and the diversity flag are derived from the per-sub-game
   results and the game-count declarations by the fixed scoring table (book ch.9), so agreement on
-  sub-games implies agreement on totals.
+  sub-games implies agreement on totals. **On a series tie, the App. F tie score (2) is ADDED
+  into each side's `total_score`** — the reference's own aggregate behaviour, observed live
+  against it. A result that instead carries the raw sum beside a separate tie field describes
+  the same match with different numbers than a reference-shaped opponent's report — the rule-35
+  contradiction, found the first time a tied series was diffed cross-implementation
+  (imreeyal dogfood N1, 2026-08-04).
 - **The report's `game_uid` must be derived from the flat negotiated terms.**
   The uid is a pure function of the **flat 14-key negotiated terms** and both group ids (§4) — the
   reference computes `derive_game_ids(terms_from_config(...), ...)`, where `terms_from_config`
