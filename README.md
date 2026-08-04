@@ -143,6 +143,18 @@ A real inbound frame from that run — redacted, with the redaction marked — i
 hashes **byte-identical** to this kit's registered documents, which is the whole point of pinning
 the document schema rather than just the hash.
 
+**And on 2026-08-04 the same pairing played its one counted series** — the end state this whole
+kit exists to reach. The campaign before it (2026-08-01 → 04): five clean friendly series in a
+single day, two mutual repo audits with written dispositions, then six counted sub-games in about
+78 seconds — six clean mutual audits, one `game_uid` (`e351176a…`), zero refusals of any kind,
+one result-only report per team, and the two reports' `mutual_agreement.sha256` **byte-identical**.
+The result on the record: **30–90, winner anrbj666**, all six sub-games — with the App. F
+diversity reward correctly attaching to them and not to us, and both teams' league fields agreeing
+field-for-field. We publish the score with the protocol facts because the two are one artifact:
+a kit that only cited runs it won would be advertising, not evidence. The whole lifecycle of that
+pairing — first contact to counted report — is written up as
+[`docs/PAIRING-PLAYBOOK.md`](docs/PAIRING-PLAYBOOK.md), contributed by the team that won.
+
 Separately, the [sparring peer](sparring/) plays a full series over MCP between two separate
 processes, and CI re-runs a networked sub-game on every push.
 
