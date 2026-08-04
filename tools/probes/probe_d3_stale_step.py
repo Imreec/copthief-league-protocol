@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 
 KIT = Path(sys.argv[1] if len(sys.argv) > 1 else
-           r"C:\Users\Alon\Desktop\projectGmar\copthief-league-protocol")
+           str(Path(__file__).resolve().parents[2]))  # P5-16: relative default
 sys.path.insert(0, str(KIT))
 
 import verify_vectors as ref                                   # noqa: E402

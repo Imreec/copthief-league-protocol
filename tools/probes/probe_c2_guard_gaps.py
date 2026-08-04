@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 KIT = Path(sys.argv[1] if len(sys.argv) > 1 else
-           r"C:\Users\Alon\Desktop\projectGmar\copthief-league-protocol")
+           str(Path(__file__).resolve().parents[2]))  # P5-16: relative default
 
 # The two lexical rules, as the guard states them.
 BANNED_TOKEN_RE = re.compile(r"\bsmtp\b", re.IGNORECASE)   # NM-2's shape

@@ -85,47 +85,83 @@ def _check_many(directories: list[str], terms: str | None) -> int:
         worst = max(worst, subprocess.run(cmd).returncode)
 
     print(f"\n=== cross-team join across {len(directories)} artifact sets ===")
-    seen: dict[str, set[str]] = {"game_uid": set(), "game_id": set()}
-    for directory in directories:
-        for path in Path(directory).rglob("*.json"):
+    # TOP LEVEL ONLY, per match. Two lessons the first join learned the hard way:
+    # (1) it swept subdirectories with rglob, so the archive layout the playbook itself
+    #     prescribes — every settled series snapshotted below the live set — was read as a
+    #     rule-35 dispute, "the scariest verdict at the one moment it is designed to be
+    #     believed" (anrbj666's P5-1). Worse than their probe shows: an archived friendly of
+    #     the SAME pairing shares the live game's deterministic ids, so no grouping can save a
+    #     recursive sweep. Archives are history, not disputes; point at an archived set
+    #     directly to join it.
+    # (2) it compared bare value-sets across everything it saw, so two DIFFERENT matches in
+    #     one tree collided, and two reports of ONE match agreeing was never actually checked
+    #     per match.
+    def top_level_docs(directory: str) -> dict[str, dict[str, dict]]:
+        """{game_id: {kind_or_name: doc}} from the directory's top level only."""
+        out: dict[str, dict[str, dict]] = {}
+        for path in sorted(Path(directory).glob("*.json")):
+            m = NAME_RE.match(path.name)
+            if not m:
+                continue
             try:
                 doc = json.loads(path.read_text(encoding="utf-8"))
             except (ValueError, UnicodeDecodeError):
                 continue
-            for key in seen:
-                if doc.get(key):
-                    seen[key].add(doc[key])
+            gid = doc.get("game_id") or m.group("gid")
+            out.setdefault(gid, {})[path.name] = doc
+        return out
 
-    for key, values in seen.items():
-        ok = check(f"all sets agree on one {key}", len(values) == 1,
-                   f"found {len(values)}: {sorted(values)}")
+    sides = {d: top_level_docs(d) for d in directories}
+    for directory in directories:
+        below = sum(1 for p in Path(directory).rglob("*.json")
+                    if p.parent != Path(directory))
+        if below and not _quiet:
+            print(f"  note: {below} artifact file(s) in subdirectories of {directory} were NOT "
+                  f"joined — archives are history, not disputes")
+
+    shared = set.intersection(*(set(s) for s in sides.values())) if sides else set()
+    if not check("the sets share a match to join", bool(shared),
+                 f"per-directory matches: "
+                 f"{ {d: sorted(s) for d, s in sides.items()} }"):
+        worst = 1
+    for directory, s in sides.items():
+        extra = sorted(set(s) - shared)
+        if extra and not _quiet:
+            print(f"  note: match(es) only in {directory}: {extra} — not joined")
+
+    JOIN_FIELDS = ("total_score", "sub_games_won", "winner_group", "ties", "series_tie",
+                   "tokens_total_series", "games_played_including_this",
+                   "first_meeting_between_groups", "diversity_reward_applied")
+    for gid in sorted(shared):
+        uids = {doc["game_uid"]
+                for s in sides.values() for doc in s[gid].values() if doc.get("game_uid")}
+        ok = check(f"[{gid}] both sets derive one game_uid", len(uids) == 1,
+                   f"found {len(uids)}: {sorted(uids)}")
         if not ok:
             worst = 1
-            if key == "game_uid":
-                print("\n  ^ two independently derived uids disagree. Neither side can see this "
-                      "alone —\n    each bundle is self-consistent. The usual cause is one side "
-                      "deriving from a\n    wider object than the flat negotiated terms. Do NOT "
-                      "report until it is resolved:\n    two counted reports naming one match by "
-                      "two uids zero BOTH teams (App. E r.35).")
-
-    # The values a grader actually diffs between two reports. The join used to compare only the
-    # ids, so two bundles describing one match with DIFFERENT scores passed it silently —
-    # found by imreeyal's dogfood verification (N2, 2026-08-04), where a tied series was
-    # reported as 77 by one side and 75 by the other and the join said ALL SETS AGREE.
-    outcomes: dict[str, set[str]] = {}
-    for directory in directories:
-        for path in Path(directory).rglob("result_*.json"):
-            try:
-                final = json.loads(path.read_text(encoding="utf-8")).get("final_result") or {}
-            except (ValueError, UnicodeDecodeError):
-                continue
-            for key in ("total_score", "sub_games_won", "winner_group"):
-                if key in final:
-                    outcomes.setdefault(key, set()).add(
-                        json.dumps(final[key], sort_keys=True, ensure_ascii=False))
-    for key, values in outcomes.items():
-        if not check(f"all results agree on final_result.{key}", len(values) <= 1,
-                     f"found {sorted(values)} — the contradictory-report shape rule 35 zeroes"):
+            print("\n  ^ two independently derived uids disagree. Neither side can see this "
+                  "alone —\n    each bundle is self-consistent. The usual cause is one side "
+                  "deriving from a\n    wider object than the flat negotiated terms. Do NOT "
+                  "report until it is resolved:\n    two counted reports naming one match by "
+                  "two uids zero BOTH teams (App. E r.35).")
+        # Every value a grader diffs between the two reports — the league fields included
+        # (they are graded inputs, and the join used to ignore all of them: imreeyal's N2,
+        # then anrbj666's P5-3) — plus the one machine-checkable must-match row, the
+        # consensus hash.
+        results = [doc for s in sides.values() for name, doc in s[gid].items()
+                   if name.startswith("result_")]
+        for key in JOIN_FIELDS:
+            values = {json.dumps((doc.get("final_result") or {}).get(key),
+                                 sort_keys=True, ensure_ascii=False)
+                      for doc in results if key in (doc.get("final_result") or {})}
+            if not check(f"[{gid}] results agree on final_result.{key}", len(values) <= 1,
+                         f"found {sorted(values)} — two reports of ONE match disagreeing is "
+                         f"the contradictory-report shape rule 35 zeroes"):
+                worst = 1
+        shas = {(doc.get("mutual_agreement") or {}).get("sha256")
+                for doc in results if doc.get("mutual_agreement")}
+        if not check(f"[{gid}] results agree on mutual_agreement.sha256", len(shas) <= 1,
+                     f"found {sorted(str(s) for s in shas)} — the settlement itself disagrees"):
             worst = 1
 
     print(f"\n{'ALL SETS AGREE' if worst == 0 else 'CROSS-TEAM JOIN FAILED'}")
@@ -225,13 +261,49 @@ def _selftest() -> int:
         fr["sub_games"] = [{"sub_game_number": 1, "score": {a: 10, b: 5}}]
         fr["final_result"] = {"total_score": {a: 10, b: 5}, "winner_group": a}
 
+    def tie_fraud(data):
+        """P5-4: `series_tie: true` used to be a free +2 on a series nobody tied. The
+        allowance must demand COHERENCE: equal totals, null winner."""
+        fr = data[f"result_{gid}.json"]["final_result"]
+        fr["total_score"] = {a: 22, b: 7}
+        fr["series_tie"] = True
+
+    def winner_is_loser(data):
+        """P5-2: winner_group must be the side the totals say won."""
+        data[f"result_{gid}.json"]["final_result"]["winner_group"] = b
+
+    def negative_count(data):
+        """P5-2: a game count below zero is arithmetic nonsense whatever the posture."""
+        data[f"result_{gid}.json"]["final_result"]["games_played_including_this"] = {a: 1, b: -7}
+
+    def diversity_to_loser(data):
+        """P5-2: the App. F reward is for a VICTORY over a new group — never the loser's."""
+        fr = data[f"result_{gid}.json"]["final_result"]
+        fr["winner_group"] = a
+        fr["first_meeting_between_groups"] = True
+        fr["diversity_reward_applied"] = {a: False, b: True}
+
+    def friendly_posture(data):
+        """The disarmed posture must stay LEGAL: unbumped counts, all-false diversity, a
+        first meeting and a winner (PAIRING-PLAYBOOK 4d)."""
+        fr = data[f"result_{gid}.json"]["final_result"]
+        fr["winner_group"] = a
+        fr["first_meeting_between_groups"] = True
+        fr["games_played_including_this"] = {a: 0, b: 0}
+        fr["diversity_reward_applied"] = {a: False, b: False}
+
     cases = [("a clean set", None, 0),
              ("a minted game_uid in the result", mint, 1),
              ("a CONSISTENT uid derived from the wrong input", wrong_input, 1),
              ("a self-first (unsorted) game_id", self_first, 1),
              ("a declared total that is not the sum", bad_total, 1),
              ("an honestly tied series declaring the App. F +2", honest_tie, 0),
-             ("the +2 without a series tie", tie_bonus_without_tie, 1)]
+             ("the +2 without a series tie", tie_bonus_without_tie, 1),
+             ("a declared tie over unequal totals", tie_fraud, 1),
+             ("winner_group naming the loser", winner_is_loser, 1),
+             ("a negative game count", negative_count, 1),
+             ("the diversity reward on the loser", diversity_to_loser, 1),
+             ("the friendly (disarmed) posture", friendly_posture, 0)]
     bad = 0
     with tempfile.TemporaryDirectory() as td:
         for i, (label, mutate, want) in enumerate(cases):
@@ -254,6 +326,26 @@ def _selftest() -> int:
             ok = got == want
             bad += not ok
             print(f"  {'PASS' if ok else 'FAIL'}  {label} -> exit {got} (want {want})")
+
+        # P5-1 (anrbj666): honest archives below the live set — a DIFFERENT match in a
+        # subdirectory — must not be read as a rule-35 dispute. The playbook's own layout.
+        d1 = build(Path(td) / "arch-a", None)
+        d2 = build(Path(td) / "arch-b", None)
+        c = "team-gimel"
+        arch_gid, arch_uid = ref.ref_game_id(a, c), ref.ref_game_uid(terms, a, c)
+        archive = d2 / "archive" / "older"
+        archive.mkdir(parents=True)
+        (archive / f"result_{arch_gid}.json").write_text(json.dumps({
+            "game_id": arch_gid, "game_uid": arch_uid, "links": {},
+            "groups": [{"group_id": a}, {"group_id": c}], "num_sub_games": 1,
+            "sub_games": [{"sub_game_number": 1, "score": {a: 5, c: 20}}],
+            "final_result": {"total_score": {a: 5, c: 20}, "winner_group": c},
+        }, indent=2) + "\n", encoding="utf-8")
+        got = verdict2(d1, d2)
+        ok = got == 0
+        bad += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  an archived DIFFERENT match below one side is "
+              f"history, not a dispute -> exit {got} (want 0)")
     print(f"\n{'SELFTEST PASSES' if bad == 0 else f'{bad} SELFTEST FAILURE(S)'}")
     return 1 if bad else 0
 
@@ -396,13 +488,93 @@ def main() -> int:
             # check refused that, and its own docstring says "do NOT report until resolved" —
             # telling a tied pair not to report is the rule-35 sanction this tool exists to
             # prevent. The allowance is exactly +2 and only under a declared series_tie.
+            final = res.get("final_result") or {}
             summed = {k: totals.get(k) for k in declared}
-            series_tie = bool((res.get("final_result") or {}).get("series_tie"))
+            series_tie = bool(final.get("series_tie"))
             tie_adjusted = {k: (None if v is None else v + 2) for k, v in summed.items()}
+            # The +2 allowance is CONDITIONED (anrbj666's P5-4: it used to be a free +2 for
+            # both sides on any series that merely SAID it tied): a declared tie must also
+            # have equal totals and no winner, or the tie flag is the lie.
+            tie_coherent = (series_tie
+                            and len(set(declared.values())) == 1
+                            and final.get("winner_group") is None)
+            delta = {k: (declared[k] - summed[k]) for k in declared
+                     if isinstance(declared.get(k), int) and isinstance(summed.get(k), int)}
+            hint = ""
+            if any(v == 10 for v in delta.values()):
+                hint = (" — a +10 delta looks like the DIVERSITY reward baked into the totals; "
+                        "it lands in the league standings, never in total_score (SPEC §6.2)")
             check("result: totals are the sum of the sub-game scores (derived, not declared; "
-                  "+2 each under a declared series tie, the reference's own behaviour)",
-                  summed == declared or (series_tie and tie_adjusted == declared),
-                  f"summed {totals}, declared {declared}, series_tie {series_tie}")
+                  "+2 each under a COHERENT series tie — equal totals, null winner)",
+                  summed == declared or (tie_coherent and tie_adjusted == declared),
+                  f"summed {totals}, declared {declared}, series_tie {series_tie}{hint}")
+
+            # --- the league fields: the only graded inputs, previously ungated ----------
+            # (anrbj666's P5-2.) Everything below is CONDITIONAL on the key being present,
+            # and posture-aware: a friendly legitimately declares unbumped counts and
+            # all-false diversity (PAIRING-PLAYBOOK 4d), so absence-of-award never fails —
+            # only arithmetic impossibilities and awards to the wrong side do.
+            row_groups = set(declared)
+            if "winner_group" in final:
+                winner = final["winner_group"]
+                if len(set(declared.values())) == 1:
+                    check("result: equal totals mean NO winner (and a declared series tie)",
+                          winner is None and series_tie,
+                          f"totals {declared} are equal but winner_group={winner!r}, "
+                          f"series_tie={series_tie}")
+                else:
+                    true_winner = max(declared, key=lambda g: declared[g])
+                    check("result: winner_group is the side with the higher total",
+                          winner == true_winner,
+                          f"totals {declared} but winner_group={winner!r}")
+            if "sub_games_won" in final and subs:
+                derived_won = {g: sum(1 for sg in subs
+                                      if isinstance(sg.get("score"), dict)
+                                      and all(x in sg["score"] for x in row_groups)
+                                      and sg["score"][g] == max(sg["score"].values())
+                                      and len(set(sg["score"].values())) > 1)
+                               for g in row_groups}
+                check("result: sub_games_won derives from the sub-game rows",
+                      {g: final["sub_games_won"].get(g) for g in row_groups} == derived_won,
+                      f"rows give {derived_won}, declared {final['sub_games_won']}")
+            if "ties" in final and subs and all("score" in sg for sg in subs):
+                # The full identity (anrbj666's P5-13): zeroed rows are credited to NOBODY, so
+                # the naive won+won+ties == num_sub_games fails any series with a technical
+                # loss. The true identity carries the zeroed rows explicitly.
+                zeroed = sum(1 for sg in subs
+                             if set(sg["score"].values()) == {0})
+                tie_rows = sum(1 for sg in subs
+                               if len(set(sg["score"].values())) == 1
+                               and set(sg["score"].values()) != {0})
+                won_total = sum(1 for sg in subs
+                                if len(set(sg["score"].values())) > 1)
+                check("result: won + tie rows + zeroed rows == num_sub_games (zeroed rows "
+                      "are credited to nobody)",
+                      won_total + tie_rows + zeroed == len(subs)
+                      and final["ties"] == tie_rows,
+                      f"rows: won {won_total}, ties {tie_rows}, zeroed {zeroed}, "
+                      f"declared ties {final['ties']}, num {len(subs)}")
+            if "tokens_total_series" in final and subs and all("tokens" in sg for sg in subs):
+                derived_tokens = {g: sum(sg["tokens"].get(g, 0) for sg in subs)
+                                  for g in row_groups}
+                check("result: tokens_total_series is the sum of the per-row tokens",
+                      {g: final["tokens_total_series"].get(g) for g in row_groups}
+                      == derived_tokens,
+                      f"rows sum to {derived_tokens}, declared {final['tokens_total_series']}")
+            if isinstance(final.get("games_played_including_this"), dict):
+                counts = final["games_played_including_this"]
+                check("result: game counts are non-negative integers",
+                      all(isinstance(v, int) and not isinstance(v, bool) and v >= 0
+                          for v in counts.values()),
+                      f"declared {counts}")
+            if isinstance(final.get("diversity_reward_applied"), dict):
+                awarded_to = [g for g, v in final["diversity_reward_applied"].items() if v]
+                check("result: a diversity reward goes only to the WINNER of a FIRST meeting "
+                      "(all-false is always legal — the friendly posture)",
+                      all(g == final.get("winner_group") for g in awarded_to)
+                      and (not awarded_to or bool(final.get("first_meeting_between_groups"))),
+                      f"awarded to {awarded_to}, winner {final.get('winner_group')!r}, "
+                      f"first_meeting {final.get('first_meeting_between_groups')!r}")
         listed = {sg.get("sub_game_number") for sg in subs}
         logged = {int(nn) for _, nn, _ in found["log"] if nn is not None}
         if listed and logged:
