@@ -13,6 +13,8 @@
         "barriers_max": 14,
         "setting": "Haifa",
         "hint_max_words": 15,
+        "axis_origin_corner": "top-left",
+        "axis_start_index": 0,
         "thief_start": [
           3,
           3
@@ -25,7 +27,7 @@
       },
       "group_a": "team-aleph",
       "group_b": "team-bet",
-      "game_uid": "4ef6aeda-3051-18a0-339c-6869f43d77aa",
+      "game_uid": "1e73c318-5b29-4a7b-1c60-ecb8286265f0",
       "game_id": "team-aleph-vs-team-bet",
       "note": "canonical order"
     },
@@ -40,6 +42,8 @@
         "barriers_max": 14,
         "setting": "Haifa",
         "hint_max_words": 15,
+        "axis_origin_corner": "top-left",
+        "axis_start_index": 0,
         "thief_start": [
           3,
           3
@@ -52,7 +56,7 @@
       },
       "group_a": "team-bet",
       "group_b": "team-aleph",
-      "game_uid": "4ef6aeda-3051-18a0-339c-6869f43d77aa",
+      "game_uid": "1e73c318-5b29-4a7b-1c60-ecb8286265f0",
       "game_id": "team-aleph-vs-team-bet",
       "note": "groups swapped -> identical uid AND identical game_id (both sorted)"
     }

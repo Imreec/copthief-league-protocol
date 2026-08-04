@@ -156,6 +156,10 @@ def _selftest() -> int:
         return subprocess.run([sys.executable, __file__, str(d), "--quiet"],
                               capture_output=True, text=True).returncode
 
+    def verdict2(d1: Path, d2: Path) -> int:
+        return subprocess.run([sys.executable, __file__, str(d1), str(d2), "--quiet"],
+                              capture_output=True, text=True).returncode
+
     def mint(data):
         data[f"result_{gid}.json"]["game_uid"] = "2f0c25a9-0000-4000-8000-000000000000"
 
@@ -204,6 +208,20 @@ def _selftest() -> int:
     with tempfile.TemporaryDirectory() as td:
         for i, (label, mutate, want) in enumerate(cases):
             got = verdict(build(Path(td) / f"case{i}", mutate))
+            ok = got == want
+            bad += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  {label} -> exit {got} (want {want})")
+        # The cross-team JOIN — "the check neither team can run alone" — previously ran in no
+        # selftest and no CI job outside a path-filtered compose run, so a regression in it
+        # would have landed green (anrbj666's audit, E4). Both directions now pinned here.
+        join_cases = [
+            ("two sides of one match join", None, 0),
+            ("two sides whose uids diverge refuse the join", mint, 1),
+        ]
+        for i, (label, mutate, want) in enumerate(join_cases):
+            d1 = build(Path(td) / f"join{i}a", None)
+            d2 = build(Path(td) / f"join{i}b", mutate)
+            got = verdict2(d1, d2)
             ok = got == want
             bad += not ok
             print(f"  {'PASS' if ok else 'FAIL'}  {label} -> exit {got} (want {want})")

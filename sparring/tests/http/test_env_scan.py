@@ -5,6 +5,7 @@ transitive tree are actually installed — which is exactly the situation that f
 guards against.
 """
 
+import os
 import unittest
 
 from sparring.guards import no_mail
@@ -18,6 +19,12 @@ def flagged(name: str) -> bool:
 
 
 class TestEnvironmentScan(unittest.TestCase):
+    @unittest.skipUnless(
+        os.environ.get("CI"),
+        "asserts a property of the AMBIENT site-packages, which only CI's environment "
+        "guarantees — a contributor with (say) google-auth-oauthlib installed for unrelated "
+        "work would go red for a reason that is not their code (anrbj666's audit, E8). The "
+        "runtime guard still scans and refuses at sparring startup regardless of this skip.")
     def test_the_installed_environment_is_clean(self):
         self.assertEqual(no_mail._scan_environment(), [])
 

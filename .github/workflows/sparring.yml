@@ -15,11 +15,13 @@ on:
     paths:
       - "sparring/**"
       - "verify_vectors.py"
+      - "tools/**"
       - ".github/workflows/sparring.yml"
   pull_request:
     paths:
       - "sparring/**"
       - "verify_vectors.py"
+      - "tools/**"
       - ".github/workflows/sparring.yml"
 
 jobs:

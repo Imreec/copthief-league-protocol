@@ -58,7 +58,10 @@ class Inbox:
         arrival = {"step": int(message["step"]), "commit": message["commit"]}
         decision = kitref.delivery_decision(self._state(), arrival)
 
-        if decision == "absorb":
+        if decision in ("absorb", "discard"):
+            # discard: below `next` and never played — a stale index that can never become
+            # applicable (SPEC section 7.1, the row anrbj666's audit added). Counted with
+            # absorbed traffic: tolerated, applied nowhere, renews nothing.
             self.absorbed += 1
             return []
         if decision == "equivocation":

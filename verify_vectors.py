@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import sys
 import uuid
 from pathlib import Path
@@ -355,6 +356,13 @@ def ref_delivery_decision(state: dict, arrival: dict) -> str:
         return "absorb" if seen == commit else "equivocation"
     if step == state["next"]:
         return "apply"
+    if step < state["next"]:
+        # Below `next` and never played: this step can never become applicable — `next` only
+        # advances past steps that were accepted, so a stale index that was not accepted is
+        # malformed (step 0, a voided attempt's leftover), not late. An earlier revision let it
+        # fall through to "buffer", where it sat forever and two conformant receivers could
+        # legitimately diverge on it — found by anrbj666's 2026-08-04 audit.
+        return "discard"
     if step - state["next"] <= state["window"]:
         return "buffer"
     return "violation"
@@ -622,6 +630,14 @@ def run() -> int:
         by_name["multiplicative_book_v1"]["status"] == "PROMOTED"
         and by_name["reference-v3"]["status"] == "PROMOTED"
         and by_name["belief"]["status"] == "PROMOTED")
+    # The declaration example was the one hash-bearing block this checker never touched
+    # (anrbj666's audit, D5): only regen-diff protected it. Now it is asserted like the rest.
+    example = lm["declaration_example"]
+    failures += not check(
+        "the declaration example's hashes equal the registered docs",
+        example["scent_model_sha256"] == by_name["multiplicative_book_v1"]["sha256"]
+        and example["wire_shape_sha256"] == by_name["reference-v3"]["sha256"]
+        and example["info_mode_sha256"] == by_name["belief"]["sha256"])
     for i, v in enumerate(lm["refusal_rule"]):
         got = ref_lock_decision(v["ours"], v["theirs"])
         failures += not check(f"refusal rule #{i} ({v['note']})", got == v["decision"], f"got {got}")
@@ -784,10 +800,35 @@ def run() -> int:
           and ref_field != book_field and dv["identical"] is False)
     failures += not check("named models pinned + observably different", ok)
     # The kernel is pinned verbatim BECAUSE a fitted Gaussian is not safely reproducible.
+    # RECOMPUTED, not read back: an earlier revision of this check trusted the fixture's own
+    # stored booleans — "a value the fixture asserts about itself", the exact pattern refused
+    # elsewhere in this file (found by anrbj666's 2026-08-04 audit). Each probe sigma is now
+    # re-expanded into the 5x5 Gaussian, quantized per its mode, and compared against the
+    # printed kernel here — and cross-checked: each sigma must FAIL under the other mode's
+    # quantization, which is what "the windows are disjoint" actually claims.
     probe = sb["closed_form_probe"]
-    ok = (probe["round"]["reproduces_printed_kernel"] and probe["trunc"]["reproduces_printed_kernel"]
-          and probe["windows"]["round"][1] < probe["windows"]["trunc"][0])
-    failures += not check("closed-form probe: both quantizations fit, windows disjoint", ok)
+    kernel = sb["kernel"]
+
+    def _quantized(sigma2: float, mode: str) -> list[list[float]]:
+        rows = []
+        for i in range(5):
+            row = []
+            for j in range(5):
+                v = 0.9 * math.exp(-((i - 2) ** 2 + (j - 2) ** 2) / (2 * sigma2))
+                row.append(round(v, 2) if mode == "round" else math.floor(v * 100) / 100)
+            rows.append(row)
+        return rows
+
+    s_round = probe["round"]["sigma_squared"]
+    s_trunc = probe["trunc"]["sigma_squared"]
+    failures += not check(
+        "closed-form probe RECOMPUTES: each sigma reproduces the kernel under its own "
+        "quantization and fails under the other's, windows disjoint",
+        _quantized(s_round, "round") == kernel
+        and _quantized(s_trunc, "trunc") == kernel
+        and _quantized(s_round, "trunc") != kernel
+        and _quantized(s_trunc, "round") != kernel
+        and probe["windows"]["round"][1] < probe["windows"]["trunc"][0])
     op = sb["ordering_probe"]
     ok = any(not c["equal"] for c in op["cases"]) and all(
         ((1 - rho) * c["tau"] + c["delta"] == c["pinned_order"])
