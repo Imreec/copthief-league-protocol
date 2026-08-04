@@ -1,12 +1,35 @@
 # Cop–Thief League Interop Kit
 
-**Everything you need to be sure your agent can finish a clean game against ours — verified on
-your own machine, before you ever contact us.**
+**Everything two teams need to go from "never met" to a clean, counted game — verified on your
+own machine, before you ever talk to an opponent. Any team that passes these checks can play any
+other team that passes them.**
 
 For the official final-project assignment: *Distributed Cops-and-Robbers over a Peer-to-Peer
 Network*, Dr. Yoram Reuven Segal, book v3.0.0 (Orchestration of AI Agents, University of Haifa).
 
-### → [**Start here**](docs/START-HERE.md) — four commands, four pass criteria, no account and no conversation with us.
+## In plain words
+
+- **The danger.** In this game your opponent checks your bytes: every move you make is hashed,
+  and at the end of each game they re-hash your log with *their* code. Two honest agents whose
+  JSON differs by one escaped character will each conclude the other cheated — and the rules
+  score that **zero for both teams**. Most of what can go wrong in the league is this, in some
+  disguise.
+- **What this kit is.** A set of checks you run locally, tonight, that prove your bytes will
+  match — before any opponent is involved. Pass them, and you and every other team that passes
+  them can schedule a game knowing the audits will come out clean.
+- **What else is in the box.** A practice opponent that plays full series against you locally
+  (and refuses bad handshakes the way a real team would, telling you exactly why); a playbook
+  covering the whole road from "first hello" between two teams to the one counted game —
+  including the **friendly games** the book itself recommends playing first; and the mistakes
+  that already cost two real teams burned evenings, written up so they don't cost you yours.
+- **Why it pays.** Your league grade is driven by how many *distinct* opponents you finish
+  clean games with. Every team using this kit is an opponent you can play with confidence —
+  and that cuts both ways, which is exactly why we published it.
+- **Proof, not promises.** Two independent teams walked exactly this path — friendlies first,
+  then a counted series that ran six sub-games in 78 seconds with every audit clean and both
+  reports byte-agreeing. The details, including the score, are below.
+
+### → [**Start here**](docs/START-HERE.md) — four commands, four pass criteria, no account and no conversation with anyone.
 
 ```bash
 git clone https://github.com/Imreec/copthief-league-protocol && cd copthief-league-protocol
@@ -206,7 +229,11 @@ looked at it.
 7. Rehearse a whole series against the [sparring peer](sparring/) — a real opponent over MCP,
    full rulebook, no mail. It puts Hebrew and an emoji on the wire on purpose, so a serializer
    that escapes non-ASCII fails *there* rather than at a real opponent's audit.
-8. The real acceptance test: feed a partner's revealed log to your verifier and yours to theirs —
+8. Ready for a real team? Open with the first-contact message in
+   [`docs/PAIRING-PLAYBOOK.md`](docs/PAIRING-PLAYBOOK.md) (an issue on this repo reaches us),
+   then play **friendlies** — full-discipline warm-ups, reports to yourselves only — until the
+   report diff passes field-by-field in *both* directions. Only then arm the one counted game.
+9. The real acceptance test: feed a partner's revealed log to your verifier and yours to theirs —
    both audits must pass with zero `tamper_forfeit`.
 
 ## Enhancements (opt-in)
