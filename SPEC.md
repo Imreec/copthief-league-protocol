@@ -520,13 +520,17 @@ behaviour: a lock should not claim to bind what it does not.
 > asserts they still equal the registered docs — so the evidence for the promotion is itself a
 > check rather than a sentence.
 >
-> Two honest limits from the same run. **`info_mode` travelled as a bare string** (`"belief"`), not
-> as a doc hash, so the `belief` / `exact` registrations are *not* reproduced — only the intent
-> was; a pair that wants the mode comparable must first agree whether it travels as a string or a
-> hash. And a **fourth family, `hardware_spec_sha256`, was observed on the wire and is deliberately
-> not registered here**: the doc underneath it is unknown to us, and registering a family whose
-> field set we have not seen would reintroduce exactly the ad-hoc-dict problem this section exists
-> to remove.
+> Two honest limits from that first run — one since discharged. **`info_mode` travelled as a bare
+> string** (`"belief"`) on 2026-07-25, not as a doc hash, so at that point the `belief` / `exact`
+> registrations were not reproduced — only the intent was. **Superseded from 2026-08-01:** both
+> implementations declared `info_mode_sha256` **byte-identical to this registry's `belief` doc**
+> in every handshake of the five-friendly campaign and the 2026-08-04 counted series, both role
+> directions — the same evidence class that promoted `wire_shape: reference-v3`, and the `belief`
+> registration is now `PROMOTED` on it (`vectors/locked_model.json` carries the observed hash and
+> the checker asserts it still equals the registered doc). The other limit stands: a **fourth
+> family, `hardware_spec_sha256`, was observed on the wire and is deliberately not registered
+> here** — the doc underneath it is unknown to us, and registering a family whose field set we
+> have not seen would reintroduce exactly the ad-hoc-dict problem this section exists to remove.
 
 ### 7.1 At-least-once delivery — the receiver contract (PROMOTED)
 
@@ -663,9 +667,14 @@ forfeits that game to itself. `vectors/uid_declaration.json` pins the table, and
 example of the failure: the same derivation over the flat terms and over a wider config produces
 **two valid, stable uuids**, which is precisely why the wrong one is hard to notice.
 
-Status is **PROPOSED** — one implementation intends it, the other is invited, and a cross-team
-warm-up is the promotion path (see [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)). Do not assume an
-opponent implements it.
+Status is **PROPOSED**, but no longer single-sided: from the 2026-08-01 warm-up through the
+**2026-08-04 counted series**, *both* implementations declared the derived uid top-level at
+negotiate in every handshake, both role directions, values matching by independent derivation
+(the observable: the opponent's inbound greetings in the archived records carry `game_uid`
+beside `role` and `sub_game_number`). What keeps this short of `PROMOTED` is the refusal half of
+the table: no live mismatch has ever fired it, and only one implementation's test suite pins the
+refuse row — a behaviour fixture promotes on *decisions*, not on the happy path (see
+[`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)). Do not assume an opponent refuses on mismatch.
 
 *Finding credited to both teams: **Imreec** observed that the divergence was silent for the whole
 series; **anrbj666**'s root-cause analysis established the mechanism — and corrected our first

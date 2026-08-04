@@ -298,8 +298,8 @@
       },
       "declared_as": "info_mode_sha256",
       "sha256": "020947daeeb3f73494af9b04201326791742c7184085456e3517d21981ee1202",
-      "status": "PROPOSED",
-      "evidence": "declared live, but as a bare string rather than a doc hash — see live_reproduction below"
+      "status": "PROMOTED",
+      "evidence": "declared as `info_mode_sha256` by BOTH independent implementations, byte-identical to this registration, in every handshake from the 2026-08-01 warm-up through the 2026-08-04 counted series (both role directions) — see live_reproduction below, where the checker asserts the observed hash still equals the registered doc. On 2026-07-25 it had travelled as a bare string; that limit is discharged"
     },
     {
       "doc": {
@@ -427,13 +427,13 @@
     }
   ],
   "live_reproduction": {
-    "note": "the mechanism, exercised end-to-end by two independent implementations: a six-sub-game cross-team series on 2026-07-25 (imreeyal / anrbj666), mutual audits clean both ways. Their peer's inbound greeting declared the two hashes below, and each is byte-identical to this kit's registered doc — which is the whole claim of this section, since a bare hash over an ad-hoc dict would have differed while describing the same model. The mechanism also demonstrably REFUSED: an earlier attempt that night aborted on a scent lock mismatch, before any game was played.",
+    "note": "the mechanism, exercised end-to-end by two independent implementations (imreeyal / anrbj666) across two cited runs. Run 1, 2026-07-25: a full six-sub-game cross-team series, mutual audits clean both ways; their peer's inbound greeting declared the scent_model and wire_shape hashes below, each byte-identical to this kit's registered doc — the whole claim of this section, since a bare hash over an ad-hoc dict would have differed while describing the same model. The mechanism also demonstrably REFUSED: an earlier attempt that night aborted on a scent lock mismatch, before any game was played. Run 2, the 2026-08-01..04 campaign (five friendly series and the 2026-08-04 counted series): every handshake in both role directions additionally declared info_mode_sha256, byte-identical to the registered `belief` doc — on 2026-07-25 the mode had travelled as a bare string, a limit discharged by run 2.",
     "observed_declarations_matching_registrations": {
       "scent_model_sha256": "934c220d5bf62acaa3297c6c9d723ea954c220260b02292ca17f6d5daef9f4d9",
-      "wire_shape_sha256": "229ae6487a418c3fcb6da9be404de2f2533c288ebc228811bff6dedc4164d6f7"
+      "wire_shape_sha256": "229ae6487a418c3fcb6da9be404de2f2533c288ebc228811bff6dedc4164d6f7",
+      "info_mode_sha256": "020947daeeb3f73494af9b04201326791742c7184085456e3517d21981ee1202"
     },
     "observed_but_not_registered_here": {
-      "info_mode": "declared as a BARE STRING ('belief'), not as a doc hash. So the info_mode family's registrations are not reproduced — only the intent is. A pair that wants info_mode comparable must agree whether it travels as a string or a hash; this kit registers the hash form and the observed run used the string form.",
       "hardware_spec_sha256": "a FOURTH family observed on the wire that this kit does not register. It is not added here on the strength of one observation: the doc underneath it is unknown, and registering a family whose field set we have not seen would reintroduce exactly the ad-hoc-dict problem this section removes."
     }
   }
