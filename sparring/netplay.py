@@ -251,10 +251,9 @@ def _play_one(peer: SubGamePeer, role: Role, cfg: SparConfig, budgets, clock) ->
     saw_their_turn = False
     for _ in range(cfg.max_steps * 2):
         if our_move_first:
-            message = peer.take_turn()
-            peer.transport.send_turn(message.to_wire())
-            peer.machine.to(PeerState.VERIFYING)
-            peer.machine.to(PeerState.WAITING_FOR_OPPONENT)
+            own = _take_own_turn(peer, role)
+            if own is not None:
+                return own
 
         raw = poll_until(peer.transport.poll_turn, budgets.turn_timeout,
                          budgets.poll_interval, clock)
@@ -281,17 +280,35 @@ def _play_one(peer: SubGamePeer, role: Role, cfg: SparConfig, budgets, clock) ->
                 return verdict
 
         if not our_move_first:
-            message = peer.take_turn()
-            peer.transport.send_turn(message.to_wire())
-            peer.machine.to(PeerState.VERIFYING)
-            peer.machine.to(PeerState.WAITING_FOR_OPPONENT)
-            own = peer.engine.self_captured()
+            own = _take_own_turn(peer, role)
             if own is not None:
-                final = peer.terminal_message()
-                if final is not None:
-                    peer.transport.send_turn(final.to_wire())
                 return own
-            if peer.engine.survived():
-                # The survival claim already rode out on the message just sent.
-                return Outcome.SURVIVAL
     return Outcome.SURVIVAL
+
+
+def _take_own_turn(peer: SubGamePeer, role: Role) -> Outcome | None:
+    """Take and send our half-turn; return an outcome if OUR OWN move ended the game.
+
+    The self-checks are the THIEF's, and they must follow the thief's move wherever it sits in
+    the turn: self-capture (walking into a barrier fold) concedes with a terminal message, and
+    reaching the survival threshold returns with the claim that already rode out on the message
+    just sent. The first thief-first cut of `_play_one` left these checks in the second-mover
+    branch — where the thief no longer was — so a surviving thief never returned, kept polling
+    for a turn that would never come, and timed out a sub-game it had won; its opponent's audit
+    poll then starved too. CI's two-container series caught it within the hour.
+    """
+    message = peer.take_turn()
+    peer.transport.send_turn(message.to_wire())
+    peer.machine.to(PeerState.VERIFYING)
+    peer.machine.to(PeerState.WAITING_FOR_OPPONENT)
+    if role is Role.THIEF:
+        own = peer.engine.self_captured()
+        if own is not None:
+            final = peer.terminal_message()
+            if final is not None:
+                peer.transport.send_turn(final.to_wire())
+            return own
+        if peer.engine.survived():
+            # The survival claim already rode out on the message just sent.
+            return Outcome.SURVIVAL
+    return None
