@@ -615,11 +615,13 @@ def run() -> int:
     failures += not check(
         "the live-declared hashes equal the registered docs",
         observed["scent_model_sha256"] == by_name["multiplicative_book_v1"]["sha256"]
-        and observed["wire_shape_sha256"] == by_name["reference-v3"]["sha256"])
+        and observed["wire_shape_sha256"] == by_name["reference-v3"]["sha256"]
+        and observed["info_mode_sha256"] == by_name["belief"]["sha256"])
     failures += not check(
-        "the two registrations that evidence names are the promoted ones",
+        "the three registrations that evidence names are the promoted ones",
         by_name["multiplicative_book_v1"]["status"] == "PROMOTED"
-        and by_name["reference-v3"]["status"] == "PROMOTED")
+        and by_name["reference-v3"]["status"] == "PROMOTED"
+        and by_name["belief"]["status"] == "PROMOTED")
     for i, v in enumerate(lm["refusal_rule"]):
         got = ref_lock_decision(v["ours"], v["theirs"])
         failures += not check(f"refusal rule #{i} ({v['note']})", got == v["decision"], f"got {got}")

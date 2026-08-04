@@ -482,8 +482,13 @@ def gen_locked_model() -> None:
                                      "hash"),
         "bookletter-v3": ("PROPOSED", "one implementation; four preimages still unpinned, so the "
                                       "hash will change when they are settled"),
-        "belief": ("PROPOSED", "declared live, but as a bare string rather than a doc hash — see "
-                               "live_reproduction below"),
+        "belief": ("PROMOTED", "declared as `info_mode_sha256` by BOTH independent "
+                               "implementations, byte-identical to this registration, in every "
+                               "handshake from the 2026-08-01 warm-up through the 2026-08-04 "
+                               "counted series (both role directions) — see live_reproduction "
+                               "below, where the checker asserts the observed hash still equals "
+                               "the registered doc. On 2026-07-25 it had travelled as a bare "
+                               "string; that limit is discharged"),
         "exact": ("PROPOSED", "registered as the counterpart of `belief`; no second "
                               "implementation has declared it"),
         "none": ("PROPOSED", "the unbound default. It describes what every implementation "
@@ -536,24 +541,25 @@ def gen_locked_model() -> None:
             for o, t, note in decisions
         ],
         "live_reproduction": {
-            "note": "the mechanism, exercised end-to-end by two independent implementations: a "
-                    "six-sub-game cross-team series on 2026-07-25 (imreeyal / anrbj666), mutual "
-                    "audits clean both ways. Their peer's inbound greeting declared the two "
-                    "hashes below, and each is byte-identical to this kit's registered doc — "
-                    "which is the whole claim of this section, since a bare hash over an ad-hoc "
-                    "dict would have differed while describing the same model. The mechanism "
-                    "also demonstrably REFUSED: an earlier attempt that night aborted on a scent "
-                    "lock mismatch, before any game was played.",
+            "note": "the mechanism, exercised end-to-end by two independent implementations "
+                    "(imreeyal / anrbj666) across two cited runs. Run 1, 2026-07-25: a full "
+                    "six-sub-game cross-team series, mutual audits clean both ways; their "
+                    "peer's inbound greeting declared the scent_model and wire_shape hashes "
+                    "below, each byte-identical to this kit's registered doc — the whole claim "
+                    "of this section, since a bare hash over an ad-hoc dict would have differed "
+                    "while describing the same model. The mechanism also demonstrably REFUSED: "
+                    "an earlier attempt that night aborted on a scent lock mismatch, before any "
+                    "game was played. Run 2, the 2026-08-01..04 campaign (five friendly series "
+                    "and the 2026-08-04 counted series): every handshake in both role "
+                    "directions additionally declared info_mode_sha256, byte-identical to the "
+                    "registered `belief` doc — on 2026-07-25 the mode had travelled as a bare "
+                    "string, a limit discharged by run 2.",
             "observed_declarations_matching_registrations": {
                 "scent_model_sha256": by_name["multiplicative_book_v1"],
                 "wire_shape_sha256": by_name["reference-v3"],
+                "info_mode_sha256": by_name["belief"],
             },
             "observed_but_not_registered_here": {
-                "info_mode": "declared as a BARE STRING ('belief'), not as a doc hash. So the "
-                             "info_mode family's registrations are not reproduced — only the "
-                             "intent is. A pair that wants info_mode comparable must agree "
-                             "whether it travels as a string or a hash; this kit registers the "
-                             "hash form and the observed run used the string form.",
                 "hardware_spec_sha256": "a FOURTH family observed on the wire that this kit does "
                                         "not register. It is not added here on the strength of "
                                         "one observation: the doc underneath it is unknown, and "
@@ -651,8 +657,12 @@ def gen_uid_declaration() -> None:
                        "and wrong only against the opponent — invisible until two reports are "
                        "diffed, after the games are over. Observed live across a full six-sub-game "
                        "series on 2026-07-25. Behaviour, not bytes, so it is pinned as a truth "
-                       "table. PROPOSED: one implementation intends it and the other is invited; "
-                       "a cross-team warm-up is the promotion path. Finding credited to both "
+                       "table. PROPOSED: both implementations have DECLARED it live since "
+                       "2026-08-01 (every handshake through the 2026-08-04 counted series, both "
+                       "role directions, values matching by independent derivation), but the "
+                       "REFUSE row has never fired cross-team and only one implementation's "
+                       "tests pin it — a behaviour table promotes on decisions, not on the "
+                       "happy path. Finding credited to both "
                        "teams — imreeyal observed that the divergence was silent for the whole "
                        "series, anrbj666's root-cause analysis made the mechanism precise.",
         "field": {

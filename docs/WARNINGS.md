@@ -108,10 +108,12 @@ The proposed closure — SPEC §7.3, and deliberately the same shape as the pair
   reference peer declares nothing at all, and a guard that fail-fasts on silence forfeits that game
   to itself.
 
-Status is **PROPOSED**: one implementation intends it and the other is invited, so under
-[`GOVERNANCE.md`](GOVERNANCE.md) it has one implementation behind it until a cross-team run
-reproduces it. Do not assume an opponent implements it — but if you do, a wrong-input uid becomes a
-refusal at the handshake instead of a contradiction in two reports the next morning.
+Status is **PROPOSED**: both implementations have declared it live since 2026-08-01 (every
+handshake through the 2026-08-04 counted series, values matching), but the **refuse** row of the
+table has never fired cross-team and only one implementation's tests pin it, so under
+[`GOVERNANCE.md`](GOVERNANCE.md) the behaviour table is not yet reproduced. Do not assume an
+opponent refuses on mismatch — but declare it anyway: a wrong-input uid then becomes a refusal at
+the handshake instead of a contradiction in two reports the next morning.
 
 *Finding credited to both teams: imreeyal observed that the divergence was silent for the entire
 series; anrbj666's root-cause analysis made the mechanism precise.*

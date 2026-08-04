@@ -132,16 +132,24 @@ itself. The registry exists so that cannot recur.
 | `wire_shape: reference-v3` — [`vectors/locked_model.json`](../vectors/locked_model.json), SPEC §7 | 2026-07-26 | Two independent implementations played the whole run below on this shape, and the opponent declared a `wire_shape_sha256` **byte-identical to the registered doc**. The checker asserts that equality, so this row is verified rather than asserted. |
 
 | `game_id` = the sorted pair — [`vectors/game_uid.json`](../vectors/game_uid.json), SPEC §4 | 2026-07-27 | Reference-derived, and **independently matched by two implementations**: anrbj666's `build_game_id` sorts the pair in their own code, written before this kit pinned it, and the imreeyal implementation adopted the sorted derivation on 2026-07-27. Neither agreed it with the other. |
+| `info_mode: belief` — [`vectors/locked_model.json`](../vectors/locked_model.json), SPEC §7 | 2026-08-04 | Both implementations declared `info_mode_sha256` **byte-identical to the registered doc** in every handshake of run 2 — the five-friendly campaign and the counted series, both role directions. Same evidence class as the `wire_shape` row, and verified the same way: the fixture carries the observed hash and the checker asserts it still equals the registered doc. (In run 1 the mode travelled as a bare string; that limit is discharged, and is why this row post-dates the others.) |
 
-**The run** the first four rows cite: the first fully autonomous cross-team series, **2026-07-25** —
+**The runs** these rows cite. **Run 1, 2026-07-25**: the first fully autonomous cross-team series —
 six sub-games under one wire `game_uid`, roles alternating, mutual audits clean both ways,
-imreeyal vs anrbj666. Per the rule above, the run is cited and not the path: its logs live in a
-private implementation repository.
+imreeyal vs anrbj666. **Run 2, 2026-08-01 → 04**, same pairing: a five-friendly campaign and then
+the pairing's **counted series** (2026-08-04) — six clean mutual audits, zero refusals, one
+result-only report per team, and the two reports' `mutual_agreement.sha256` byte-identical.
+Per the rule above, the runs are cited and not the paths: their logs live in private
+implementation repositories.
 
-**Currently `PROPOSED`**, with one implementation behind it: the **`game_uid` declaration** at
-negotiate (SPEC §7.3, [`vectors/uid_declaration.json`](../vectors/uid_declaration.json)). One
-implementation intends it and the other is invited; a cross-team warm-up is the promotion path.
-Recorded here so the difference between "agreed" and "proposed" stays visible.
+**Currently `PROPOSED`**: the **`game_uid` declaration** at negotiate (SPEC §7.3,
+[`vectors/uid_declaration.json`](../vectors/uid_declaration.json)). Run 2 strengthened it without
+promoting it: **both** implementations declared the derived uid in every handshake, values
+matching — but the fixture is a behaviour table, and its **refuse** row has never fired
+cross-team; only one implementation's tests pin it. A behaviour table promotes on decisions, not
+on the happy path, so it stays `PROPOSED` until a cross-team drill (or a live mismatch, which
+nobody should wish for) exercises the refusal. Recorded here so the difference between "declared
+by both" and "reproduced" stays visible.
 
 **Currently `PROPOSED` with *zero* implementations** — the weakest thing this repo publishes, and
 labelled so rather than dressed up: the **`smell_binding` family** (SPEC §7.4,
@@ -152,12 +160,13 @@ bar is the ordinary one **plus a live warm-up drill**, because it changes a comm
 peers must change what they seal on the same turn, and a mid-series divergence there is the
 contradiction App. E rule 35 zeroes both teams for. It never debuts in a counted game.
 
-Not promoted from the same run, and why: **`info_mode`** travelled as a bare string rather than a
-doc hash, so the `belief` / `exact` registrations were not reproduced — only the intent was.
-**`hardware_spec_sha256`** was observed on the wire as a fourth family and is deliberately not
-registered; the doc underneath it is unknown to us, and registering a family whose field set we
-have not seen would reintroduce the ad-hoc-dict problem §7 exists to remove. **`bookletter-v3`**
-keeps four unpinned preimages and stays `PROPOSED`.
+Still not promoted, and why: **`info_mode: exact`** — run 2 promoted only `belief`, the mode both
+teams actually declared; promoting the counterpart nobody has put on the wire would be exactly
+the promotion-by-association the bar forbids. **`hardware_spec_sha256`** was observed on the wire
+as a fourth family and is deliberately not registered; the doc underneath it is unknown to us,
+and registering a family whose field set we have not seen would reintroduce the ad-hoc-dict
+problem §7 exists to remove. **`bookletter-v3`** keeps four unpinned preimages and stays
+`PROPOSED`.
 
 ---
 
