@@ -20,6 +20,12 @@ jobs:
           python examples/gen_pairing_artifacts.py
       - name: Pairing bundle still passes the artifact gate
         run: python tools/check_artifacts.py examples/pairing-artifacts
+
+      - name: Pairing bundle's games are still playable
+        # check_artifacts never opens a sealed payload, so it cannot see a log that
+        # contradicts its own summary. This walks both sides' moves and requires each
+        # sub-game to reach the outcome its row declares.
+        run: python examples/verify_pairing_physics.py
       - name: Verify all fixtures (core + enhancements)
         run: python verify_vectors.py
       - name: Tools still catch what they claim to

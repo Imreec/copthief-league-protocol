@@ -1,7 +1,13 @@
 {
-  "_schema": "Final series result, PAIRING-PLAYBOOK example: the emailed binding report (book §9.3.3 — its full example IS the results file). Static team metadata is NOT repeated here; it lives in the declaration.",
+  "_schema": "Final series result - the emailed binding report (book section 9.3.3). EMAIL THE COMPACT CANONICAL BYTES, not this pretty-print (SPEC section 2). The league fields below are ARMED because this is a counted series; a warm-up that copies them armed is a false declaration (App. E rules 37-38).",
   "schema_version": "1.1",
   "report_type": "final_game_result",
+  "league": {
+    "authority": "book App. E rule 52 — the one counted series of this pairing",
+    "counted": true,
+    "reason": "counted",
+    "_synthetic": "example bundle: no game was played to produce these bytes"
+  },
   "game_id": "team-aleph-vs-team-bet",
   "game_uid": "da4f6f1e-c9b0-6051-1485-b02030c5b1e6",
   "links": {
@@ -38,6 +44,7 @@
       "result": "capture",
       "winner_group": "team-aleph",
       "tie": false,
+      "steps": 6,
       "github_commit": {
         "team-aleph": "a1ef0000c0fc0fc0fc0fc0fc0fc0fc0fc0fc0f5c",
         "team-bet": "b2e70001de2de2de2de2de2de2de2de2de2de271"
@@ -62,14 +69,15 @@
     {
       "sub_game_number": 2,
       "roles": {
-        "team-bet": "police",
-        "team-aleph": "thief"
+        "team-aleph": "thief",
+        "team-bet": "police"
       },
       "started_at": "2026-08-04T01:00:20+03:00",
       "ended_at": "2026-08-04T01:00:29+03:00",
       "result": "survival",
       "winner_group": "team-aleph",
       "tie": false,
+      "steps": 35,
       "github_commit": {
         "team-aleph": "a1ef00017f17f17f17f17f17f17f17f17f17f13e",
         "team-bet": "b2e70000abcabcabcabcabcabcabcabcabcabc90"
@@ -102,6 +110,7 @@
       "result": "capture",
       "winner_group": "team-aleph",
       "tie": false,
+      "steps": 6,
       "github_commit": {
         "team-aleph": "a1ef0000c0fc0fc0fc0fc0fc0fc0fc0fc0fc0f5c",
         "team-bet": "b2e70001de2de2de2de2de2de2de2de2de2de271"
@@ -126,14 +135,15 @@
     {
       "sub_game_number": 4,
       "roles": {
-        "team-bet": "police",
-        "team-aleph": "thief"
+        "team-aleph": "thief",
+        "team-bet": "police"
       },
       "started_at": "2026-08-04T01:00:40+03:00",
       "ended_at": "2026-08-04T01:00:49+03:00",
       "result": "survival",
       "winner_group": "team-aleph",
       "tie": false,
+      "steps": 35,
       "github_commit": {
         "team-aleph": "a1ef00017f17f17f17f17f17f17f17f17f17f13e",
         "team-bet": "b2e70000abcabcabcabcabcabcabcabcabcabc90"
@@ -166,6 +176,7 @@
       "result": "capture",
       "winner_group": "team-aleph",
       "tie": false,
+      "steps": 7,
       "github_commit": {
         "team-aleph": "a1ef0000c0fc0fc0fc0fc0fc0fc0fc0fc0fc0f5c",
         "team-bet": "b2e70001de2de2de2de2de2de2de2de2de2de271"
@@ -190,14 +201,15 @@
     {
       "sub_game_number": 6,
       "roles": {
-        "team-bet": "police",
-        "team-aleph": "thief"
+        "team-aleph": "thief",
+        "team-bet": "police"
       },
       "started_at": "2026-08-04T01:01:00+03:00",
       "ended_at": "2026-08-04T01:01:09+03:00",
       "result": "survival",
       "winner_group": "team-aleph",
       "tie": false,
+      "steps": 35,
       "github_commit": {
         "team-aleph": "a1ef00017f17f17f17f17f17f17f17f17f17f13e",
         "team-bet": "b2e70000abcabcabcabcabcabcabcabcabcabc90"
