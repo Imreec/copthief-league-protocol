@@ -30,15 +30,35 @@ class AuditResult:
     failed_steps: list[int] = field(default_factory=list)
     detail: str = ""
     skipped: bool = False
+    #: The steps whose commit did not reproduce — the INTEGRITY failures, which are the ones
+    #: rule 20 calls tampering. Kept apart from the physics failures because a caller that
+    #: reports "does not reproduce its commitment" over a physics complaint sends an honest
+    #: team hunting a serialization bug it does not have (see `replay.verify_log`).
+    tampered_steps: list[int] = field(default_factory=list)
 
     def to_wire(self) -> dict:
         return {"passed": self.passed, "verified_steps": self.verified_steps,
                 "failed_steps": list(self.failed_steps), "skipped": self.skipped}
 
 
-#: The five legal wire actions. Anything else in a revealed record — a diagonal, a typo — is a
-#: move the physics forbid, revealed only now because moves are sealed during play.
-_LEGAL_MOVES = frozenset({"MOVE:N", "MOVE:S", "MOVE:W", "MOVE:E", "STAY"})
+#: The five legal wire actions, in THIS kit's spelling. Anything else in a revealed record — a
+#: diagonal, a typo — is a move the physics forbid, revealed only now because moves are sealed
+#: during play.
+#:
+#: The spelling is ours, and it is not an interop constraint. ``vectors/commit_reveal.json``
+#: says so in its first line — "the canonical form must match cross-team even though the
+#: payload does not" — and ``turnloop`` repeats it: each side reveals its own records in its
+#: own schema. Two real league teams name their moves ``"E"``, and the pairing's own signed
+#: config declared ``move_set: ["N", "S", "E", "W", "STAY"]``; the reference's five directions
+#: under two spellings are the same five directions.
+#:
+#: So this set is only consulted when the caller ARMS the physics layer with the signed terms
+#: (see ``audit_records``). Applied unconditionally it called an honest, sealed, counted bundle
+#: TAMPERED — found by the reciprocal audit of anrbj666's counted artifacts, 2026-08-05, in the
+#: copy of OUR OWN records they had sealed as ``opponent_records``.
+_MOVE_DELTA = {"MOVE:N": (-1, 0), "MOVE:S": (1, 0), "MOVE:E": (0, 1), "MOVE:W": (0, -1),
+               "STAY": (0, 0)}
+_LEGAL_MOVES = frozenset(_MOVE_DELTA)
 
 
 def audit_records(records: list[dict], *, played: dict[int, str] | None = None,
@@ -57,11 +77,22 @@ def audit_records(records: list[dict], *, played: dict[int, str] | None = None,
        received at the time, and every received step must be revealed. Steps past our consumed
        frontier are tolerated — the game legitimately ends before the receiver drains the
        sender's final messages. This is the comparison the docstring always promised.
-    3. **Physics** (board/quota/ceiling given): revealed positions must be on the board, moves
-       must be the five legal actions and consistent with the position trail, barrier placements
-       must fit the signed quota, and steps must not exceed the ceiling (+1 for a terminal).
+    3. **Physics** (board/quota/ceiling given): revealed positions must be on the board, the
+       position trail must advance by at most one orthogonal step (which is what makes a
+       diagonal illegal, whatever the peer calls one), barrier placements must fit the signed
+       quota, and steps must not exceed the ceiling (+1 for a terminal).
+
+       The physics are judged from the POSITION TRAIL, never from the peer's spelling of a
+       move. An earlier revision rejected any ``move`` token outside this kit's own
+       ``MOVE:<D>`` vocabulary, unconditionally — and both real league teams name their moves
+       ``"E"``, so it called an honest, sealed, counted series TAMPERED. A revealed payload's
+       schema is not an interop constraint (``vectors/commit_reveal.json``, ``turnloop``); the
+       trail it describes is. Where the token IS one this kit recognises, it is cross-checked
+       against the delta the positions actually show — a free extra check that can never fire
+       on a vocabulary we simply do not know.
     """
     failed: list[int] = []
+    tampered: list[int] = []
     notes: list[str] = []
     revealed_by_step: dict[int, dict] = {}
     prev_pos: tuple[int, int] | None = None
@@ -76,6 +107,7 @@ def audit_records(records: list[dict], *, played: dict[int, str] | None = None,
         step = int(payload.get("step", -1))
         if recomputed != claimed:
             failed.append(step)
+            tampered.append(step)
             if len(notes) < 3:      # enough to diagnose; not the whole log
                 notes.append(
                     f"step {step}: they committed {claimed}, we recompute {recomputed}\n"
@@ -97,11 +129,16 @@ def audit_records(records: list[dict], *, played: dict[int, str] | None = None,
             r = c = -1
         if board_size is not None and not (0 <= r < board_size and 0 <= c < board_size):
             problems.append(f"position {pos} is off the {board_size}x{board_size} board")
-        if move is not None and move not in _LEGAL_MOVES:
-            problems.append(f"move {move!r} is not one of the five legal actions")
         if prev_pos is not None and abs(r - prev_pos[0]) + abs(c - prev_pos[1]) > 1:
             problems.append(f"position jumps {prev_pos} -> {(r, c)}: more than one orthogonal "
                             f"step between consecutive revealed records")
+        # Only where we RECOGNISE the token: does it describe the step the positions show?
+        # Silence on an unrecognised vocabulary is deliberate — see the note on _LEGAL_MOVES.
+        if move in _LEGAL_MOVES and prev_pos is not None:
+            want = _MOVE_DELTA[move]
+            got = (r - prev_pos[0], c - prev_pos[1])
+            if got != want:
+                problems.append(f"move {move!r} says {want} but the positions moved {got}")
         prev_pos = (r, c)
         if payload.get("verdict") == "placed_barrier":
             barriers_seen += 1
@@ -137,16 +174,20 @@ def audit_records(records: list[dict], *, played: dict[int, str] | None = None,
                              f"never received in play")
     failed = sorted(set(failed))
     result = AuditResult(passed=not failed, verified_steps=max(0, len(records) - len(failed)),
-                         failed_steps=failed)
+                         failed_steps=failed, tampered_steps=sorted(set(tampered)))
     if failed:
-        result.detail = (
-            "\n    ".join(notes) +
-            "\n    Before concluding tampering: the release publishes THREE different commit "
-            "constructions, and building from the wrong one fails every audit in good faith. "
-            "Hash one of their records under all three with the `divergent_forms` entry in "
-            "vectors/commit_reveal.json — if one of the others matches, that is the bug. "
-            "Otherwise compare the canonical strings for an escaped non-ASCII character "
-            "(SPEC section 2).")
+        result.detail = "\n    ".join(notes)
+        # The three-constructions advice is for a HASH mismatch only. Printed under a physics
+        # or binding failure it sends an honest team hunting a serialization bug it does not
+        # have — which is exactly how a spelling complaint once read as tampering.
+        if tampered:
+            result.detail += (
+                "\n    Before concluding tampering: the release publishes THREE different "
+                "commit constructions, and building from the wrong one fails every audit in "
+                "good faith. Hash one of their records under all three with the "
+                "`divergent_forms` entry in vectors/commit_reveal.json — if one of the others "
+                "matches, that is the bug. Otherwise compare the canonical strings for an "
+                "escaped non-ASCII character (SPEC section 2).")
     return result
 
 

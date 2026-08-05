@@ -91,7 +91,11 @@ def _check_many(directories: list[str], terms: str | None) -> int:
 
     worst = 0
     for directory in directories:
-        cmd = [sys.executable, __file__, directory] + (["--terms", terms] if terms else [])
+        # --quiet used to stop at this boundary: the join honoured it, the per-directory runs
+        # it launches did not, so `--quiet` on a two-directory run still printed both full PASS
+        # lists. The flag is the caller's, all the way down.
+        cmd = [sys.executable, __file__, directory] + (["--terms", terms] if terms else []) \
+            + (["--quiet"] if _quiet else [])
         worst = max(worst, subprocess.run(cmd).returncode)
 
     print(f"\n=== cross-team join across {len(directories)} artifact sets ===")
@@ -686,6 +690,22 @@ def main() -> int:
             return 1
         found[m.group(1)].append((path, m.group("nn"), data))
 
+    # The set's own game_id, so the restaging hints below can name a file that belongs to THIS
+    # match. Pointed at a real repo, an unfiltered hint named `experiments/config_fuzz.json` —
+    # a file from no match at all — which reads as the checker being confused about what it is
+    # auditing (found auditing anrbj666's counted repos, 2026-08-05).
+    set_gid = next((d.get("game_id") for items in found.values() for _, _, d in items
+                    if d.get("game_id")), None)
+
+    def _elsewhere(pattern: str) -> list[Path]:
+        """Artifact files of THIS match sitting below the flat directory we were given."""
+        here = [p for p in root.rglob(pattern)
+                if p.parent != root and NAME_RE.match(p.name)]
+        if set_gid is None:
+            return here
+        ours = [p for p in here if NAME_RE.match(p.name).group("gid") == set_gid]
+        return ours or here
+
     total = sum(len(v) for v in found.values())
     if total == 0:
         print(f"no artifacts found in {root} — expected declaration_<game_id>.json and friends "
@@ -694,8 +714,7 @@ def main() -> int:
         # per-kind hint below is only reached once SOMETHING is flat, so "I pointed at the
         # parent folder" — every artifact one level down — got the bare refusal with no clue,
         # which is the afternoon anrbj666's P6-9 describes.
-        below = [p.relative_to(root) for p in root.rglob("*.json")
-                 if p.parent != root and NAME_RE.match(p.name)]
+        below = [p.relative_to(root) for p in _elsewhere("*.json")]
         if below:
             print(f"  ^ but {len(below)} artifact file(s) DO exist one or more levels down "
                   f"(e.g. {below[0]}). This checker reads ONE FLAT directory by design (the "
@@ -712,14 +731,18 @@ def main() -> int:
               f"found {len(found[kind])}")
     for kind in SUB_GAME_LEVEL:
         if not check(f"at least one {kind} artifact", len(found[kind]) >= 1):
-            below = [p.relative_to(root) for p in root.rglob(f"{kind}_*.json")
-                     if p.parent != root]
+            below = [p.relative_to(root) for p in _elsewhere(f"{kind}_*.json")]
             if below:
                 print(f"    ^ {len(below)} {kind} file(s) exist in subdirectories "
                       f"(e.g. {below[0]}). This checker reads ONE FLAT directory by design "
                       f"(the join's archive-exclusion contract) — assemble the four kinds "
                       f"into one directory first, as when preparing the artifacts a report "
                       f"names.")
+            elif set_gid:
+                print(f"    ^ and none below this directory either. A real repo may keep the "
+                      f"{kind}s in a SIBLING directory (the reference's layout puts configs "
+                      f"under config/games/ and the rest under results/) — this checker reads "
+                      f"one flat directory, so assemble the four kinds into one first.")
 
     every = [(k, p, nn, d) for k, items in found.items() for p, nn, d in items]
 
