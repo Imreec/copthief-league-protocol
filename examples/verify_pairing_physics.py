@@ -112,24 +112,50 @@ def main() -> int:
             return unreadable(f"{log_path.name} does not name a sub-game with a config beside "
                               f"it (looked for {cfg_path.name if cfg_path else 'config_*'})")
         cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        # Every key this walker goes on to DEREFERENCE, checked here — not just the top-level
+        # containers. The first revision gated on the containers and then read row["steps"],
+        # row["result"], summary["role"], summary["steps"] and the terms' cells unchecked, so a
+        # real foreign bundle got past the gate and died on `KeyError: 'steps'`: a stack instead
+        # of the diagnosis this whole function exists to print. Found against anrbj666's counted
+        # bundle, 2026-08-05, whose result rows carry no `steps` and need not.
+        summary = doc.get("summary") if isinstance(doc.get("summary"), dict) else {}
+        row = rows.get(n) if isinstance(rows.get(n), dict) else {}
+        terms = cfg.get("terms") if isinstance(cfg.get("terms"), dict) else None
         missing = [k for k in ("records", "opponent_records", "summary") if k not in doc]
-        if missing or "terms" not in cfg or n not in rows:
-            return unreadable(f"{log_path.name}: missing {missing or ''}"
-                              f"{' terms' if 'terms' not in cfg else ''}"
-                              f"{f' (and the result has no row {n})' if n not in rows else ''}"
-                              f" — this walker needs both sides' sealed records, the flat terms "
-                              f"and the row that declares the outcome")
-        terms, row = cfg["terms"], rows[n]
+        missing += [f"summary.{k}" for k in ("role", "steps") if k not in summary]
+        missing += [] if terms is None else \
+            [f"terms.{k}" for k in ("board_size", "max_steps", "cop_start", "thief_start")
+             if k not in terms]
+        if terms is None:
+            missing.append("config terms")
+        if n not in rows:
+            missing.append(f"result row {n}")
+        else:
+            missing += [f"row.{k}" for k in ("result", "steps") if k not in row]
+        if missing:
+            return unreadable(f"{log_path.name}: missing {sorted(set(missing))} — this walker "
+                              f"needs both sides' sealed records, the flat terms and the row "
+                              f"that declares the outcome")
         board, max_steps = terms["board_size"], terms["max_steps"]
         print(f"{log_path.name}  ({row['result']}, {row['steps']} steps)")
 
+        # A sealed record is payload + nonce + commit. One that is not is a shape this walker
+        # cannot judge, and guessing at it below would be another KeyError.
+        sealed = doc["records"] + doc["opponent_records"]
+        if not all(isinstance(r, dict) and {"payload", "nonce", "commit"} <= set(r)
+                   and isinstance(r["payload"], dict) for r in sealed):
+            return unreadable(f"{log_path.name}: a sealed record is not "
+                              f"{{payload, nonce, commit}} with an object payload")
+        if not doc["records"]:
+            return unreadable(f"{log_path.name}: no own records to walk")
+
         # 1. every sealed record re-hashes
-        bad = [r["payload"].get("step") for r in doc["records"] + doc["opponent_records"]
+        bad = [r["payload"].get("step") for r in sealed
                if ref.ref_commit(r["payload"], r["nonce"]) != r["commit"]]
         check("every sealed record re-hashes to its commit", not bad, f"failed steps {bad}")
 
         # 2. both sides' walks are legal, from the START CELLS THE TERMS DECLARE
-        mine_is_cop = doc["summary"]["role"] == "police"
+        mine_is_cop = summary["role"] == "police"
         my_start = tuple(terms["cop_start"] if mine_is_cop else terms["thief_start"])
         their_start = tuple(terms["thief_start"] if mine_is_cop else terms["cop_start"])
         before = len(failures)
@@ -139,9 +165,14 @@ def main() -> int:
               "; ".join(failures[before:]))
 
         # 3. the declared step count matches the records
-        played = max(r["payload"]["step"] for r in doc["records"])
-        check("summary.steps matches the sealed records", played == row["steps"] == doc["summary"]["steps"],
-              f"records reach {played}, summary says {doc['summary']['steps']}, row says {row['steps']}")
+        steps_seen = [r["payload"]["step"] for r in doc["records"]
+                      if isinstance(r["payload"].get("step"), int)]
+        if not steps_seen:
+            return unreadable(f"{log_path.name}: no record numbers itself with an integer step")
+        played = max(steps_seen)
+        check("summary.steps matches the sealed records",
+              played == row["steps"] == summary["steps"],
+              f"records reach {played}, summary says {summary['steps']}, row says {row['steps']}")
 
         # 4. THE OUTCOME IS ACTUALLY REACHED
         cop_end, thief_end = (my_end, their_end) if mine_is_cop else (their_end, my_end)
