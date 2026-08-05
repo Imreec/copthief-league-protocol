@@ -49,6 +49,16 @@ REQUIRED = {
 _failures = 0
 _quiet = False
 
+# Windows consoles and — worse — Windows PIPES decode as the ANSI code page, so a fully
+# conformant bundle whose group ids are Hebrew crashed this checker with UnicodeEncodeError
+# the moment its output was redirected: exit 1 on an honest bundle, from the reporting layer
+# rather than any check (anrbj666's P6-8; tools/probes/run_all.py already carries the same fix
+# for the probes it launches). Forcing utf-8 keeps the verdict text byte-identical across
+# platforms, which is the property the join's output exists to provide.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 
 def check(name: str, ok: bool, detail: str = "") -> bool:
     global _failures
@@ -158,15 +168,29 @@ def _check_many(directories: list[str], terms: str | None) -> int:
                 # is two teams each claiming their own count, not a contradiction. Only two
                 # different non-null numbers for the SAME group conflict.
                 claims: dict[str, set] = {}
+                claims_shaped = True
                 for doc in results:
-                    for group, v in ((doc.get("final_result") or {})
-                                     .get(key, {}) or {}).items():
+                    val = (doc.get("final_result") or {}).get(key)
+                    if val is None:
+                        continue
+                    if not isinstance(val, dict):
+                        # A malformed value used to abort the whole join with a traceback
+                        # (anrbj666's P6-3) — killing every later check, including the
+                        # mutual-agreement hash, and printing a machine-local stack instead
+                        # of the byte-identical verdict this tool owes both sides. A shape
+                        # fault is a named FAIL; the join continues past it.
+                        claims_shaped = False
+                        continue
+                    for group, v in val.items():
                         if v is not None:
-                            claims.setdefault(group, set()).add(v)
-                if not check(f"[{gid}] results' non-null game-count claims are compatible",
-                             all(len(v) <= 1 for v in claims.values()),
+                            claims.setdefault(group, set()).add(
+                                json.dumps(v, sort_keys=True, ensure_ascii=False))
+                if not check(f"[{gid}] results' non-null game-count claims are compatible "
+                             f"(and shaped as per-group maps)",
+                             claims_shaped and all(len(v) <= 1 for v in claims.values()),
                              f"conflicting claims: "
-                             f"{ {g: sorted(v) for g, v in claims.items() if len(v) > 1} }"):
+                             f"{ {g: sorted(v) for g, v in claims.items() if len(v) > 1} }"
+                             + ("" if claims_shaped else " — and a non-map value")):
                     worst = 1
                 continue
             values = {json.dumps((doc.get("final_result") or {}).get(key),
@@ -176,8 +200,28 @@ def _check_many(directories: list[str], terms: str | None) -> int:
                          f"found {sorted(values)} — two reports of ONE match disagreeing is "
                          f"the contradictory-report shape rule 35 zeroes"):
                 worst = 1
+        # The join used to read ONLY final_result aggregates, so a report that quietly
+        # dropped a sub-game — keeping compatible totals by inflating another row — joined
+        # clean (anrbj666's P6-2): exactly the "report that quietly drops a game" shape the
+        # settlement guard exists to prevent (WARNINGS §1, App. E rule 35). num_sub_games,
+        # the row set and each row's SCORE map must agree across the two reports; roles and
+        # steps stay per-side (each side counts its own turns, so a ±1 there is perspective,
+        # not contradiction).
+        rowsets = {json.dumps(
+            [doc.get("num_sub_games"),
+             sorted((sg.get("sub_game_number"),
+                     json.dumps(sg.get("score"), sort_keys=True, ensure_ascii=False))
+                    for sg in (doc.get("sub_games")
+                               if isinstance(doc.get("sub_games"), list) else [])
+                    if isinstance(sg, dict))],
+            ensure_ascii=False) for doc in results}
+        if not check(f"[{gid}] results agree on num_sub_games and the per-row scores",
+                     len(rowsets) <= 1,
+                     f"found {sorted(rowsets)} — a dropped or reshaped sub-game is the "
+                     f"quietly-different-game shape rule 35 zeroes"):
+            worst = 1
         shas = {(doc.get("mutual_agreement") or {}).get("sha256")
-                for doc in results if doc.get("mutual_agreement")}
+                for doc in results if isinstance(doc.get("mutual_agreement"), dict)}
         if not check(f"[{gid}] results agree on mutual_agreement.sha256", len(shas) <= 1,
                      f"found {sorted(str(s) for s in shas)} — the settlement itself disagrees"):
             worst = 1
@@ -226,13 +270,20 @@ def _selftest() -> int:
             (dest / name).write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
         return dest
 
+    def _run(argv: list[str]) -> int:
+        p = subprocess.run(argv, capture_output=True, text=True)
+        if "Traceback" in (p.stderr or ""):
+            # A crash exits 1 too, which is how three crash paths once hid inside "want 1"
+            # (anrbj666's P6-3/5/6). A traceback is never a verdict: map it to a code no
+            # case wants, so a check that dies mid-verdict fails the selftest by itself.
+            return 99
+        return p.returncode
+
     def verdict(d: Path) -> int:
-        return subprocess.run([sys.executable, __file__, str(d), "--quiet"],
-                              capture_output=True, text=True).returncode
+        return _run([sys.executable, __file__, str(d), "--quiet"])
 
     def verdict2(d1: Path, d2: Path) -> int:
-        return subprocess.run([sys.executable, __file__, str(d1), str(d2), "--quiet"],
-                              capture_output=True, text=True).returncode
+        return _run([sys.executable, __file__, str(d1), str(d2), "--quiet"])
 
     def mint(data):
         data[f"result_{gid}.json"]["game_uid"] = "2f0c25a9-0000-4000-8000-000000000000"
@@ -310,6 +361,40 @@ def _selftest() -> int:
         fr["games_played_including_this"] = {a: 0, b: 0}
         fr["diversity_reward_applied"] = {a: False, b: False}
 
+    def no_total_score(data):
+        """P6-1: every league gate hung off total_score's presence, so a result that simply
+        OMITTED it slipped winner_group-names-the-loser (and every other fraud the cases
+        below pin) past all of them at once. The gates now judge against the row-derived
+        totals when the declaration is missing."""
+        fr = data[f"result_{gid}.json"]["final_result"]
+        del fr["total_score"]
+        fr["winner_group"] = b
+
+    def empty_total_score(data):
+        """P6-1's second door: `total_score: {}` is present, dict-typed — and empty."""
+        fr = data[f"result_{gid}.json"]["final_result"]
+        fr["total_score"] = {}
+        fr["winner_group"] = b
+
+    def null_in_total_score(data):
+        """P6-5: a null inside total_score is a SHAPE fail — it used to be a TypeError in
+        the winner gate, which killed every later check and printed a stack instead of a
+        verdict."""
+        fr = data[f"result_{gid}.json"]["final_result"]
+        fr["total_score"] = {a: None, b: 5}
+        fr["winner_group"] = a
+
+    def malformed_tokens(data):
+        """P6-6: "tokens": 12 satisfied the key-presence guard and crashed the summation."""
+        fr = data[f"result_{gid}.json"]
+        fr["sub_games"][0]["tokens"] = 12
+        fr["final_result"]["tokens_total_series"] = {a: 12, b: 12}
+
+    def scalar_count(data):
+        """P6-4: a non-map count was silently SKIPPED here while the same value crashed the
+        cross-team join (P6-3) — the two halves of the tool disagreed about one artifact."""
+        data[f"result_{gid}.json"]["final_result"]["games_played_including_this"] = 7
+
     cases = [("a clean set", None, 0),
              ("a minted game_uid in the result", mint, 1),
              ("a CONSISTENT uid derived from the wrong input", wrong_input, 1),
@@ -321,7 +406,12 @@ def _selftest() -> int:
              ("winner_group naming the loser", winner_is_loser, 1),
              ("a negative game count", negative_count, 1),
              ("the diversity reward on the loser", diversity_to_loser, 1),
-             ("the friendly (disarmed) posture", friendly_posture, 0)]
+             ("the friendly (disarmed) posture", friendly_posture, 0),
+             ("winner-is-loser with total_score OMITTED", no_total_score, 1),
+             ("winner-is-loser with total_score EMPTY", empty_total_score, 1),
+             ("a null inside total_score (shape FAIL, no traceback)", null_in_total_score, 1),
+             ("malformed per-row tokens (shape FAIL, no traceback)", malformed_tokens, 1),
+             ("a scalar game count (shape FAIL, no silent skip)", scalar_count, 1)]
     bad = 0
     with tempfile.TemporaryDirectory() as td:
         for i, (label, mutate, want) in enumerate(cases):
@@ -387,6 +477,51 @@ def _selftest() -> int:
         bad += not ok
         print(f"  {'PASS' if ok else 'FAIL'}  an archived DIFFERENT match below one side is "
               f"history, not a dispute -> exit {got} (want 0)")
+
+        # P6-3: a malformed count value on ONE side used to abort the whole join with a
+        # traceback — losing the remaining fields, the mutual-agreement check and the verdict
+        # line. It must be a named FAIL the join walks past.
+        d1 = build(Path(td) / "shape-a", None)
+        d2 = build(Path(td) / "shape-b", scalar_count)
+        got = verdict2(d1, d2)
+        ok = got == 1
+        bad += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  a scalar game count on one side fails the join "
+              f"without a traceback -> exit {got} (want 1)")
+
+        # P6-8: a fully conformant bundle whose group ids are Hebrew (our league has them)
+        # must verify cleanly with stdout PIPED — Windows decoded pipes as the ANSI code page
+        # and crashed on the first printed gid: exit 1 on an honest bundle, from the
+        # reporting layer rather than any check. This subprocess IS a piped run.
+        ha, hb = "קבוצת-בית", "קבוצת-אלף"
+        hgid, huid = ref.ref_game_id(ha, hb), ref.ref_game_uid(terms, ha, hb)
+        hdir = Path(td) / "hebrew"
+        hdir.mkdir()
+        hbase = {"game_id": hgid, "game_uid": huid,
+                 "links": {"declaration": f"declaration_{hgid}.json",
+                           "result": f"result_{hgid}.json",
+                           "config": f"config_{hgid}_g<NN>.json",
+                           "log": f"log_{hgid}_g<NN>.json"}}
+        for name, doc in {
+                f"declaration_{hgid}.json": {**hbase, "num_sub_games": 1,
+                                             "groups": {"group_1": {"group_id": ha},
+                                                        "group_2": {"group_id": hb}}},
+                f"config_{hgid}_g01.json": {**hbase, "sub_game_number": 1, "terms": terms},
+                f"log_{hgid}_g01.json": {**hbase, "summary": {"sub_game_number": 1},
+                                         "records": []},
+                f"result_{hgid}.json": {**hbase, "num_sub_games": 1,
+                                        "groups": [{"group_id": ha}, {"group_id": hb}],
+                                        "sub_games": [{"sub_game_number": 1,
+                                                       "score": {ha: 20, hb: 5}}],
+                                        "final_result": {"total_score": {ha: 20, hb: 5}}},
+        }.items():
+            (hdir / name).write_text(json.dumps(doc, ensure_ascii=False, indent=2) + "\n",
+                                     encoding="utf-8")
+        got = verdict(hdir)
+        ok = got == 0
+        bad += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  Hebrew group ids verify with output piped "
+              f"-> exit {got} (want 0)")
     print(f"\n{'SELFTEST PASSES' if bad == 0 else f'{bad} SELFTEST FAILURE(S)'}")
     return 1 if bad else 0
 
@@ -447,7 +582,15 @@ def main() -> int:
         check(f"exactly one {kind} artifact", len(found[kind]) == 1,
               f"found {len(found[kind])}")
     for kind in SUB_GAME_LEVEL:
-        check(f"at least one {kind} artifact", len(found[kind]) >= 1)
+        if not check(f"at least one {kind} artifact", len(found[kind]) >= 1):
+            below = [p.relative_to(root) for p in root.rglob(f"{kind}_*.json")
+                     if p.parent != root]
+            if below:
+                print(f"    ^ {len(below)} {kind} file(s) exist in subdirectories "
+                      f"(e.g. {below[0]}). This checker reads ONE FLAT directory by design "
+                      f"(the join's archive-exclusion contract) — assemble the four kinds "
+                      f"into one directory first, as when preparing the artifacts a report "
+                      f"names.")
 
     every = [(k, p, nn, d) for k, items in found.items() for p, nn, d in items]
 
@@ -516,20 +659,49 @@ def main() -> int:
             check("result: sub_games count matches num_sub_games",
                   len(subs) == res["num_sub_games"],
                   f"{len(subs)} entries vs num_sub_games={res['num_sub_games']}")
+        if found["declaration"]:
+            # The declaration PROMISES a series length before the first sub-game; the result
+            # reports one after the last. A result quietly reporting fewer games than the
+            # declaration promised is the dropped-game shape, and neither file alone can see
+            # it (anrbj666's P6-7).
+            dec = found["declaration"][0][2]
+            if isinstance(dec.get("num_sub_games"), int) \
+                    and isinstance(res.get("num_sub_games"), int):
+                check("declaration and result agree on num_sub_games",
+                      dec["num_sub_games"] == res["num_sub_games"],
+                      f"declared {dec['num_sub_games']}, result reports "
+                      f"{res['num_sub_games']}")
         totals: dict[str, int] = {}
         for sg in subs:
             for gid, score in (sg.get("score") or {}).items():
                 if isinstance(score, (int, float)):
                     totals[gid] = totals.get(gid, 0) + score
-        declared = (res.get("final_result") or {}).get("total_score")
-        if totals and isinstance(declared, dict):
+        final = res.get("final_result") or {}
+        declared = final.get("total_score")
+
+        def _numeric_map(v) -> bool:
+            """A non-empty per-group map of real numbers — the only shape totals can take.
+
+            bool is excluded explicitly (it IS an int to isinstance), and None has no meaning
+            here: the null-claim convention belongs to games_played_including_this alone
+            (SPEC §6.2). Malformed shapes used to fall through this file two different ways —
+            silently passing the single-directory gate and crashing the join (anrbj666's
+            P6-4/P6-5) — so the shape verdict is now its own named check.
+            """
+            return (isinstance(v, dict) and bool(v)
+                    and all(isinstance(x, (int, float)) and not isinstance(x, bool)
+                            for x in v.values()))
+
+        if "total_score" in final:
+            check("result: total_score is a non-empty per-group map of numbers",
+                  _numeric_map(declared), f"declared {declared!r}")
+        if totals and _numeric_map(declared):
             # On a SERIES tie the reference ADDS the App. F tie score (2, fixed) to each side's
             # equal total — observed live against the reference implementation, so an honestly
             # tied series legitimately declares summed+2 per group. An earlier revision of this
             # check refused that, and its own docstring says "do NOT report until resolved" —
             # telling a tied pair not to report is the rule-35 sanction this tool exists to
             # prevent. The allowance is exactly +2 and only under a declared series_tie.
-            final = res.get("final_result") or {}
             summed = {k: totals.get(k) for k in declared}
             series_tie = bool(final.get("series_tie"))
             tie_adjusted = {k: (None if v is None else v + 2) for k, v in summed.items()}
@@ -550,25 +722,36 @@ def main() -> int:
                   summed == declared or (tie_coherent and tie_adjusted == declared),
                   f"summed {totals}, declared {declared}, series_tie {series_tie}{hint}")
 
-            # --- the league fields: the only graded inputs, previously ungated ----------
-            # (anrbj666's P5-2.) Everything below is CONDITIONAL on the key being present,
-            # and posture-aware: a friendly legitimately declares unbumped counts and
-            # all-false diversity (PAIRING-PLAYBOOK 4d), so absence-of-award never fails —
-            # only arithmetic impossibilities and awards to the wrong side do.
-            row_groups = set(declared)
+        # --- the league fields: the only graded inputs, previously ungated ---------------
+        # (anrbj666's P5-2.) Everything below is CONDITIONAL on ITS OWN key being present,
+        # and posture-aware: a friendly legitimately declares unbumped counts and all-false
+        # diversity (PAIRING-PLAYBOOK 4d), so absence-of-award never fails — only arithmetic
+        # impossibilities and awards to the wrong side do.
+        #
+        # The gates judge against `basis`: the declared totals when healthy, else the totals
+        # DERIVED from the rows. An earlier revision nested every gate under a healthy
+        # total_score, so a result that simply omitted (or emptied) that one key escaped all
+        # of them at once — winner_group naming the loser included (anrbj666's P6-1). What a
+        # gate needs is a totals table to judge against, and the rows supply one whether or
+        # not the declaration is present to be checked against it.
+        basis = declared if _numeric_map(declared) else (totals or {})
+        series_tie = bool(final.get("series_tie"))
+        if basis:
+            row_groups = set(basis)
             if "winner_group" in final:
                 winner = final["winner_group"]
-                if len(set(declared.values())) == 1:
+                if len(set(basis.values())) == 1:
                     check("result: equal totals mean NO winner (and a declared series tie)",
                           winner is None and series_tie,
-                          f"totals {declared} are equal but winner_group={winner!r}, "
+                          f"totals {basis} are equal but winner_group={winner!r}, "
                           f"series_tie={series_tie}")
                 else:
-                    true_winner = max(declared, key=lambda g: declared[g])
+                    true_winner = max(basis, key=lambda g: basis[g])
                     check("result: winner_group is the side with the higher total",
                           winner == true_winner,
-                          f"totals {declared} but winner_group={winner!r}")
+                          f"totals {basis} but winner_group={winner!r}")
             if "sub_games_won" in final and subs:
+                won_shape = isinstance(final["sub_games_won"], dict)
                 derived_won = {g: sum(1 for sg in subs
                                       if isinstance(sg.get("score"), dict)
                                       and all(x in sg["score"] for x in row_groups)
@@ -576,8 +759,10 @@ def main() -> int:
                                       and len(set(sg["score"].values())) > 1)
                                for g in row_groups}
                 check("result: sub_games_won derives from the sub-game rows",
-                      {g: final["sub_games_won"].get(g) for g in row_groups} == derived_won,
-                      f"rows give {derived_won}, declared {final['sub_games_won']}")
+                      won_shape
+                      and {g: final["sub_games_won"].get(g) for g in row_groups}
+                      == derived_won,
+                      f"rows give {derived_won}, declared {final['sub_games_won']!r}")
             if "ties" in final and subs and all("score" in sg for sg in subs):
                 # The full identity (anrbj666's P5-13): zeroed rows are credited to NOBODY, so
                 # the naive won+won+ties == num_sub_games fails any series with a technical
@@ -594,32 +779,49 @@ def main() -> int:
                       won_total + tie_rows + zeroed == len(subs)
                       and final["ties"] == tie_rows,
                       f"rows: won {won_total}, ties {tie_rows}, zeroed {zeroed}, "
-                      f"declared ties {final['ties']}, num {len(subs)}")
+                      f"declared ties {final['ties']!r}, num {len(subs)}")
             if "tokens_total_series" in final and subs and all("tokens" in sg for sg in subs):
-                derived_tokens = {g: sum(sg["tokens"].get(g, 0) for sg in subs)
-                                  for g in row_groups}
-                check("result: tokens_total_series is the sum of the per-row tokens",
-                      {g: final["tokens_total_series"].get(g) for g in row_groups}
-                      == derived_tokens,
-                      f"rows sum to {derived_tokens}, declared {final['tokens_total_series']}")
-            if isinstance(final.get("games_played_including_this"), dict):
-                # null is legal: a count is each team's OWN claim (SPEC §6.2), and an emitter
-                # that cannot know its opponent's standing declares nothing rather than
-                # fabricating a number (anrbj666's P5-9).
-                counts = final["games_played_including_this"]
-                check("result: game counts are non-negative integers (or null: unclaimed)",
-                      all(v is None or (isinstance(v, int) and not isinstance(v, bool)
+                # The guard used to check the KEY existed in every row and then trusted the
+                # VALUE, so "tokens": 12 crashed the checker mid-verdict (anrbj666's P6-6) —
+                # and a crash is worse than a FAIL for a tool whose contract is a byte-
+                # identical verdict on both sides.
+                rows_shape = all(_numeric_map(sg.get("tokens")) for sg in subs)
+                decl_shape = isinstance(final["tokens_total_series"], dict)
+                if check("result: per-row tokens and tokens_total_series are numeric maps",
+                         rows_shape and decl_shape,
+                         f"rows {[sg.get('tokens') for sg in subs]!r}, "
+                         f"declared {final['tokens_total_series']!r}"):
+                    derived_tokens = {g: sum(sg["tokens"].get(g, 0) for sg in subs)
+                                      for g in row_groups}
+                    check("result: tokens_total_series is the sum of the per-row tokens",
+                          {g: final["tokens_total_series"].get(g) for g in row_groups}
+                          == derived_tokens,
+                          f"rows sum to {derived_tokens}, "
+                          f"declared {final['tokens_total_series']}")
+        if "games_played_including_this" in final:
+            # null is legal: a count is each team's OWN claim (SPEC §6.2), and an emitter
+            # that cannot know its opponent's standing declares nothing rather than
+            # fabricating a number (anrbj666's P5-9). A non-map value, though, is a shape
+            # fault, not a claim — the isinstance guard here used to SKIP it silently while
+            # the very same value crashed the cross-team join (anrbj666's P6-3/P6-4).
+            counts = final["games_played_including_this"]
+            check("result: game counts are non-negative integers (or null: unclaimed)",
+                  isinstance(counts, dict)
+                  and all(v is None or (isinstance(v, int) and not isinstance(v, bool)
                                         and v >= 0)
                           for v in counts.values()),
-                      f"declared {counts}")
-            if isinstance(final.get("diversity_reward_applied"), dict):
-                awarded_to = [g for g, v in final["diversity_reward_applied"].items() if v]
-                check("result: a diversity reward goes only to the WINNER of a FIRST meeting "
-                      "(all-false is always legal — the friendly posture)",
-                      all(g == final.get("winner_group") for g in awarded_to)
-                      and (not awarded_to or bool(final.get("first_meeting_between_groups"))),
-                      f"awarded to {awarded_to}, winner {final.get('winner_group')!r}, "
-                      f"first_meeting {final.get('first_meeting_between_groups')!r}")
+                  f"declared {counts!r}")
+        if "diversity_reward_applied" in final:
+            applied = final["diversity_reward_applied"]
+            awarded_to = [g for g, v in applied.items() if v] \
+                if isinstance(applied, dict) else []
+            check("result: a diversity reward goes only to the WINNER of a FIRST meeting "
+                  "(all-false is always legal — the friendly posture)",
+                  isinstance(applied, dict)
+                  and all(g == final.get("winner_group") for g in awarded_to)
+                  and (not awarded_to or bool(final.get("first_meeting_between_groups"))),
+                  f"awarded to {awarded_to}, winner {final.get('winner_group')!r}, "
+                  f"first_meeting {final.get('first_meeting_between_groups')!r}")
         listed = {sg.get("sub_game_number") for sg in subs}
         logged = {int(nn) for _, nn, _ in found["log"] if nn is not None}
         if listed and logged:

@@ -130,12 +130,29 @@ def serve(cfg: SparConfig, *, host: str, port: int, peer_url: str | None,
 
     from sparring.deadlines import MonotonicClock
     from sparring.netplay import play_series
-    from sparring.transport.client import McpClient, PeerUnreachable
+    from sparring.transport.client import McpClient, PeerUnreachable, edge_answers
 
     # Give both sides a moment to bind before the first greeting; a connect that races the
     # opponent's startup looks exactly like an opponent that never arrived. Slept through the
     # clock module, which is the only place permitted to know what time it is (purity rule P-3).
-    MonotonicClock().sleep(float(cfg.budgets.poll_interval) * 6)
+    clock = MonotonicClock()
+    clock.sleep(float(cfg.budgets.poll_interval) * 6)
+    if await_peer:
+        # The flag's promise, made real: poll the opponent's edge (the same "poll, don't dial"
+        # contract the banner teaches — any HTTP answer, 406 included, means an edge is up)
+        # for one handshake budget before the first greeting. Without this, two peers started
+        # by hand lose the series to a startup race: a cold start takes longer than the grace
+        # sleep above, the first connect is refused, and refused-once was fatal. The budget is
+        # turn_timeout — the same budget SPAR-N09 gives an ARRIVED peer to greet, so "how long
+        # will it wait for me" has one answer on both sides of the handshake.
+        deadline = clock.now() + float(cfg.budgets.turn_timeout)
+        if not edge_answers(peer_url, float(cfg.budgets.poll_interval) * 4):
+            print(f"  awaiting the opponent's edge at {peer_url} "
+                  f"(budget {cfg.budgets.turn_timeout:.0f}s — the handshake budget)")
+            while clock.now() < deadline:
+                if edge_answers(peer_url, float(cfg.budgets.poll_interval) * 4):
+                    break
+                clock.sleep(float(cfg.budgets.poll_interval))
     client = McpClient(peer_url, timeout=cfg.budgets.connect_timeout)
 
     try:
