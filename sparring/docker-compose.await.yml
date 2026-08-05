@@ -42,3 +42,9 @@ services:
       - "8931:8931"
     volumes:
       - ./runs:/kit/runs
+    # SPAR_PEER's natural value is http://host.docker.internal:<port>/mcp — but that name only
+    # exists by magic on Docker Desktop. On a Linux engine it is "Name or service not known" and
+    # the peer burns its whole await budget polling a URL that can never answer. host-gateway
+    # makes the name real on both.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
