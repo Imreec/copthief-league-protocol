@@ -89,6 +89,20 @@ class SubGamePeer:
         #: and discarded means the cop can never learn it captured anyone, and the sub-game runs
         #: to the step ceiling and settles as a timeout that nobody caused.
         self.pending_answer: dict | None = None
+        #: The cell we last CLAIMED (police only) — what lets a caught=true be classified:
+        #: echoing this cell is an ANSWER to our claim; naming any other cell is a CONCESSION
+        #: (rules 46/47, a fact only the thief can see). The two settle identically and audit
+        #: differently: a concession pays the thief 5 where a zeroed row pays 0, so it is the
+        #: half that must be corroborated rather than believed (issue #37 refinement).
+        self.last_claim: list | None = None
+        #: A concession we settled on, held for the audit to corroborate against our OWN
+        #: barrier record and the thief's revealed final position.
+        self.conceded: dict | None = None
+        #: The cell of an ANSWERED capture we settled on — held for the audit's other half
+        #: (imreeyal's F-2): a false answer echoing our own claim pays the thief 5 AND us 20,
+        #: so both peers profit and neither can be left to catch it. The audit checks the
+        #: thief's revealed trail actually ends where the answer said it was caught.
+        self.answered_at: list | None = None
 
     # --- sealing ---------------------------------------------------------------------------
 
@@ -151,12 +165,15 @@ class SubGamePeer:
             "verdict": "placed_barrier" if action.barrier else "moved",
         })
 
+        claim = list(self.engine.position) if self.role is Role.POLICE else None
+        if claim is not None:
+            self.last_claim = claim
         message = TurnMessage(
             step=self.step, sender=self.role.value, commit=record["commit"], hint=hint,
             timestamp=self.clock.stamp(),
             smell_grid=field_now,
             barrier_placed=list(action.barrier) if action.barrier else None,
-            capture_claim=(list(self.engine.position) if self.role is Role.POLICE else None),
+            capture_claim=claim,
             # The answer we owe from their last claim rides out now. Under hidden positions the
             # cop learns the result of its claim only from this field.
             claim_response=self.pending_answer,
@@ -180,7 +197,19 @@ class SubGamePeer:
         The action is ``STAY``, which is always legal, so the record chain stays consistent and
         the opponent's audit still reproduces every commit.
         """
-        if self.pending_answer is None and not self.engine.survived():
+        concession = None
+        if self.engine.self_captured() is not None:
+            # Rules 46/47 end the game at a position ONLY WE can see — a barrier on our own
+            # cell, or no orthogonal escape — so the final must SAY so or the cop waits out
+            # its budget and the two sides settle one game two ways (issue #37: reproduced
+            # over live HTTP, deterministic at seeds 4242/777, fork at sub-game 3). The
+            # concession is the league's existing vocabulary, not an extension: caught=true
+            # naming OUR OWN final cell — distinct from an ANSWER, which echoes the cell the
+            # cop claimed. The cop's settlement switch has accepted this form all along
+            # (adjudicate below); this peer just never sent it.
+            concession = {"claim": [int(self.engine.position[0]),
+                                    int(self.engine.position[1])], "caught": True}
+        if concession is None and self.pending_answer is None and not self.engine.survived():
             return None
         self.step += 1
         self.engine.step = self.step
@@ -197,7 +226,10 @@ class SubGamePeer:
             # reads, to a strict physics checker, as a scent field that vanished for one
             # step (dogfood finding 4); {} is the not-transmitted convention, not "done".
             smell_grid=self.engine.trail.full_turn(self.engine.position),
-            claim_response=self.pending_answer,
+            # The concession supersedes a stale answer: both are caught-verdicts, but only the
+            # concession is true of the position this final seals — and it is the one worth
+            # five points, so it is the one the audit corroborates (audit.py).
+            claim_response=concession or self.pending_answer,
             win_claim=({"type": "survival"} if self.engine.survived() else None))
         self.pending_answer = None
         return message
@@ -255,6 +287,18 @@ class SubGamePeer:
         if answer is not None and answer.get("caught"):
             return Outcome.CAPTURE
         if incoming.claim_response is not None and incoming.claim_response.get("caught"):
+            # ANSWER or CONCESSION? An answer echoes the cell WE claimed; a concession names
+            # the thief's own cell (rules 46/47 — an ending only it can see). Both settle
+            # CAPTURE now, exactly as before — and BOTH are held for the audit, because both
+            # pay: a false concession is worth 5 over the zeroed row (imreeyal's refinement),
+            # and a false answer is worth 5 to them AND 20 to us (their F-2 — echoing our own
+            # claimed cell was the way around the concession check, and it is the lie both
+            # peers profit from). The settle stays fast; the checking is structural.
+            if self.role is Role.POLICE:
+                if incoming.claim_response.get("claim") != self.last_claim:
+                    self.conceded = dict(incoming.claim_response)
+                else:
+                    self.answered_at = list(self.last_claim or [])
             return Outcome.CAPTURE
         if incoming.win_claim and incoming.win_claim.get("type") == "survival":
             return Outcome.SURVIVAL
@@ -282,12 +326,17 @@ class SubGamePeer:
 
     def _audit(self, theirs: dict) -> AuditResult:
         """The armed form: integrity + binding against what we actually received in play +
-        physics under the signed terms (SPEC §3; anrbj666's A1-A3)."""
+        physics under the signed terms (SPEC §3; anrbj666's A1-A3) — and, when we settled on
+        a rule-46/47 concession, corroboration of that concession against our OWN barrier
+        record and the position trail the thief itself revealed."""
         return audit_records(AuditPayload.from_wire(theirs).records,
                              played=self.inbox.played,
                              board_size=self.cfg.board_size,
                              barriers_max=self.cfg.barriers_max,
-                             max_steps=self.cfg.max_steps)
+                             max_steps=self.cfg.max_steps,
+                             concession=self.conceded,
+                             answered_at=self.answered_at,
+                             own_barriers=[list(b) for b in self.engine.barriers])
 
     def verify_audit(self) -> AuditResult:
         """Re-hash whatever the opponent revealed, with OUR serializer."""
