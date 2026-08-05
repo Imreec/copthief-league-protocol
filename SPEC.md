@@ -399,6 +399,20 @@ pair that splits it):
   because arming them in a game that does not count is a false declaration under rules 37–38
   (PAIRING-PLAYBOOK stage 4d). A winner beside an unclaimed reward in a friendly is therefore
   correct, not a contradiction.
+- **`null` in `games_played_including_this` means UNCLAIMED, and it is legal.** A count is a
+  team's own unverifiable claim about its own standing, so an emitter that cannot know its
+  opponent's count MUST declare `null` for that group rather than fabricate one — and `null`
+  is **not** `0`, which is a claim that the opponent has played no counted game. Two reports of
+  one match therefore **agree** when their non-null claims are compatible **per group**:
+  `{"a": 3, "b": null}` beside `{"a": null, "b": 5}` is two teams each stating their own count,
+  not a contradiction, and `tools/check_artifacts.py` joins it. Only two **different non-null**
+  numbers for the **same** group are the rule-35 disagreement. This is the one league field
+  where a per-side difference is legal, precisely because it is the one field neither side can
+  observe about the other — the other two are pair-observable and must be byte-identical. The
+  exchange before the counted T (above) is what usually makes both sides fully non-null; a
+  friendly against a peer whose ledger you have not been told is where the nulls belong.
+  *(Three documents disagreed about this until anrbj666's pass six: the playbook's must-be-
+  identical table, the checker's join, and this section, which had never said the word.)*
 - **Where the two App. F awards land is asymmetric.** The **+2 tie** award is ADDED into
   `total_score` (above). The **+10 diversity** award is **not**: it is applied by the league
   table *from* the `diversity_reward_applied` flag and never enters the report's totals — the
