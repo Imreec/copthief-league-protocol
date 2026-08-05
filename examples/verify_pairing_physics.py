@@ -1,6 +1,6 @@
-"""Verify examples/pairing-artifacts/ is a set of games that could actually be PLAYED.
+"""Verify a bundle is a set of games that could actually be PLAYED.
 
-    python examples/verify_pairing_physics.py
+    python examples/verify_pairing_physics.py [dir]      # default: examples/pairing-artifacts
 
 `tools/check_artifacts.py` checks names, ids, required keys and score arithmetic — by
 design it never opens a sealed payload, so it cannot see a log whose records contradict
@@ -14,7 +14,15 @@ It exists because an earlier revision of this bundle shipped one-step logs decla
 result. `check_artifacts` passed it. Found by anrbj666 auditing anrbj666's contribution,
 2026-08-04; this checker is the regression gate for that class.
 
+It takes the bundle path as an optional argument (anrbj666's pass-six probes did the same, for
+the same reason): the check that matters most is the one you run against artifacts you did NOT
+generate — a real counted set, an opponent's bundle before a join — and a gate wired to one
+hardcoded directory can only ever re-certify the fixture it ships with. CI still passes no
+argument, so the default is unchanged.
+
 Exit 0 = every game is legal and reaches its declared outcome.
+Exit 2 = the directory holds nothing this can read (see the note it prints — a foreign bundle
+         may seal its logs in a shape this walker does not know, which is not a physics fault).
 """
 
 from __future__ import annotations
@@ -26,7 +34,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import verify_vectors as ref  # noqa: E402
 
-BUNDLE = Path(__file__).resolve().parent / "pairing-artifacts"
+BUNDLE = (Path(sys.argv[1]).resolve() if len(sys.argv) > 1
+          else Path(__file__).resolve().parent / "pairing-artifacts")
 DELTAS = {"MOVE:N": (-1, 0), "MOVE:S": (1, 0), "MOVE:E": (0, 1), "MOVE:W": (0, -1),
           "STAY": (0, 0)}          # the book's move set: orthogonal or stay, never diagonal
 
@@ -65,16 +74,51 @@ def walk(records: list[dict], start: tuple[int, int], board: int,
     return pos
 
 
-def main() -> int:
-    result = json.loads((BUNDLE / [p.name for p in BUNDLE.glob("result_*.json")][0])
-                        .read_text(encoding="utf-8"))
-    rows = {row["sub_game_number"]: row for row in result["sub_games"]}
+def unreadable(why: str) -> int:
+    """Refuse with a diagnosis, never with a stack.
 
-    for log_path in sorted(BUNDLE.glob("log_*_g*.json")):
+    Pointed at a bundle it did not generate, this walker meets shapes it does not know — and a
+    shape it cannot read is NOT a physics fault. Saying so in words is the difference between
+    "their logs are wrong" and "our tool cannot read their logs", which is the whole distinction
+    an audit of someone else's artifacts exists to make.
+    """
+    print(f"cannot read this bundle: {why}\n"
+          f"  This is a limit of THIS checker, not a verdict on the bundle. "
+          f"tools/check_artifacts.py and `sparring.cli replay` read a wider range of shapes; "
+          f"run those and report this as unreadable-here rather than as a physics failure.",
+          file=sys.stderr)
+    return 2
+
+
+def main() -> int:
+    results = sorted(BUNDLE.glob("result_*.json"))
+    if not results:
+        return unreadable(f"no result_*.json at the top level of {BUNDLE}")
+    result = json.loads(results[0].read_text(encoding="utf-8"))
+    if not isinstance(result.get("sub_games"), list):
+        return unreadable(f"{results[0].name} has no sub_games list")
+    rows = {row.get("sub_game_number"): row for row in result["sub_games"]
+            if isinstance(row, dict)}
+
+    logs = sorted(BUNDLE.glob("log_*_g*.json"))
+    if not logs:
+        return unreadable(f"no log_*_g<NN>.json at the top level of {BUNDLE}")
+    for log_path in logs:
         doc = json.loads(log_path.read_text(encoding="utf-8"))
-        n = doc["sub_game_number"]
-        cfg = json.loads((BUNDLE / f"config_{doc['game_id']}_g{n:02d}.json")
-                         .read_text(encoding="utf-8"))
+        n = doc.get("sub_game_number", (doc.get("summary") or {}).get("sub_game_number"))
+        cfg_path = BUNDLE / f"config_{doc.get('game_id')}_g{n:02d}.json" \
+            if isinstance(n, int) else None
+        if cfg_path is None or not cfg_path.is_file():
+            return unreadable(f"{log_path.name} does not name a sub-game with a config beside "
+                              f"it (looked for {cfg_path.name if cfg_path else 'config_*'})")
+        cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+        missing = [k for k in ("records", "opponent_records", "summary") if k not in doc]
+        if missing or "terms" not in cfg or n not in rows:
+            return unreadable(f"{log_path.name}: missing {missing or ''}"
+                              f"{' terms' if 'terms' not in cfg else ''}"
+                              f"{f' (and the result has no row {n})' if n not in rows else ''}"
+                              f" — this walker needs both sides' sealed records, the flat terms "
+                              f"and the row that declares the outcome")
         terms, row = cfg["terms"], rows[n]
         board, max_steps = terms["board_size"], terms["max_steps"]
         print(f"{log_path.name}  ({row['result']}, {row['steps']} steps)")
