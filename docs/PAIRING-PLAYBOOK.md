@@ -269,7 +269,7 @@ what may legitimately differ:
 | both audits `log_verified: true, tampered: false` | per-sub-game timestamps (different clocks, different start/end definitions — **provably outside the consensus scope**, since the hashes match anyway) |
 | all four `github_commit` values, byte-for-byte | email subject wording |
 | aggregate: `total_score`, `sub_games_won`, `ties`, `winner_group`, `series_tie` | which side's driver reported first |
-| all three league fields (`games_played_including_this`, `first_meeting_between_groups`, `diversity_reward_applied`) — definitions in SPEC §6.2 | — |
+| league fields `first_meeting_between_groups` and `diversity_reward_applied` — both pair-observable, both derived from the same outcome (SPEC §6.2) | `games_played_including_this` **where one side declares `null`** — a count is each team's own unverifiable claim, so an emitter that cannot know yours declares nothing rather than inventing it. Non-null claims must be compatible per group; `null` is *unclaimed*, never `0` (SPEC §6.2, which is the authority the checker's join implements) |
 | **`mutual_agreement.sha256`** — the machine-checkable consensus (SPEC §6, `vectors/report_consensus.json`) | — |
 
 If the mutual hash differs, do not negotiate prose — diff the **canonical consensus strings**

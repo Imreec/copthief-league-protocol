@@ -207,10 +207,16 @@ def _check_many(directories: list[str], terms: str | None) -> int:
         # the row set and each row's SCORE map must agree across the two reports; roles and
         # steps stay per-side (each side counts its own turns, so a ±1 there is perspective,
         # not contradiction).
+        #
+        # Each row is canonicalised to ONE string before the sort. Sorting `(number, score)`
+        # tuples looked tidier and was a crash: a row that omits `sub_game_number` sorts None
+        # against int, and a row numbering itself "3" sorts str against int — both TypeErrors,
+        # in the check whose own purpose is that a shape fault is a verdict and not a stack.
+        # Strings are totally ordered whatever the rows contain.
         rowsets = {json.dumps(
             [doc.get("num_sub_games"),
-             sorted((sg.get("sub_game_number"),
-                     json.dumps(sg.get("score"), sort_keys=True, ensure_ascii=False))
+             sorted(json.dumps([sg.get("sub_game_number"), sg.get("score")],
+                               sort_keys=True, ensure_ascii=False)
                     for sg in (doc.get("sub_games")
                                if isinstance(doc.get("sub_games"), list) else [])
                     if isinstance(sg, dict))],
@@ -219,6 +225,28 @@ def _check_many(directories: list[str], terms: str | None) -> int:
                      len(rowsets) <= 1,
                      f"found {sorted(rowsets)} — a dropped or reshaped sub-game is the "
                      f"quietly-different-game shape rule 35 zeroes"):
+            worst = 1
+        # Silence is not agreement (anrbj666's P6-12). Every field above is presence-gated, so
+        # a report that simply OMITS winner_group, ties or the consensus hash joins clean
+        # against a full one. The tolerance is deliberate — the league fields are optional and
+        # a disarmed friendly legitimately carries fewer of them — but a one-sided field is
+        # not a value the two sides agreed on, and the verdict should not read as though it
+        # were. So: named, never silent, and not a FAIL.
+        if len(results) > 1 and not _quiet:
+            for key in JOIN_FIELDS + ("mutual_agreement",):
+                declaring = sum(1 for doc in results
+                                if key in (doc if key == "mutual_agreement"
+                                           else (doc.get("final_result") or {})))
+                if 0 < declaring < len(results):
+                    print(f"  note: [{gid}] {key} is declared by {declaring} of "
+                          f"{len(results)} reports — compared where present, so this is "
+                          f"NOT agreement on it"
+                          + ("  <- the consensus hash: one side alone cannot settle"
+                             if key == "mutual_agreement" else ""))
+        bad_ma = [doc for doc in results
+                  if "mutual_agreement" in doc and not isinstance(doc["mutual_agreement"], dict)]
+        if bad_ma and not check(f"[{gid}] mutual_agreement is an object where declared",
+                                False, f"found {bad_ma[0]['mutual_agreement']!r}"):
             worst = 1
         shas = {(doc.get("mutual_agreement") or {}).get("sha256")
                 for doc in results if isinstance(doc.get("mutual_agreement"), dict)}
@@ -395,6 +423,31 @@ def _selftest() -> int:
         cross-team join (P6-3) — the two halves of the tool disagreed about one artifact."""
         data[f"result_{gid}.json"]["final_result"]["games_played_including_this"] = 7
 
+    # The three row shapes below all ended in a traceback rather than a verdict — the defect
+    # class pass six named and closed for total_score, tokens and the counts, one line short of
+    # the rows those gates derive from. Each is a shape fault, so each wants a FAIL and a
+    # readable line, and exit 99 (a traceback) fails this selftest by itself.
+    def unnumbered_row(data):
+        """A row that omits sub_game_number. Harmless-looking, and it sorted None against int
+        inside the pass-six join check — a crash introduced BY the fix for P6-2."""
+        data[f"result_{gid}.json"]["sub_games"][0].pop("sub_game_number", None)
+
+    def string_row_number(data):
+        """A row numbering itself "1": a JSON-typing slip, not a lie, and a TypeError in the
+        log-coverage check's DETAIL string — which is built even when that check passes."""
+        data[f"result_{gid}.json"]["sub_games"][0]["sub_game_number"] = "1"
+
+    def nested_score(data):
+        """A score value that is itself a map: `max(sg["score"].values())` compared int to
+        dict in the sub_games_won derivation."""
+        data[f"result_{gid}.json"]["sub_games"][0]["score"] = {a: {"points": 20}, b: 5}
+
+    def sub_games_not_a_list(data):
+        """`sub_games` as a map: `for sg in subs` then iterated KEYS, and the first sg.get()
+        died on a str."""
+        r = data[f"result_{gid}.json"]
+        r["sub_games"] = {str(i + 1): sg for i, sg in enumerate(r["sub_games"])}
+
     cases = [("a clean set", None, 0),
              ("a minted game_uid in the result", mint, 1),
              ("a CONSISTENT uid derived from the wrong input", wrong_input, 1),
@@ -411,7 +464,12 @@ def _selftest() -> int:
              ("winner-is-loser with total_score EMPTY", empty_total_score, 1),
              ("a null inside total_score (shape FAIL, no traceback)", null_in_total_score, 1),
              ("malformed per-row tokens (shape FAIL, no traceback)", malformed_tokens, 1),
-             ("a scalar game count (shape FAIL, no silent skip)", scalar_count, 1)]
+             ("a scalar game count (shape FAIL, no silent skip)", scalar_count, 1),
+             ("a row with no sub_game_number (shape FAIL, no traceback)", unnumbered_row, 1),
+             ("a row numbering itself \"1\" (shape FAIL, no traceback)", string_row_number, 1),
+             ("a nested score value (shape FAIL, no traceback)", nested_score, 1),
+             ("sub_games as a map, not a list (shape FAIL, no traceback)",
+              sub_games_not_a_list, 1)]
     bad = 0
     with tempfile.TemporaryDirectory() as td:
         for i, (label, mutate, want) in enumerate(cases):
@@ -488,6 +546,65 @@ def _selftest() -> int:
         bad += not ok
         print(f"  {'PASS' if ok else 'FAIL'}  a scalar game count on one side fails the join "
               f"without a traceback -> exit {got} (want 1)")
+
+        # P6-2, the case the fix itself never had: a side that quietly drops a sub-game while
+        # keeping every final_result aggregate compatible. BOTH bundles are internally perfect
+        # here — same totals, each with its own declaration, configs and logs — so neither
+        # team can see it alone, which is the only kind of defect a join exists for.
+        def two_rows(data):
+            r = data[f"result_{gid}.json"]
+            r["num_sub_games"] = 2
+            r["sub_games"] = [{"sub_game_number": 1, "score": {a: 10, b: 5}},
+                              {"sub_game_number": 2, "score": {a: 10, b: 0}}]
+            data[f"declaration_{gid}.json"]["num_sub_games"] = 2
+            data[f"config_{gid}_g02.json"] = {**base, "sub_game_number": 2, "terms": terms}
+            data[f"log_{gid}_g02.json"] = {**base, "summary": {"sub_game_number": 2},
+                                           "records": []}
+
+        def two_rows_unnumbered(data):
+            """The same two rows, one of them unnumbered — which is what made the P6-2 check
+            sort None against int. One row never compares; two do."""
+            two_rows(data)
+            data[f"result_{gid}.json"]["sub_games"][1].pop("sub_game_number")
+
+        d1 = build(Path(td) / "drop-a", None)
+        d2 = build(Path(td) / "drop-b", two_rows)
+        for d, want, what in [(d1, 0, "the one-row side alone"), (d2, 0, "the two-row side "
+                                                                  "alone")]:
+            got = verdict(d)
+            ok = got == want
+            bad += not ok
+            print(f"  {'PASS' if ok else 'FAIL'}  {what} is internally perfect -> exit {got} "
+                  f"(want {want})")
+        got = verdict2(d1, d2)
+        ok = got == 1
+        bad += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  one side quietly reporting FEWER sub-games, "
+              f"aggregates intact, refuses the join -> exit {got} (want 1)")
+
+        got = verdict2(d1, build(Path(td) / "drop-c", two_rows_unnumbered))
+        ok = got == 1
+        bad += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  an unnumbered row on one side fails the join "
+              f"without a traceback -> exit {got} (want 1)")
+
+        # P6-12: presence-gated comparison means an OMITTED field joins clean against a
+        # declared one. That tolerance stays (optional fields are legal), but it must be said
+        # out loud, or the verdict reads as agreement on a value only one side ever stated.
+        def full_settlement(data):
+            fr = data[f"result_{gid}.json"]
+            fr["final_result"]["winner_group"] = a
+            fr["mutual_agreement"] = {"sha256": "0" * 64}
+
+        p = subprocess.run([sys.executable, __file__,
+                            str(build(Path(td) / "asym-a", full_settlement)),
+                            str(build(Path(td) / "asym-b", None))],
+                           capture_output=True, text=True, encoding="utf-8", errors="replace")
+        ok = ("mutual_agreement is declared by 1 of 2" in p.stdout
+              and "winner_group is declared by 1 of 2" in p.stdout)
+        bad += not ok
+        print(f"  {'PASS' if ok else 'FAIL'}  a field present on ONE side only is named as "
+              f"not-agreement rather than passing silently")
 
         # P6-8: a fully conformant bundle whose group ids are Hebrew (our league has them)
         # must verify cleanly with stdout PIPED — Windows decoded pipes as the ANSI code page
@@ -573,6 +690,18 @@ def main() -> int:
     if total == 0:
         print(f"no artifacts found in {root} — expected declaration_<game_id>.json and friends "
               f"(book App. F table 20)", file=sys.stderr)
+        # The restaging hint belongs here too, and this is the likelier way to meet it: the
+        # per-kind hint below is only reached once SOMETHING is flat, so "I pointed at the
+        # parent folder" — every artifact one level down — got the bare refusal with no clue,
+        # which is the afternoon anrbj666's P6-9 describes.
+        below = [p.relative_to(root) for p in root.rglob("*.json")
+                 if p.parent != root and NAME_RE.match(p.name)]
+        if below:
+            print(f"  ^ but {len(below)} artifact file(s) DO exist one or more levels down "
+                  f"(e.g. {below[0]}). This checker reads ONE FLAT directory by design (the "
+                  f"join's archive-exclusion contract) — point it at that directory, or "
+                  f"assemble the four kinds into one, as when preparing the artifacts a report "
+                  f"names.", file=sys.stderr)
         return 2
 
     print(f"{root}  ({total} artifacts)")
@@ -654,7 +783,17 @@ def main() -> int:
     # --- 6. the result agrees with itself ------------------------------------------------
     if found["result"]:
         res = found["result"][0][2]
-        subs = res.get("sub_games") or []
+        # `sub_games` is the table every league gate below derives from, so its own shape is a
+        # named verdict before anything reads it. A map instead of a list made `for sg in subs`
+        # iterate KEYS, and the first `sg.get(...)` died on a str — the same
+        # crash-instead-of-verdict shape pass six closed elsewhere in this file, still open here.
+        raw_subs = res.get("sub_games")
+        if "sub_games" in res:
+            check("result: sub_games is a list of row objects",
+                  isinstance(raw_subs, list) and all(isinstance(sg, dict) for sg in raw_subs),
+                  f"declared {type(raw_subs).__name__}")
+        subs = [sg for sg in raw_subs if isinstance(sg, dict)] \
+            if isinstance(raw_subs, list) else []
         if isinstance(res.get("num_sub_games"), int):
             check("result: sub_games count matches num_sub_games",
                   len(subs) == res["num_sub_games"],
@@ -691,6 +830,23 @@ def main() -> int:
             return (isinstance(v, dict) and bool(v)
                     and all(isinstance(x, (int, float)) and not isinstance(x, bool)
                             for x in v.values()))
+
+        # The same shape discipline pass six gave the per-row TOKENS, given to the per-row
+        # numbers and scores it stopped one line short of. `max(sg["score"].values())` on a
+        # nested value and `sorted(listed)` on a row numbering itself "3" were both TypeErrors
+        # — on the single-directory gate, which is the half a team runs alone before reporting.
+        # sub_game_number is REQUIRED per row, not merely typed when present: it is the key
+        # that matches a row to its log file here and aligns the two sides' row sets in the
+        # join. An unnumbered row was matched by neither and refused by nothing.
+        bad_rows = [sg for sg in subs
+                    if ("score" in sg and not _numeric_map(sg.get("score")))
+                    or not (isinstance(sg.get("sub_game_number"), int)
+                            and not isinstance(sg["sub_game_number"], bool))]
+        rows_wellformed = not bad_rows
+        if subs:
+            check("result: every sub-game row numbers itself with an integer and scores with "
+                  "a per-group map of numbers", rows_wellformed,
+                  f"{len(bad_rows)} malformed row(s), first {bad_rows[0] if bad_rows else None!r}")
 
         if "total_score" in final:
             check("result: total_score is a non-empty per-group map of numbers",
@@ -750,7 +906,7 @@ def main() -> int:
                     check("result: winner_group is the side with the higher total",
                           winner == true_winner,
                           f"totals {basis} but winner_group={winner!r}")
-            if "sub_games_won" in final and subs:
+            if "sub_games_won" in final and subs and rows_wellformed:
                 won_shape = isinstance(final["sub_games_won"], dict)
                 derived_won = {g: sum(1 for sg in subs
                                       if isinstance(sg.get("score"), dict)
@@ -763,7 +919,8 @@ def main() -> int:
                       and {g: final["sub_games_won"].get(g) for g in row_groups}
                       == derived_won,
                       f"rows give {derived_won}, declared {final['sub_games_won']!r}")
-            if "ties" in final and subs and all("score" in sg for sg in subs):
+            if "ties" in final and subs and rows_wellformed \
+                    and all("score" in sg for sg in subs):
                 # The full identity (anrbj666's P5-13): zeroed rows are credited to NOBODY, so
                 # the naive won+won+ties == num_sub_games fails any series with a technical
                 # loss. The true identity carries the zeroed rows explicitly.
@@ -822,13 +979,18 @@ def main() -> int:
                   and (not awarded_to or bool(final.get("first_meeting_between_groups"))),
                   f"awarded to {awarded_to}, winner {final.get('winner_group')!r}, "
                   f"first_meeting {final.get('first_meeting_between_groups')!r}")
-        listed = {sg.get("sub_game_number") for sg in subs}
+        # Integers only, and the row-shape gate above has already named any row that is not one
+        # — so this set is sortable, which the detail string needs even when the check PASSES
+        # (an f-string argument is built before `check` is called, so a stack here fired on
+        # honest bundles too).
+        listed = {sg["sub_game_number"] for sg in subs
+                  if isinstance(sg.get("sub_game_number"), int)
+                  and not isinstance(sg["sub_game_number"], bool)}
         logged = {int(nn) for _, nn, _ in found["log"] if nn is not None}
         if listed and logged:
             check("every log file's sub-game appears in the result",
                   logged <= listed,
-                  f"logs present for {sorted(logged)}, result lists "
-                  f"{sorted(x for x in listed if x is not None)}")
+                  f"logs present for {sorted(logged)}, result lists {sorted(listed)}")
 
     # --- 7. does the uid actually DERIVE? ------------------------------------------------
     #
