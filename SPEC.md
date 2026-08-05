@@ -201,7 +201,15 @@ So, cop side, at the audit and not at settlement:
   (rule 46) or boxed in by them (rule 47) — never under the barrier list the thief reports, which
   is the thief's own claim;
 - an **answer**'s cell must be where the thief's revealed trail ends;
-- either failing settles `tamper_forfeit`, on the same path a false survival claim does.
+- either failing **voids the corroboration**, and the capture must never be counted clean. *How*
+  the sanction is applied is the implementation's: this kit settles the row `tamper_forfeit`, on
+  the same path a false survival claim takes; an implementation may instead record it as
+  **disputed-capture evidence** in the artifacts and leave the sanction to the pair or the league
+  — *"reported, never a unilateral rewrite: the logs decide"* (rule 35). Both routes reach the
+  same refusal; only one side imposing it is not required, and an earlier revision of this
+  paragraph mandated the kit's own mechanism as though it were the law. *(anrbj666's sceptical
+  read of this section, issue #37 — the distinction is theirs and their engine takes the second
+  route.)*
 
 **And it degrades.** A peer whose revealed payloads carry no `position` at all is using a legal
 schema — §3 above says the payload schema is not an interop constraint — so it gets the checks
@@ -210,9 +218,21 @@ own payload schema as an interop constraint is how a checker comes to call an ho
 counted series *tampered*; that mistake has been made once in this kit and must not get a second
 home.
 
+**If you widen where the trail comes from, widen only what you CHECK.** A verifier may reasonably
+try more than one source for the revealed position — `position` first, then the reference's
+`state` spelling (§3) where a peer emits it, then degrade. That is legitimate under the rule
+above, with one hard condition: **the parse must be strict, and anything it cannot parse
+confidently must degrade rather than resolve to a cell.** A loose parse that mis-reads a
+malformed `state` into the *wrong* cell does not widen verification — it invents a new way to
+accuse an honest peer, wearing a helpful hat. Note also that a peer sealing a `state_digest`
+rather than the reference's spelling has nothing to parse at all, and is fully conforming: its
+half is proven by reconstructing the digest from the revealed pair at audit.
+
 *Credit: **anrbj666** (Alon Engel, Renat Karimov) — the live reproduction, the mechanism, the
-construction and the corroboration implementation; **imreeyal** — the corroboration requirement,
-the answer-path symmetry and the degradation contract. Settled on issue #37, 2026-08-05.*
+construction and the corroboration implementation, the sanction/mechanism distinction above, and
+the mis-parse condition on widening the trail source; **imreeyal** — the corroboration
+requirement, the answer-path symmetry and the degradation contract. Settled on issue #37,
+2026-08-05.*
 
 ## 4. Agreement signature, `game_uid` and `game_id`
 
