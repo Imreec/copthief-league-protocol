@@ -883,8 +883,10 @@ falls back to direct peer play.
   It plays a **live series over MCP between two separate processes** — handshake per sub-game,
   sealed turns, mutual audit, four artifacts, both sides deriving one shared `game_uid` — and CI
   runs a two-server version of exactly that on every push. `python -m sparring.cli selfplay` needs
-  no dependencies at all; `docker compose -f sparring/docker-compose.await.yml up` stands one up
-  for your own implementation to dial.
+  no dependencies at all; `SPAR_PEER=<your MCP url> docker compose -f
+  sparring/docker-compose.await.yml up` stands one up that awaits your implementation and dials it
+  back. `SPAR_PEER` is load-bearing: MCP pushes one way per session, so a peer that only listens
+  answers tools and plays nothing — without it the compose runs the tools-only mode.
 
   It is an **uncounted warm-up** (App. E rule 52): nothing is owed by either side, no report is
   produced, and it has no mail code at all — a property checked at startup rather than promised.

@@ -1,8 +1,16 @@
 ﻿# One sparring peer, waiting for YOUR implementation to dial it.
 #
+#     SPAR_PEER=http://host.docker.internal:<your-port>/mcp \
 #     docker compose -f sparring/docker-compose.await.yml up
 #
 # Point your peer at  http://localhost:8931/mcp  (or host.docker.internal from inside a container).
+#
+# SPAR_PEER is your OWN implementation's MCP URL, and it is what makes this peer PLAY: MCP
+# pushes one way per session, so a peer that only listens answers tools and moves nothing —
+# both sides must dial each other. Without SPAR_PEER this compose stands up the tools-only
+# mode: useful for probing the wire surface, but no game loop runs and greetings queue
+# unanswered. SPAR_ROLE picks our side of sub-game 1 (default police-first; set thief if your
+# implementation opens as police).
 #
 # If you expose this through a tunnel to play from elsewhere, rewrite the Host header or fastmcp
 # answers 421 to every request â€” its DNS-rebinding guard rejects any Host that is not its bind
@@ -27,7 +35,8 @@ services:
       - --host=0.0.0.0
       - --port=8931
       - --await-peer
-      - --role=alternate
+      - --peer=${SPAR_PEER:-}
+      - --role=${SPAR_ROLE:-alternate}
       - --artifacts=/kit/runs
     ports:
       - "8931:8931"

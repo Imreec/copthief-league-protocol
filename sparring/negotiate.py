@@ -145,7 +145,9 @@ def verify_peer(cfg: SparConfig, ours: Negotiation, raw: dict) -> Agreed:
         raise Refused(
             "SPAR-N07",
             f"role collision: both peers declared {ours.role!r}. The two sides of a game are "
-            f"complementary; two of the same side can only deadlock.")
+            f"complementary; two of the same side can only deadlock. Two sparring peers hit "
+            f"this whenever both keep the default role — restart exactly one side with "
+            f"--role thief.")
 
     opponent = raw.get("group_id") or (raw.get("identity") or {}).get("group_id")
     if not opponent:

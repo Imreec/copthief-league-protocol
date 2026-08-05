@@ -163,7 +163,13 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("--hint-lang", default="mixed", choices=["en", "he", "mixed"],
                        help="'mixed' deliberately puts Hebrew and an emoji on the wire, so a "
                             "serializer that escapes non-ASCII fails here and not at an audit")
-        p.add_argument("--role", default="alternate", choices=["police", "thief", "alternate"])
+        p.add_argument("--role", default="alternate", choices=["police", "thief", "alternate"],
+                       help="which side WE take in sub-game 1 — roles then alternate every "
+                            "sub-game, all three choices included. 'alternate' is an alias for "
+                            "'police' (police-first), kept for compatibility. Two sparring peers "
+                            "playing each other need COMPLEMENTARY values: start exactly one "
+                            "side with --role thief, or both open every sub-game as police and "
+                            "the handshake refuses with SPAR-N07.")
         p.add_argument("--artifacts", default="runs")
         p.add_argument("--turn-timeout", type=float, default=180.0)
         p.add_argument("--reorder-window", type=int, default=4)
@@ -180,7 +186,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8931)
     p.add_argument("--peer", default=None, help="the opponent's MCP URL")
-    p.add_argument("--await-peer", action="store_true", help="wait for them to dial us")
+    p.add_argument("--await-peer", action="store_true",
+                   help="with --peer: poll the opponent's edge for one handshake budget "
+                        "(turn-timeout) before the first greeting, so a startup race is not "
+                        "read as an opponent that never arrived. Without --peer (tools-only "
+                        "mode): print tunnel guidance while we listen")
     p.set_defaults(func=cmd_serve)
 
     p = sub.add_parser("doctor", help="classify a peer URL before you agree a start time")

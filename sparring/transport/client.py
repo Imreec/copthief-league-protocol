@@ -143,6 +143,17 @@ def _get(url: str, timeout: float) -> int:
         raise PeerUnreachable(str(exc)) from exc
 
 
+def edge_answers(url: str, timeout: float = 2.0) -> bool:
+    """True once ANYTHING HTTP answers at the URL — 406 is the healthy answer, but any status
+    proves an edge is up, which is all `--await-peer` needs to know before the first greeting.
+    A refused connection (nothing bound yet) is the one state that returns False."""
+    try:
+        _get(url, timeout)
+        return True
+    except PeerUnreachable:
+        return False
+
+
 def classify_probe(get_status: int | None, post_status: int | None,
                    post_text: str) -> tuple[int, str]:
     """(exit code, message) from the two probes' raw results. Pure, so it is testable.
