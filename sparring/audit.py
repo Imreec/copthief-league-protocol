@@ -63,10 +63,12 @@ _LEGAL_MOVES = frozenset(_MOVE_DELTA)
 
 def audit_records(records: list[dict], *, played: dict[int, str] | None = None,
                   board_size: int | None = None, barriers_max: int | None = None,
-                  max_steps: int | None = None) -> AuditResult:
+                  max_steps: int | None = None, concession: dict | None = None,
+                  answered_at: list | None = None,
+                  own_barriers: list | None = None) -> AuditResult:
     """Re-hash every revealed record with OUR serializer — and CLOSE the commit-reveal loop.
 
-    Three layers, each optional args arm the next (anrbj666's audit, findings A1-A3, proved the
+    Four layers, each optional args arm the next (anrbj666's audit, findings A1-A3, proved the
     first revision hollow: a wholly fabricated log — a game never played, with diagonal moves at
     off-board coordinates — passed, because the only check was re-hashing each record against
     the commit embedded in that same record):
@@ -90,6 +92,21 @@ def audit_records(records: list[dict], *, played: dict[int, str] | None = None,
        trail it describes is. Where the token IS one this kit recognises, it is cross-checked
        against the delta the positions actually show — a free extra check that can never fire
        on a vocabulary we simply do not know.
+    4. **The caught=true that settled the game** (cop side; issue #37, imreeyal's refinement
+       plus their F-1/F-2): the five points must be TRUE of the evidence, whichever path they
+       took. A ``concession`` (caught=true that answered no claim of ours) must name a cell
+       captured under OUR OWN barrier record — on a barrier (rule 46) or boxed in (rule 47) —
+       and, where the reveal carries positions, the trail must actually end there. An answer
+       (caught=true echoing the cell we claimed, ``answered_at``) has no barrier half — it is
+       the co-location shape — but the trail must end at the claimed cell, or the "answer"
+       paid the thief 5 AND us 20 for a capture the reveal says never happened: both peers
+       profit from that lie, which is exactly why neither can be left to catch it.
+
+       Both halves follow the same degradation contract as the physics layer: a reveal that
+       carries NO positions at all (a legitimate schema — one real league team seals
+       action+state only) gets the checks the evidence supports and a note for the one it
+       cannot, never an accusation. Treating our own payload schema as an interop constraint
+       is the K-1 mistake, and it does not get a second home here.
     """
     failed: list[int] = []
     tampered: list[int] = []
@@ -172,6 +189,61 @@ def audit_records(records: list[dict], *, played: dict[int, str] | None = None,
                 failed.append(step)
                 notes.append(f"step {step} BINDING: revealed, inside our consumed range, but "
                              f"never received in play")
+
+    # --- the caught=true that settled the game: TRUE of the evidence, or refused ----------
+    # One degradation contract, shared with the physics layer above: `prev_pos` is only ever
+    # set from a payload that revealed a `position`, so a schema that seals action+state only
+    # leaves it None — and that is a schema, not an offence (F-1: an earlier revision failed
+    # every honest rule-46/47 ending of exactly such a peer). The trail half runs only when a
+    # trail was revealed; what remains checkable is checked either way.
+    final_step = max(revealed_by_step) if revealed_by_step else -1
+
+    def _cell(claim) -> tuple[int, int] | None:
+        try:
+            return (int(claim[0]), int(claim[1]))
+        except (TypeError, ValueError, IndexError):
+            return None
+
+    if concession is not None and board_size is not None:
+        from sparring.rules.board import Board
+        cell = _cell(concession.get("claim"))
+        barriers = {(int(b[0]), int(b[1])) for b in (own_barriers or [])}
+        problems = []
+        if cell is None:
+            problems.append(f"the conceded claim {concession.get('claim')!r} is not a cell")
+        elif not (cell in barriers or Board(board_size).boxed_in(cell, barriers)):
+            problems.append(f"{list(cell)} is neither on one of our barriers nor boxed in by "
+                            f"them (ours: {sorted(barriers)})")
+        if prev_pos is not None and cell is not None and prev_pos != cell:
+            problems.append(f"the revealed trail ends at {list(prev_pos)}, not {list(cell)}")
+        elif prev_pos is None:
+            notes.append("note: the reveal carries no positions, so the concession's trail "
+                         "half could not be checked — its schema, not an offence; the barrier "
+                         "half is what the evidence supports")
+        if problems:
+            failed.append(final_step)
+            notes.append(f"step {final_step} CONCESSION: the game settled on caught=true "
+                         f"naming {concession.get('claim')!r}, but " + "; ".join(problems) +
+                         " — a concession is worth five points over the zeroed row it "
+                         "replaces, and one the evidence does not support settles like a "
+                         "false survival claim")
+
+    if answered_at is not None:
+        cell = _cell(answered_at)
+        if prev_pos is not None and cell is not None and prev_pos != cell:
+            # F-2: the answer path was the way around the corroboration — echo the cop's own
+            # claimed cell and be believed. A false answer is the worse lie: it pays the thief
+            # 5 AND the cop 20, so BOTH peers profit and neither has an incentive to look.
+            failed.append(final_step)
+            notes.append(f"step {final_step} ANSWER: the game settled on caught=true at our "
+                         f"claimed cell {list(cell)}, but the revealed trail ends at "
+                         f"{list(prev_pos)} — a capture the thief's own reveal says never "
+                         f"happened pays both sides, which is exactly why it is checked "
+                         f"structurally and not left to either of them")
+        elif prev_pos is None:
+            notes.append("note: the reveal carries no positions, so the answered capture's "
+                         "co-location could not be re-checked — its schema, not an offence")
+
     failed = sorted(set(failed))
     result = AuditResult(passed=not failed, verified_steps=max(0, len(records) - len(failed)),
                          failed_steps=failed, tampered_steps=sorted(set(tampered)))

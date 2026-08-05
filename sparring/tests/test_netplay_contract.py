@@ -123,5 +123,151 @@ class TestStepCeiling(unittest.TestCase):
                              f"sealed {peer.step} steps against a ceiling of {cfg.max_steps}")
 
 
+class TestRule46Concession(unittest.TestCase):
+    """Issue #37: a rule-46/47 ending is a fact only the thief can see, so the thief must SAY
+    it — and because saying it is worth five points over the zeroed row it replaces, the cop
+    must CORROBORATE it (imreeyal's refinement). Unit pins for both halves of that bargain,
+    deterministic and network-free — the live shape forked at seeds 4242/777, sub-game 3."""
+
+    def _cfg(self) -> SparConfig:
+        return SparConfig(budgets=Budgets(turn_timeout=5.0, poll_interval=0.5,
+                                          connect_timeout=2.0))
+
+    def test_a_walled_in_thief_concedes_in_its_terminal_message(self):
+        # The send path that was missing: before this, a self-captured thief with no pending
+        # answer returned None here and the cop burned its budget into a timeout.
+        cfg = self._cfg()
+        peer = make_peer(Role.THIEF, cfg, ScriptedTransport([]), FakeClock())
+        peer.engine.observe_barrier(list(peer.engine.position))     # rule 46: walled in place
+        self.assertIs(peer.engine.self_captured(), Outcome.CAPTURE)
+        final = peer.terminal_message()
+        self.assertIsNotNone(final, "a self-captured thief must still say so")
+        self.assertEqual(final.claim_response,
+                         {"claim": list(peer.engine.position), "caught": True},
+                         "the concession names the thief's OWN final cell, caught=true")
+
+    def test_the_cop_settles_a_concession_and_classifies_it(self):
+        # The fork in miniature: the thief's concession reaches the cop as a caught=true that
+        # answers no claim of ours — it must settle CAPTURE (not run to timeout) and be held
+        # for the audit, because it is a concession, not an answer.
+        cfg = self._cfg()
+        cop = make_peer(Role.POLICE, cfg, ScriptedTransport([]), FakeClock())
+        cop.last_claim = [0, 0]
+        concession = turn(12, sender="thief",
+                          claim_response={"claim": [4, 5], "caught": True})
+        outcome = cop.adjudicate(TurnMessage.from_wire(concession), None)
+        self.assertIs(outcome, Outcome.CAPTURE)
+        self.assertEqual(cop.conceded, {"claim": [4, 5], "caught": True})
+
+    def test_an_answer_to_our_own_claim_is_not_held_as_a_concession(self):
+        # The reference behaviour, unchanged: caught=true echoing OUR claimed cell is the
+        # thief's obligatory answer, and the audit treats it exactly as before.
+        cfg = self._cfg()
+        cop = make_peer(Role.POLICE, cfg, ScriptedTransport([]), FakeClock())
+        cop.last_claim = [4, 5]
+        answer = turn(12, sender="thief",
+                      claim_response={"claim": [4, 5], "caught": True})
+        outcome = cop.adjudicate(TurnMessage.from_wire(answer), None)
+        self.assertIs(outcome, Outcome.CAPTURE)
+        self.assertIsNone(cop.conceded)
+        self.assertEqual(cop.answered_at, [4, 5],
+                         "the answer path is held for its OWN audit half (F-2)")
+
+    @staticmethod
+    def _sealed_trail(cells: list[list[int]], with_position: bool = True) -> list[dict]:
+        # Honest records: the sealed move token matches the delta the positions show, or
+        # K-1's token-vs-trail cross-check (rightly) complains about the fixture itself.
+        deltas = {(-1, 0): "MOVE:N", (1, 0): "MOVE:S", (0, 1): "MOVE:E", (0, -1): "MOVE:W",
+                  (0, 0): "STAY"}
+        records = []
+        prev = None
+        for step, pos in enumerate(cells, start=1):
+            move = deltas[(pos[0] - prev[0], pos[1] - prev[1])] if prev else "STAY"
+            payload = {"step": step, "role": "thief", "sub_game": 1,
+                       "move": move, "intent": "truth", "hint": "", "verdict": "settled",
+                       "state": f"grid=7x7;self={pos};barriers=[]"}
+            if with_position:
+                payload["position"] = pos
+            nonce = f"{step:032x}"
+            records.append({"payload": payload, "nonce": nonce,
+                            "commit": kitref.commit(payload, nonce)})
+            prev = pos
+        return records
+
+    def test_a_true_concession_is_corroborated_by_the_cop_s_own_barrier_record(self):
+        from sparring.audit import audit_records
+        records = self._sealed_trail([[4, 6], [4, 5]])          # trail ends ON our barrier
+        result = audit_records(records, board_size=7,
+                               concession={"claim": [4, 5], "caught": True},
+                               own_barriers=[[4, 5]])
+        self.assertTrue(result.passed, result.detail)
+
+    def test_a_false_concession_fails_the_audit_and_names_why(self):
+        # The five-point lie: caught=true over a cell our barriers never touched. The audit —
+        # not trust — is what stands between it and a clean-looking 20.
+        from sparring.audit import audit_records
+        records = self._sealed_trail([[2, 3], [2, 2]])          # honest trail, no capture there
+        result = audit_records(records, board_size=7,
+                               concession={"claim": [2, 2], "caught": True},
+                               own_barriers=[[4, 5]])
+        self.assertFalse(result.passed)
+        self.assertIn("CONCESSION", result.detail)
+
+    def test_a_concession_naming_a_cell_the_trail_never_reached_fails(self):
+        from sparring.audit import audit_records
+        records = self._sealed_trail([[4, 6], [4, 5]])
+        result = audit_records(records, board_size=7,
+                               concession={"claim": [6, 6], "caught": True},
+                               own_barriers=[[5, 6], [6, 5]])   # (6,6) IS boxed in — but the
+        self.assertFalse(result.passed)                          # revealed trail ends at (4,5)
+        self.assertIn("CONCESSION", result.detail)
+
+    def test_an_honest_concession_from_a_position_less_schema_is_not_tampering(self):
+        # imreeyal's F-1 (severe): a conforming peer whose reveal seals action+state and no
+        # `position` key failed corroboration on EVERY honest rule-46/47 ending — our own
+        # payload schema applied as an interop constraint, the K-1 mistake in a second home.
+        # The trail half degrades to a note; the barrier half still runs and still passes.
+        from sparring.audit import audit_records
+        records = self._sealed_trail([[4, 6], [4, 5]], with_position=False)
+        result = audit_records(records, board_size=7,
+                               concession={"claim": [4, 5], "caught": True},
+                               own_barriers=[[4, 5]])
+        self.assertTrue(result.passed, result.detail)
+
+    def test_a_false_concession_from_a_position_less_schema_still_fails_the_barrier_half(self):
+        # Degrading is not disarming: with no trail to check, the barrier half alone still
+        # refuses a concession our own record never captured.
+        from sparring.audit import audit_records
+        records = self._sealed_trail([[2, 3], [2, 2]], with_position=False)
+        result = audit_records(records, board_size=7,
+                               concession={"claim": [2, 2], "caught": True},
+                               own_barriers=[[4, 5]])
+        self.assertFalse(result.passed)
+        self.assertIn("CONCESSION", result.detail)
+
+    def test_a_false_answer_echoing_our_claim_fails_the_audit(self):
+        # imreeyal's F-2: echoing the cop's own claimed cell routed the lie around the
+        # corroboration as an "answer" — and a false answer pays the thief 5 AND the cop 20,
+        # so both peers profit and neither can be left to catch it. The revealed trail must
+        # end at the cell the answer says the capture happened on.
+        from sparring.audit import audit_records
+        records = self._sealed_trail([[2, 3], [2, 2]])           # trail never near [4, 6]
+        result = audit_records(records, board_size=7, answered_at=[4, 6])
+        self.assertFalse(result.passed)
+        self.assertIn("ANSWER", result.detail)
+
+    def test_an_honest_answer_still_verifies(self):
+        from sparring.audit import audit_records
+        records = self._sealed_trail([[4, 5], [4, 6]])           # trail ends where claimed
+        result = audit_records(records, board_size=7, answered_at=[4, 6])
+        self.assertTrue(result.passed, result.detail)
+
+    def test_an_answer_from_a_position_less_schema_degrades_instead_of_accusing(self):
+        from sparring.audit import audit_records
+        records = self._sealed_trail([[4, 5], [4, 6]], with_position=False)
+        result = audit_records(records, board_size=7, answered_at=[4, 6])
+        self.assertTrue(result.passed, result.detail)
+
+
 if __name__ == "__main__":
     unittest.main()
