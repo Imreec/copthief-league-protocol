@@ -239,6 +239,38 @@ contradiction that zeroes both.
 
 ---
 
+## 5c. An ending only you can see must be SAID, or you fork the game
+
+Two of the three ways a capture happens are facts about the **thief's own hidden position** — a
+barrier dropped on its cell (rule 46) and no legal move left (rule 47). The cop cannot infer
+either. If your thief settles those endings silently, it stops playing while the cop, having
+learned nothing, waits out its whole budget and settles a **timeout**. Both peers are honest,
+both are correct by their own knowledge, and they have just described one sub-game two ways —
+the contradictory-report shape rule 35 zeroes for **both** teams.
+
+It is worse than a normal bug in two ways. It only appears in a **live** run: self-play shares a
+process, so the outcome never has to travel, and a one-sub-game CI test is protected by
+random-walk odds. And it cascades — from the fork on, the two peers are auditing different
+games, so the next sub-games settle as `tamper_forfeit` and the sub-game index drifts until one
+side gives up.
+
+This repo is the example. Two copies of the sparring peer were played against each other over
+real HTTP; sub-game 3 settled **capture on one side and timeout on the other**, three runs out
+of three, no fault injected (anrbj666, issue #37). The settlement guard then correctly refused
+both result artifacts — the guard held, but the game it was guarding had already split in two.
+
+**The fix costs nothing**, because the vocabulary already exists: the thief's game-ending final
+carries `claim_response: {"claim": [own final cell], "caught": true}`, the same shape every
+implementation already emits on a co-location capture, and a conforming cop already settles
+CAPTURE on it. See SPEC §3.1 for the construction, the answer-vs-concession distinction, and why
+the cop must **corroborate** a `caught: true` rather than believe it.
+
+The check is mechanical, and it is the same shape as §5b above: find the line where your thief
+detects a rule-46/47 ending, and follow it to the message that leaves your process. If there
+isn't one, your opponent will never know you lost.
+
+---
+
 ## 6. Report format traps
 
 - **Rule 34 says JSON attachment; the book's own listing sends a text body.** The rule requires the

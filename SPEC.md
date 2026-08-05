@@ -62,11 +62,13 @@ output, or the game cannot start / audit / settle. Each is backed by a vector:
    declares the hash of a described model. The doc schema must match or the hashes are not
    comparable. `vectors/locked_model.json`.
 
-Three more places are **behaviour** rather than bytes — a conforming peer answers the same way, and
-answering differently costs a game just as surely as a hash mismatch. Each is pinned as a truth
-table, not a digest: the locked-model refusal rule (§7, `vectors/locked_model.json`), the
+Four more places are **behaviour** rather than bytes — a conforming peer answers the same way, and
+answering differently costs a game just as surely as a hash mismatch. Three are pinned as truth
+tables rather than digests: the locked-model refusal rule (§7, `vectors/locked_model.json`), the
 at-least-once receiver contract (§7.1, `vectors/delivery_contract.json`) and the pairing
-declaration (§7.2, `vectors/pairing_declaration.json`).
+declaration (§7.2, `vectors/pairing_declaration.json`). The fourth has no vector because it is a
+message a peer must **send**: a rule-46/47 ending is visible only to the thief, so a thief that
+does not say it forks the game (§3.1).
 
 Everything else (your strategy, your GUI, your prompts, your infra) is private and needs no
 cross-team agreement.
@@ -145,6 +147,72 @@ Note the nonce is **pipe-appended to the canonical string**, not placed inside t
   `f"grid={n}x{n};self={[row, col]};barriers={sorted_barriers}"` (Python list repr, note the space
   after the comma). It carries *your own* position only — never the opponent's (hidden-position
   model) — so there is no shared board frame both sides must reproduce.
+
+### 3.1 Endings only one side can see — the `caught: true` final
+
+**What settles a capture.** Three families, all from the book, all equal in standing:
+
+1. **Co-location** — the cop claims a cell and the thief is on it.
+2. **Rule 46** — a barrier is placed on the thief's own cell.
+3. **Rule 47** — the thief has no legal move: **every orthogonal neighbour** is a barrier or off
+   the board. `STAY` does not rescue it; the rule is about movement, not about intent.
+
+A physics gate that encodes only the first will refuse every legitimate cornering the league
+plays. *(Settled jointly with **anrbj666** on issue #37, and matching both independent engines'
+`boxed_in` predicate.)*
+
+**Families 2 and 3 are facts only the THIEF can observe** — they are properties of its own hidden
+position — and the cop cannot infer them. So they must be **said**, on the wire, or the game
+forks: the thief settles CAPTURE from its own knowledge while the cop, having learned nothing,
+waits out its budget and settles TIMEOUT. Two honest peers then describe one sub-game two ways,
+which is the contradictory-report shape App. E rule 35 zeroes. This is not hypothetical — it was
+reproduced live between two copies of this kit's own sparring peer, deterministically, three
+times, with no fault injected (issue #37, found by **anrbj666**).
+
+**The construction is the league's existing vocabulary, not an extension.** The thief's
+game-ending final carries
+
+```json
+"claim_response": {"claim": [<thief's own final cell>], "caught": true}
+```
+
+which is the same `caught: true` final every implementation already emits on a co-location
+capture — the one whose `smell_grid` this SPEC already exempts from the one-advance law
+("The zero-step final convention", §7). A conforming cop already settles CAPTURE on any
+thief-sent `caught: true`. **Nothing new is registered; a thief that stays silent here is simply
+not conforming.**
+
+**Answer or concession, and why the cop must check.** A `caught: true` that *echoes the cell the
+cop claimed* is an **answer** — the co-location shape. One that *names any other cell* is a
+**concession** — a rule-46/47 ending. Both settle CAPTURE immediately; they differ at the audit,
+and both must be corroborated rather than believed, because both are worth points the evidence
+may not support:
+
+| | pays the thief | pays the cop | who profits from a false one |
+|---|---|---|---|
+| capture | 5 | 20 | — |
+| timeout / technical loss / tamper forfeit | 0 | 0 | — |
+| a false **concession** | +5 over the zeroed row it replaces | +20 | the thief |
+| a false **answer** | +5 | +20 | **both peers** — so neither can be left to catch it |
+
+So, cop side, at the audit and not at settlement:
+
+- a **concession**'s cell must be captured under the cop's **own** barrier record — on a barrier
+  (rule 46) or boxed in by them (rule 47) — never under the barrier list the thief reports, which
+  is the thief's own claim;
+- an **answer**'s cell must be where the thief's revealed trail ends;
+- either failing settles `tamper_forfeit`, on the same path a false survival claim does.
+
+**And it degrades.** A peer whose revealed payloads carry no `position` at all is using a legal
+schema — §3 above says the payload schema is not an interop constraint — so it gets the checks
+the evidence supports and a note for the one it cannot, **never an accusation**. Treating your
+own payload schema as an interop constraint is how a checker comes to call an honest, sealed,
+counted series *tampered*; that mistake has been made once in this kit and must not get a second
+home.
+
+*Credit: **anrbj666** (Alon Engel, Renat Karimov) — the live reproduction, the mechanism, the
+construction and the corroboration implementation; **imreeyal** — the corroboration requirement,
+the answer-path symmetry and the degradation contract. Settled on issue #37, 2026-08-05.*
 
 ## 4. Agreement signature, `game_uid` and `game_id`
 
