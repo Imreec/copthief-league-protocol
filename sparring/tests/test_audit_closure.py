@@ -33,8 +33,66 @@ class TestTheFoundingProbe(unittest.TestCase):
                 for s in (1, 2, 3)]
         result = audit_records(fake, board_size=7, barriers_max=14, max_steps=35)
         self.assertFalse(result.passed)
-        self.assertIn("not one of the five legal actions", result.detail)
         self.assertIn("off the 7x7 board", result.detail)
+        # Judged from the POSITION TRAIL, not from the spelling of the move — so it is a
+        # physics failure and not an integrity one, and must not be called tampering.
+        self.assertEqual([], result.tampered_steps)
+
+    def test_a_diagonal_is_caught_by_the_trail_whatever_it_is_called(self):
+        """A1/A2's diagonal, on-board and named in a vocabulary this kit does not know.
+
+        The old token whitelist would have caught `MOVE:NE` and missed `NE`; the trail catches
+        both, because a diagonal is two orthogonal steps however the peer spells it.
+        """
+        for token in ("MOVE:NE", "NE", "northeast", None):
+            with self.subTest(token=token):
+                diag = [sealed({"step": s, "position": [s, s], "move": token})
+                        for s in (1, 2, 3)]
+                result = audit_records(diag, board_size=7, barriers_max=14, max_steps=35)
+                self.assertFalse(result.passed)
+                self.assertIn("more than one orthogonal step", result.detail)
+
+
+class TestForeignVocabularies(unittest.TestCase):
+    """A revealed payload's SCHEMA is not an interop constraint — `vectors/commit_reveal.json`
+    ("the canonical form must match cross-team even though the payload does not").
+
+    An earlier revision rejected any `move` token outside this kit's own `MOVE:<D>` spelling,
+    unconditionally, and so called an honest sealed counted series TAMPERED: both real league
+    teams name their moves `"E"`, and the pairing's signed config declared
+    `move_set: ["N", "S", "E", "W", "STAY"]`. Found by the reciprocal audit of anrbj666's
+    counted artifacts, 2026-08-05, inside the copy of OUR OWN records they had sealed.
+    """
+
+    def test_a_legal_walk_named_in_another_teams_vocabulary_verifies(self):
+        recs = [sealed({"step": s, "position": [0, s], "move": "E", "intent": "truth"})
+                for s in (1, 2, 3)]
+        result = audit_records(recs, board_size=7, barriers_max=14, max_steps=35)
+        self.assertTrue(result.passed, result.detail)
+
+    def test_a_token_this_kit_does_not_know_is_not_tampering(self):
+        """`BARRIER` is one real team's word for "this turn placed a barrier". Unknown here,
+        and a position that does not move is legal, so there is nothing to complain about."""
+        recs = [sealed({"step": s, "position": [2, 2], "move": "BARRIER"}) for s in (1, 2)]
+        result = audit_records(recs, board_size=7, barriers_max=14, max_steps=35)
+        self.assertTrue(result.passed, result.detail)
+
+    def test_a_recognised_token_is_still_checked_against_the_trail(self):
+        """Where the spelling IS ours, it must describe the step the positions show."""
+        recs = [sealed({"step": 1, "position": [0, 1], "move": "MOVE:E"}),
+                sealed({"step": 2, "position": [1, 1], "move": "MOVE:E"})]   # actually south
+        result = audit_records(recs, board_size=7, barriers_max=14, max_steps=35)
+        self.assertFalse(result.passed)
+        self.assertIn("but the positions moved", result.detail)
+        self.assertEqual([], result.tampered_steps)
+
+    def test_a_real_hash_mismatch_is_still_tampering(self):
+        recs = honest_walk()
+        recs[1]["commit"] = "0" * 64
+        result = audit_records(recs, board_size=7, barriers_max=14, max_steps=35)
+        self.assertFalse(result.passed)
+        self.assertEqual([2], result.tampered_steps)
+        self.assertIn("THREE different commit constructions", result.detail)
 
 
 class TestBinding(unittest.TestCase):

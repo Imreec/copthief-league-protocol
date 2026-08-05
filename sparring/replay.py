@@ -46,15 +46,42 @@ def verify_log(path: Path) -> tuple[bool, str]:
         return False, f"{path.name}: no records — the game left nothing to verify"
 
     terms = _terms_beside(path)
-    result = audit_records(records,
-                           board_size=terms.get("board_size"),
-                           barriers_max=terms.get("barriers_max"),
-                           max_steps=terms.get("max_steps"))
-    if result.passed:
-        return True, (f"{path.name}: Verified OK — {result.verified_steps} records re-hashed "
-                      f"against their commitments")
-    return False, (f"{path.name}: TAMPERED — steps {result.failed_steps} do not reproduce their "
-                   f"commitments\n    {result.detail}")
+
+    def audit(recs: list[dict]):
+        return audit_records(recs,
+                             board_size=terms.get("board_size"),
+                             barriers_max=terms.get("barriers_max"),
+                             max_steps=terms.get("max_steps"))
+
+    # A bundle may seal ONE side or BOTH. Reading only `records` and reporting "Verified OK"
+    # over a two-sided log certified half a file with the other half open on the desk — found
+    # against anrbj666's counted logs, 2026-08-05, which seal `opponent_records` beside their
+    # own. Every sealed record in the file gets re-hashed, and the line says how many.
+    halves = [("own", records)]
+    if doc.get("opponent_records"):
+        halves.append(("opponent", doc["opponent_records"]))
+
+    lines, ok, total = [], True, 0
+    for label, recs in halves:
+        result = audit(recs)
+        total += len(recs)
+        if result.passed:
+            continue
+        ok = False
+        # TAMPERED is rule 20's word and it means one thing: a record did not reproduce its
+        # commitment. A physics or binding failure is a different verdict and gets a different
+        # word, or an honest team is told it forged a log it did not forge.
+        verdict = ("TAMPERED — steps {} do not reproduce their commitments"
+                   .format(result.tampered_steps) if result.tampered_steps else
+                   "ILLEGAL — every record re-hashes, but steps {} break the signed physics"
+                   .format(result.failed_steps))
+        lines.append(f"{path.name} ({label} records): {verdict}\n    {result.detail}")
+
+    if ok:
+        sides = "both sides'" if len(halves) > 1 else "one side's"
+        return True, (f"{path.name}: Verified OK — {total} records re-hashed against their "
+                      f"commitments ({sides} sealed half)")
+    return False, "\n  ".join(lines)
 
 
 def verify_dir(root: Path) -> tuple[int, int, list[str]]:
