@@ -360,12 +360,59 @@ Both teams independently build the final result JSON, and both email it — the 
   re-serialization, and it nearly scored 0.
 - **Derived, not declared.** Totals and the diversity flag are derived from the per-sub-game
   results and the game-count declarations by the fixed scoring table (book ch.9), so agreement on
-  sub-games implies agreement on totals. **On a series tie, the App. F tie score (2) is ADDED
-  into each side's `total_score`** — the reference's own aggregate behaviour, observed live
-  against it. A result that instead carries the raw sum beside a separate tie field describes
-  the same match with different numbers than a reference-shaped opponent's report — the rule-35
-  contradiction, found the first time a tied series was diffed cross-implementation
-  (imreeyal dogfood N1, 2026-08-04).
+  sub-games implies agreement on totals. **On a series tie, this kit ADDS the App. F tie score
+  (2) into each side's `total_score`** — see the tie rule immediately below, which is a
+  documented book-versus-reference contradiction and not a settled fact.
+
+- **The tie rule is a book-versus-reference contradiction. Name it, choose, and declare it.**
+  The two authorities disagree about *where* the tie score lands, and the disagreement is
+  invisible until a series happens to tie:
+
+  - **The book says SERIES level, on the accumulated score.** Ch.9's *כלל התיקו / Tie Rule*:
+    "if the **accumulated** score of **all the sub-games** between a pair of groups ends in a tie
+    — [tie score] … so that no encounter remains without a scoring decision." The binding
+    parameters table says the same in the row that fixes the value — App. F **table 17**, row 5:
+    "[tie score] — score to each side **when the accumulated score against an opponent ends in a
+    tie** — 2, fixed." Since the binding table is the only binding source for quantitative
+    values, this is the stronger authority.
+  - **The reference implements a PER-SUB-GAME award that then sums.** Its own published example
+    result (`4-final-result.txt`) has sub-game 3 at `"result": "tie"` with `"score": {2, 2}`, a
+    `total_score` of `32 / 12` that is the plain sum of the three rows (`20+10+2`, `5+5+2`), and
+    `"series_tie": false`. There is **no** series-level adjustment anywhere in it.
+
+  *An earlier revision of this section asserted the series-level award and attributed it to "the
+  reference's own aggregate behaviour, observed live against it". That attribution was wrong —
+  the reference's own artifact disproves it — and the same revision claimed a raw-sum report
+  would differ from "a reference-shaped opponent's report", which inverts the truth: a
+  reference-shaped report carries exactly the raw sum. The rule survived the correction; only its
+  authority changed, from the one source that contradicts it to the two that state it. Found by
+  **best2934** (Tomer Levy, Eyal Koloshi, Alon Issman) reading the reference we had cited, kit
+  issue #45; the contradiction was adjudicated by the course staff under the book's
+  academic-freedom clause, which makes either behaviour implementable **provided the choice is
+  documented and justified**.*
+
+  **This kit's choice, documented as the clause requires: series-level, ADDITIVE.** The reasons,
+  in the order that decides them — (1) rule 35 charges **both** teams for contradictory reports,
+  so a reading held alone costs an innocent opponent; (2) every league implementation checked so
+  far sums additively (imreeyal, anrbj666, best2934); (3) *replacing* inverts the ordering the
+  rule claims to protect — a fought 25–25 series would pay 2 while a single narrow sub-game win
+  pays 20, so a team would rank higher for one victory than for six draws (argument due to
+  best2934).
+
+  **What is still open, and should be declared rather than assumed:** the book fixes the tie
+  score at the series level but does not say whether it *replaces* the summed scores or is
+  *added* to them, and the reference answers a different question entirely. Three behaviours are
+  therefore live in the league — `series_add` (this kit), `series_replace` (the book's other
+  reading), `per_subgame` (the reference) — and two conformant teams can legitimately compute
+  different totals for one tied series. **Agree it before the first window, like the scent
+  model.** A pair that does not will discover it only if a series ties, which is rare enough
+  never to surface in a friendly and expensive enough to matter when it does.
+
+  **Do not apply two mechanisms to the same points.** §6.2's `ties` counts tie-*scored* rows —
+  the reference's per-sub-game concept — and this section's award is a series-level one. Under
+  `series_add` a tied row already carries its 2 into the sum, and the series award is a further
+  2 on top; that is the intended reading here, but a pair that reads one field the reference's
+  way and the other this way will double-count without either side seeing it.
 - **The report's `game_uid` must be derived from the flat negotiated terms.**
   The uid is a pure function of the **flat 14-key negotiated terms** and both group ids (§4) — the
   reference computes `derive_game_ids(terms_from_config(...), ...)`, where `terms_from_config`
