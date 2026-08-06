@@ -297,6 +297,37 @@ isn't one, your opponent will never know you lost.
 
 ---
 
+## 6a. The tie rule is undeclared, and you will find out on the one series that ties
+
+Three behaviours are live in this league and all three are defensible, because the book and the
+reference disagree about where the App. F tie score (2) lands:
+
+| behaviour | who | totals for a 25–25 series |
+|---|---|---|
+| `series_add` | this kit, imreeyal, anrbj666, best2934 | 27 / 27 |
+| `series_replace` | the book's other reading | 2 / 2 |
+| `per_subgame` | the reference implementation | 25 / 25, with tied ROWS paying 2 each |
+
+The book puts the award at the **series** level, on the accumulated score (ch.9 *כלל התיקו*, and
+App. F **table 17** row 5, which is binding for the value). The reference awards it **per
+sub-game** and plainly sums — see its own `4-final-result.txt`. The course staff have ruled this a
+genuine contradiction under the academic-freedom clause: implement either, **document and justify
+the choice**. SPEC §6 has the full disposition and this kit's documented choice.
+
+**Why it is a trap rather than a disagreement.** It cannot surface in a friendly, because a level
+series is rare. It cannot surface in testing, because each side is self-consistent. It surfaces
+exactly once — in a counted series that happens to tie — and then two honest reports carry
+different `total_score` values for one match, which is the contradiction rule 35 zeroes for
+**both** teams.
+
+**So declare it before the first window, beside the scent model**, as a `tie_rule` value:
+`series_add | series_replace | per_subgame`. One line in the pairing constitution costs nothing;
+the alternative is a coin flip you do not know you are making. *(Raised by **best2934** on kit
+issue #45, along with the observation that the kit had attributed its own rule to the one source
+that contradicts it.)*
+
+---
+
 ## 7. If you are practising
 
 Warm-ups are explicitly permitted and encouraged (App. E rule 52) — *"warm-up games that are not
