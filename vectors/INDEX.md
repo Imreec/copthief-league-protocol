@@ -19,6 +19,7 @@ the totals it actually ran.
 | [`locked_model.json`](locked_model.json) | `CORE` | §7 | the locked-model doc schema and the refusal truth table |
 | [`pairing_declaration.json`](pairing_declaration.json) | `PROMOTED` | §7.2 | `sub_game_number` + `role` in the negotiate extras, and when they refuse |
 | [`delivery_contract.json`](delivery_contract.json) | `PROMOTED` | §7.1 | the at-least-once receiver contract, as a decision table |
+| [`turn_message.json`](turn_message.json) | `PROMOTED` | §7.5 | the reference-v3 wire surface: what each tool carries, and what refuses |
 | [`uid_declaration.json`](uid_declaration.json) | `PROPOSED` | §7.3 | declaring the derived `game_uid` at negotiate, and when it refuses |
 | [`smell_binding.json`](smell_binding.json) | `PROPOSED` | §7.4 | binding the transmitted smell grid into the sealed step record |
 | [`scent_book_v3.json`](scent_book_v3.json) | `PROMOTED` | §5.1 | `multiplicative_book_v1` — the book's own scent model |
