@@ -239,7 +239,16 @@ requirement, the answer-path symmetry and the degradation contract. Settled on i
 Before play, each peer signs the agreed terms and both derive a shared id — the pre-game gate that
 refuses to start on any mismatch.
 
-- **Signature** = the §3 construction over the terms: `SHA256(canonical_json(terms)|nonce)`. Each
+- **Signature** = the §3 construction over the terms: `SHA256(canonical_json(terms)|nonce)`.
+  **The separator is a SINGLE `|` (U+007C) and nothing else** — not a bare concatenation, not
+  `||`. Spelled out because the formula loses the argument against a reader's habits: all three
+  readings are plausible in prose, only one reproduces the vector, and the two wrong ones fail
+  **every** handshake with nothing to go on but "signature mismatch" — which reads as the
+  opponent being broken, or as the terms disagreeing, and sends both sides diffing fourteen
+  values that already agree. It is invisible to self-testing, too: sign and verify with the
+  same wrong separator and every local test passes. Implementations SHOULD name the expected
+  construction in the refusal itself rather than only refusing. *(Raised by **best2934**, kit
+  issue #45, after running all three forms against the vector's own numbers.)* Each
   peer signs the terms with its own nonce; the opponent re-verifies over the terms it received
   (which must value-equal its own) using the signer's nonce. `vectors/terms_signature.json`. The
   `terms` are the subset of `config/game.json` both sides must match on (board, scent params,
