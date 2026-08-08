@@ -971,6 +971,54 @@ the machinery already protecting moves protects the field. Scoped by **Imreec** 
 privacy — from the frame-inversion measurement that showed a bound field leaks the sender's cell
 exactly as an unbound one does. Agreed by both teams 2026-07-29 as worth doing on its own merits.*
 
+### 7.5 The wire surface — which tools, carrying what (PROMOTED)
+
+`vectors/turn_message.json`.
+
+**Compare tool lists before you compare anything inside them.** Two peers can agree every one of
+the fourteen terms, verify each other's signatures, settle the scent lock, the parity and the step
+semantics, bring up both tunnels — and still be unable to exchange a single move, because they
+never once compared the *names of the calls*. That is not hypothetical: it cost **best2934** and
+**imreeyal** a scheduled friendly on 2026-08-08 (issue #45), with everything else already agreed.
+Their surfaces intersected in exactly one name, `negotiate`.
+
+The `wire_shape: reference-v3` locked document has always carried the tool list in its `params`.
+What it did not carry — and what this section adds — is the **shape of what those tools carry**, so
+a team could learn that `receive_turn` exists and still have nothing to build against.
+
+| tool | status | carries |
+|---|---|---|
+| `negotiate` | REQUIRED | flat terms + nonce + signature + `identity`; either side may open (§4) |
+| `receive_turn` | REQUIRED | one `TurnMessage`, one message per half-turn |
+| `submit_audit` | REQUIRED | one `AuditPayload` per sub-game: the sealed chain **with nonces** |
+| `receive_control` | OPTIONAL | a status channel touching no game state; answering 200 is conformant |
+
+**The transport is symmetric push.** Each side CALLS the other's `receive_turn` with its own turn
+and polls its own inbox for the other's. Neither peer can be purely passive: there is nowhere else
+for a turn to go. This is one HTTP call per turn, not a client stack.
+
+**Two things are deliberately NOT on this wire**, and both have cost a window:
+
+- **No step-0 tool and no step-0 turn.** The hardware/model declaration rides in `negotiate` under
+  `identity`; the sealed step-0 record is disclosed inside `submit_audit`. A peer that waits for a
+  `declare_step0` call waits forever.
+- **No `hello`.** A liveness probe should be `tools/list`, not a tool *call*. A peer that
+  implements none of your names is still **up**, and `negotiate` is the authority on whether you
+  may play. Collapsing "you do not implement this" into "you are not there" is how one team spent
+  five minutes reporting a live opponent as absent.
+
+`step` numbering is per-peer and a step is a **round** — see the fixture's field notes, and read
+§4's `max_steps` alongside them: two peers reading "35" as *rounds* and as *half-turns* agree on
+every signed term and still desync, and no gate either of them builds will say a word about it.
+
+Validation happens **before any state change**. The fixture pins seven cases including the two
+load-bearing ones: an unknown key is tolerated (the extension seam) and a missing required key is
+refused rather than defaulted (a defaulted `commit` is a move the sender never sealed).
+
+*Raised by **best2934** (Tomer Levy, Eyal Koloshi, Alon Issman) after the disjoint-surface friendly,
+who asked to be pointed at a published contract rather than reverse-engineer payload shapes from a
+live game — "that is how a series ends in a rule 35 void". They were right, and the gap was ours.*
+
 ## 8. Conformance
 
 A team is **interop-ready** when:

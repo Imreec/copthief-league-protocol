@@ -317,6 +317,62 @@ def ref_binding_audit(sealed: dict, archived_grid: dict | None) -> str:
     return "ok" if ref_smell_grid_sha256(archived_grid) == digest else "bound_mismatch"
 
 
+# --- THE WIRE SURFACE (SPEC section 7.5) -------------------------------------------------
+#
+# The tool NAMES have been published since the first release, inside the `wire_shape:
+# reference-v3` locked document. What was never published is the SHAPE of what those tools
+# carry, so a team could learn that `receive_turn` exists and still have nothing to build
+# against. best2934 lost a scheduled friendly to exactly that gap (issue #45): two peers with
+# fourteen agreed terms, verifying signatures and green tunnels, whose tool surfaces turned out
+# to be disjoint except for `negotiate`.
+#
+# Validation is behaviour, not bytes, so it is pinned as a decision function like section 7.1.
+
+TURN_REQUIRED = ("step", "sender", "hint", "smell_grid", "commit", "timestamp")
+TURN_OPTIONAL = ("barrier_placed", "capture_claim", "claim_response", "win_claim")
+
+
+def ref_turn_validate(raw: dict) -> str:
+    """Whether an inbound TurnMessage is admissible, and if not, which field refused it.
+
+    Returns ``"accept"`` or ``"<field>: <reason>"``. A receiver MUST validate before any
+    state change: the message is adversarial input, and a partially-applied bad turn is
+    unrecoverable. Every problem is named rather than the first one, so a peer fixes its
+    encoder in one round trip instead of six.
+
+    Unknown keys are TOLERATED and ignored — the extension seam. Missing required keys are
+    not: a receiver that defaults them invents a move the sender never sealed.
+    """
+    problems: list[str] = []
+    step = raw.get("step")
+    if not isinstance(step, int) or isinstance(step, bool) or step < 0:
+        problems.append("step: required non-negative int")
+    for name in ("sender", "timestamp"):
+        value = raw.get(name)
+        if not isinstance(value, str) or not value:
+            problems.append(f"{name}: required non-empty str")
+    if not isinstance(raw.get("hint"), str):
+        problems.append("hint: required str (may be empty)")
+    grid = raw.get("smell_grid")
+    if not isinstance(grid, dict) or not all(
+        isinstance(k, str) and isinstance(v, (int, float)) and not isinstance(v, bool)
+        for k, v in grid.items()
+    ):
+        problems.append("smell_grid: required dict of 'r,c' -> number")
+    commit = raw.get("commit")
+    if not (isinstance(commit, str) and len(commit) == 64
+            and all(c in "0123456789abcdef" for c in commit)):
+        problems.append("commit: required 64-char lowercase hex")
+    for name in ("barrier_placed", "capture_claim"):
+        cell = raw.get(name)
+        if cell is not None and not (
+            isinstance(cell, (list, tuple)) and len(cell) == 2
+            and all(isinstance(i, int) and not isinstance(i, bool) for i in cell)
+        ):
+            problems.append(f"{name}: optional [row, col] of ints, or null")
+    return "accept" if not problems else "; ".join(problems)
+
+
 # --- AT-LEAST-ONCE DELIVERY (SPEC section 7.1) -------------------------------------------
 #
 # Both registered wire shapes ride HTTP, which is at-least-once. A push whose ack is lost is
@@ -763,6 +819,35 @@ def run() -> int:
         "tolerated traffic never renews the deadline",
         ref_deadline_decision(100.0, 99.0, True, True) == ref_deadline_decision(100.0, 99.0, False, False)
         and ref_deadline_decision(100.0, 100.0, True, True) == "expired")
+
+    tm = _section("turn_message.json")
+    for i, v in enumerate(tm["validation"]):
+        got = ref_turn_validate(v["message"])
+        failures += not check(f"turn validation #{i} ({v['note'][:58]})",
+                              got == v["verdict"], f"got {got}")
+    # The two halves that make this fixture worth having: unknown keys must pass (or the wire
+    # can never be extended) and missing required keys must not (or a receiver invents a move
+    # the sender never sealed). Asserted as a property, not left to the rows above.
+    accepted = [v for v in tm["validation"] if v["verdict"] == "accept"]
+    failures += not check("an unknown key is tolerated",
+                          any("unknown_field" in v["message"] for v in accepted))
+    failures += not check("a missing required key is refused",
+                          all(ref_turn_validate({k: val for k, val in accepted[0]["message"].items()
+                                                 if k != req}) != "accept"
+                              for req in TURN_REQUIRED))
+    # The tool surface is the thing best2934 could not find (issue #45): assert the fixture and
+    # the `wire_shape: reference-v3` locked document name the SAME four tools, so the two places
+    # a team might look can never disagree.
+    wire_doc = next(e["doc"] for e in lm["registered"]
+                    if e["doc"]["family"] == "wire_shape" and e["doc"]["name"] == "reference-v3")
+    failures += not check("fixture and reference-v3 lock doc agree on the tool surface",
+                          set(tm["tools"]) == set(wire_doc["params"]["tools"]),
+                          f'fixture {sorted(tm["tools"])} vs doc {sorted(wire_doc["params"]["tools"])}')
+    failures += not check("negotiate, receive_turn and submit_audit are all REQUIRED",
+                          all(tm["tools"][name].startswith("REQUIRED")
+                              for name in ("negotiate", "receive_turn", "submit_audit")))
+    failures += not check("receive_control is OPTIONAL",
+                          tm["tools"]["receive_control"].startswith("OPTIONAL"))
 
     sb = _section("scent_book_v3.json")
     rho = sb["field_walk"]["rho"]

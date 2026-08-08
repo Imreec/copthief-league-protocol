@@ -44,6 +44,8 @@ TIERS: dict[str, tuple[str, str, str]] = {
                                                      "extras, and when they refuse"),
     "delivery_contract.json": ("PROMOTED", "§7.1", "the at-least-once receiver contract, as a "
                                                    "decision table"),
+    "turn_message.json":      ("PROMOTED", "§7.5", "the reference-v3 wire surface: what each "
+                                                   "tool carries, and what refuses"),
     "uid_declaration.json":   ("PROPOSED", "§7.3", "declaring the derived `game_uid` at "
                                                    "negotiate, and when it refuses"),
     "smell_binding.json":     ("PROPOSED", "§7.4", "binding the transmitted smell grid into the "
@@ -589,6 +591,117 @@ def gen_locked_model() -> None:
     })
 
 
+def gen_turn_message() -> None:
+    """SPEC §7.5 — what the reference-v3 tools actually carry."""
+    example = {
+        "step": 7,
+        "sender": "police",
+        "hint": "north of the park",
+        "smell_grid": {"3,3": 0.9, "3,4": 0.5, "4,3": 0.5},
+        "commit": "a" * 64,
+        "timestamp": "2026-08-08T19:00:00Z",
+        "barrier_placed": [5, 6],
+        "capture_claim": None,
+        "claim_response": None,
+        "win_claim": None,
+    }
+    cases = [
+        (example, "the full ten-key set, nulls explicit"),
+        ({**example, "unknown_field": {"anything": 1}},
+         "an UNKNOWN key is tolerated and ignored — the extension seam. A receiver that "
+         "refuses it cannot be extended without a flag day"),
+        ({**example, "timestamp": ""},
+         "empty timestamp REFUSED. Decorative field, load-bearing refusal: this kit's own "
+         "sparring peer sends an empty string, so every one of its turns is rejected by a "
+         "conformant receiver. A pair may agree to tolerate it — but BOTH must, because one "
+         "side tolerating it plays a series the other refuses"),
+        ({k: v for k, v in example.items() if k != "commit"},
+         "a MISSING required key is refused, never defaulted — a defaulted commit is a move "
+         "the sender never sealed"),
+        ({**example, "commit": "A" * 64},
+         "uppercase hex refused: the commit is compared as a string, so case is a divergence"),
+        ({**example, "smell_grid": {"3,3": "0.9"}},
+         "a stringified intensity refused — it survives JSON and poisons the physics check"),
+        ({**example, "step": -1}, "a negative step is not a step"),
+    ]
+    _write("turn_message.json", {
+        "description": "PROMOTED — the reference-v3 wire surface (SPEC §7.5). The tool "
+                       "NAMES were already published inside the `wire_shape: reference-v3` locked "
+                       "document; what was missing was the SHAPE of what they carry, so a team "
+                       "could read the names and still have nothing to build against. best2934 "
+                       "lost a scheduled friendly to that gap (issue #45): fourteen agreed terms, "
+                       "verifying signatures, green tunnels both sides, and tool surfaces "
+                       "disjoint except for `negotiate`. Promoted rather than proposed because "
+                       "this surface has carried two full counted six-sub-game series over public "
+                       "tunnels between independently written peers (imreeyal vs anrbj666 "
+                       "2026-08-04; imreeyal vs uoh-sqak 2026-08-08), mutual audits clean both "
+                       "ways.",
+        "tools": {
+            "negotiate": "REQUIRED. The pre-game gate: flat terms + nonce + signature + identity. "
+                         "Either side may open. See §4.",
+            "receive_turn": "REQUIRED. One TurnMessage, one message per half-turn. Each side "
+                            "CALLS the other's receive_turn with its own turn — the transport "
+                            "is symmetric push, so neither peer can be purely passive.",
+            "submit_audit": "REQUIRED. One AuditPayload per sub-game: the full sealed chain plus "
+                            "nonces, for the opponent to re-hash.",
+            "receive_control": "OPTIONAL. A status channel that touches no game state and is "
+                               "never sealed or scored. Answering 200 is conformant; omitting it "
+                               "costs nothing.",
+        },
+        "not_on_this_wire": {
+            "declare_step0": "there is no step-0 tool and no step-0 TURN. The hardware/model "
+                             "declaration rides in `negotiate` under `identity`, and the sealed "
+                             "step-0 record is disclosed inside `submit_audit` — never "
+                             "transmitted as a turn. A peer that waits for a step-0 call waits "
+                             "forever.",
+            "hello": "not part of this surface. A liveness probe should be `tools/list`, not a "
+                     "tool CALL: a peer implementing none of your names is still up, and "
+                     "`negotiate` is the authority on whether you may play. Reading an "
+                     "unknown-tool error as 'peer is down' is how best2934 spent five minutes "
+                     "calling a live opponent absent (issue #45).",
+        },
+        "turn_message": {
+            "required": list(ref.TURN_REQUIRED),
+            "optional": list(ref.TURN_OPTIONAL),
+            "field_notes": {
+                "step": "each peer numbers its OWN chain 1..max_steps. A step is a ROUND (one "
+                        "action from each side), NOT a half-turn — so `max_steps: 35` means "
+                        "35 moves EACH. Two peers reading this differently agree on every term "
+                        "and still desync, and no gate either side builds will catch it.",
+                "sender": "'police' | 'thief'",
+                "hint": "the <=15-word verbal hint; may be empty, and may be a lie (App. E "
+                        "permits deception in the verbal channel)",
+                "smell_grid": "{'r,c': intensity} — on the wire under reference-v3",
+                "commit": "SHA256(canonical_json(payload)|nonce), a SINGLE pipe — see §4",
+                "timestamp": "decorative, but must be non-empty; see the refusal case",
+                "claim_response": "{'claim': [r, c], 'caught': bool} — the thief's honest "
+                                  "answer to a capture claim",
+                "win_claim": "{'type': 'survival'} on the thief's threshold turn",
+            },
+        },
+        "audit_payload": {
+            "required": ["sender", "records", "result_claim"],
+            "field_notes": {
+                "records": "the full sealed chain INCLUDING nonces, so the opponent re-hashes "
+                           "every step with its own serializer",
+                "result_claim": "what this side believes the sub-game ended as. The opponent's "
+                                "audit settles it, never the claim.",
+            },
+        },
+        "control_message": {
+            "required": ["kind", "sender"],
+            "optional": ["sub_game_number", "status", "step_budget", "payload"],
+        },
+        "validation": [
+            {"message": m, "note": n, "verdict": ref.ref_turn_validate(m)} for m, n in cases
+        ],
+        "validate_before_applying": "every case above is decided BEFORE any state change. An "
+                                    "inbound turn is adversarial input; a partially applied bad "
+                                    "turn cannot be rolled back, and under App. E rule 35 a "
+                                    "self-inflicted protocol fault zeroes BOTH teams.",
+    })
+
+
 def gen_pairing_declaration() -> None:
     """SPEC section 7.2 — the two pairing fields and their refusal truth table."""
     cases = [
@@ -1046,6 +1159,7 @@ def main() -> None:
     gen_uid_declaration()
     gen_smell_binding()
     gen_delivery_contract()
+    gen_turn_message()
     gen_scent_book_v3()
     gen_joint_seed()
     gen_derive_starts()
