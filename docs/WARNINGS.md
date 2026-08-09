@@ -120,6 +120,90 @@ series; anrbj666's root-cause analysis made the mechanism precise.*
 
 ---
 
+## 2b. Answering a push is not replying to it
+
+Two conformant peers can wait on each other forever, and **every probe you own will say both are
+healthy.**
+
+`negotiate` can be built two ways, and the kit's vectors pin the bytes rather than the direction:
+
+- as a **push** — call the opponent's `negotiate`, discard the return value, and wait for *their*
+  call to arrive at yours;
+- as **request/response** — call the opponent's `negotiate` and read the agreement out of the reply.
+
+A push peer and a request/response peer are each internally correct and mutually mute. The
+request/response side answers every call perfectly — and its answers land in a variable the push
+side never reads. The push side, meanwhile, may have no outbound call at all, because its design
+expects to be spoken to first. Both logs show healthy traffic. Neither shows an error. **The
+missing thing is missing from both**, so there is nothing to see until the deadline expires.
+
+What makes this worse than a normal interop bug is that the usual pre-flight passes. `tools/list`
+matches. Argument names match. Terms match, signatures verify, the call returns 200. A pre-flight
+that diffs tool names *and* argument names — a good pre-flight, better than most teams have —
+passes clean, because the shape that is wrong is in neither list.
+
+**Two defences, and you want both:**
+
+1. **Read the response body as well as your queue.** A peer that answers your call correctly should
+   never be mute to you. Accepting an agreement from either place costs nothing and makes your side
+   compatible with both dialects.
+2. **Push first, without waiting to be spoken to.** Whoever speaks first unblocks the other, so
+   speaking is never the wrong move.
+
+*Found by **best2934** and **imreeyal** on kit issue #45, from two live stalls in one night. The
+diagnosis needed both halves: best2934's log showed thirteen well-formed answers going out;
+imreeyal's showed a handshake that had never read a reply.*
+
+---
+
+## 2c. An unknown tool is not a dead peer
+
+When a `tools/list` comes back with none of the names you expect, the tempting reading is that
+nobody is home. It is the wrong one, and it costs a window.
+
+A peer publishing ten tool names you have never seen is **running, reachable, and conformant to
+its own design** — you have found a dialect, not a corpse. The correct next action is to name the
+mismatch to your opponent, not to retry the endpoint or wait for it to come up. It is already up.
+
+So **log the names you actually received**, in both directions and tallied — not merely "handshake
+failed". A team that logs only its own view has no way to log an *absence*: a client that called
+nothing produces no record anywhere, and the one fact that matters is then structurally invisible
+to the side that needs it. Names only, never bodies — a turn carries a commitment and an audit
+carries the nonces, and neither belongs in a file that gets pasted into an issue thread.
+
+SPEC §7.5 pins the four tools and their payloads precisely so this conversation can be short.
+
+*Both league pairings hit this. Credited to **best2934**, whose tool-name tally turned the second
+stall from a guess into a diagnosis in one message.*
+
+---
+
+## 2d. Read the other side's edge before you blame the other side's code
+
+`502`, `530`, `404` and `406` are four different facts and only one of them is about your opponent's
+agent. Guessing between them wastes a window at best and produces a false accusation at worst.
+
+| what the probe returns | what it actually means |
+|---|---|
+| **406** (or any non-5xx) | a peer is **bound** and answering — an MCP endpoint refusing a bare `GET` is a *healthy* endpoint |
+| **502** | the tunnel is up and reaching its origin, but **no peer is bound** — the correct standby state between sub-games |
+| **530** | the tunnel is up and the **origin is unreachable** — your own process, not the network |
+| **404 + `ERR_NGROK_3200`** | **no agent is connected to the reserved domain at all** — the tunnel client itself is gone |
+
+That last row is the one that gets misread. The domain still resolves, TLS still completes, and you
+get a clean HTTP response — so it looks like a routing or path mistake and invites a round of "are
+you sure that is the right URL?". It is not a URL problem. `ERR_NGROK_3200` means the agent process
+on the other side has stopped, and no amount of correctness on your side will produce a game until
+it restarts.
+
+**So put the probe in your launcher and gate on it.** Refusing to start against a dead endpoint
+costs nothing and leaves no artifacts to clean up; discovering it after the handshake budget
+expires costs a window and writes a technical loss into a log you then have to explain. And check
+the *specific* error code, not merely "did I get a non-5xx" — a bare `502` check cannot tell a
+healthy idle tunnel from one with no ingress at all ([LEAGUE-OPS](LEAGUE-OPS.md)).
+
+---
+
 ## 3. Make the lecturer's address unreachable, not merely unconfigured
 
 An address you have configured is one flag away from being used. An address the run *cannot*
@@ -271,6 +355,39 @@ isn't one, your opponent will never know you lost.
 
 ---
 
+## 5d. Audit against the commitment that **arrived**, not the one in the record
+
+A commit-reveal audit has two inputs and it is easy to ship with only one.
+
+At the end of a sub-game your opponent discloses a list of records — position, nonce, and the
+commitment each one hashes to. The obvious check is that every record is self-consistent: recompute
+`SHA256(canonical(payload)|nonce)` and compare it to the commitment **printed in that same record**.
+That check passes on every honest game, so it looks finished.
+
+It is worth nothing on its own. A record whose position, nonce *and* commitment were all rewritten
+after the fact is perfectly self-consistent — you are verifying a document against itself. The
+commitments that actually constrain anything are the ones that **crossed the wire during play**,
+one per turn, before the position they hide was knowable. Those are the promise; the disclosed
+records are merely the claim to have kept it.
+
+**So keep your own archive of the live commitments and bind the disclosure to it**: for every step,
+the commitment in the disclosed record must equal the commitment you received at that step, and
+every step you received must appear. Then recompute the hash. A disclosure that changes any sealed
+position now fails, because the live commitment is a value the opponent can no longer choose.
+
+Two properties worth stating, because they decide whether this is real:
+
+- **Verify it is live, not merely present.** The check is easy to write and easy to leave
+  unreachable (§5b is the same hazard). Run a real game and confirm the auditor is holding a
+  non-empty set of received commitments — a check fed an empty archive passes everything.
+- **It costs the honest peer nothing.** Both implementations that have shipped it report no
+  behaviour change on clean games, which is exactly what a tamper-evidence check should look like.
+
+*Raised by **gal-roy1** on kit issue #48, and already built by **best2934** at the time it was
+raised. imreeyal's audit had the self-consistency half only.*
+
+---
+
 ## 6. Report format traps
 
 - **Rule 34 says JSON attachment; the book's own listing sends a text body.** The rule requires the
@@ -357,3 +474,7 @@ That permission comes with a shape:
 | keep the counted-games ledger uncommitted, or forget to advance it | the next counted series declares a false first meeting on its own (rules 37–38, 52) |
 | assume the shell you killed took its children | an orphan will play a sub-game and settle it |
 | trust a bare `502` check | it cannot tell a healthy idle tunnel from one with no ingress ([LEAGUE-OPS](LEAGUE-OPS.md)) |
+| read `404 ERR_NGROK_3200` as a wrong URL | the URL is fine; the agent behind it is gone, and nothing you change will help |
+| assume a peer that answers your `negotiate` has replied to it | a push and a request/response peer are each conformant and mutually mute, and every probe passes |
+| read an unfamiliar `tools/list` as a dead peer | you have found a dialect, not a corpse — say so instead of retrying |
+| verify a disclosed record only against the commitment printed inside it | that is a document checked against itself; bind it to the commitment that arrived live |
