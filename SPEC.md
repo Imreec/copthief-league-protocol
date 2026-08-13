@@ -470,7 +470,7 @@ convention, offered as the default — it is the reference's own `symmetric_outc
 { game_id,
   aggregate,                      # total_score, sub_games_won, ties, winner_group, series_tie
   sub_games: [trimmed rows] }     # each row keeps ONLY sub_game_number, roles, result,
-                                  #   winner_group, tie, score
+                                  #   winner_group, score
 ```
 
 — everything two honest teams must agree on and **nothing they may legitimately differ on**. A
@@ -482,6 +482,21 @@ moved when the outcome pattern moved — behaving as a consensus, not a cache. E
 preimage with `game_uid` and the `github_commit` columns was agreed by both teams as worth doing
 and is **PROPOSED** — no implementation computes it yet; until one does, the trimmed scope above
 is the interoperable default.
+
+*An earlier revision of this row list (2026-08-04 → 2026-08-13) carried a sixth key, `tie`, and
+still called the row the reference's "verbatim". Both halves were wrong, and the error sat in
+every carrier at once — this list, the bundle generator's tuple, the bundle's shipped hash and
+the bundle README. The reference's `emit.py` deliberately writes `tie` into the document row and
+leaves it OUT of the hash preimage; every hash ever settled live — the reference's own sample
+run, the 2026-08-03/04 window this very section cites, every filed counted series — reproduces
+only under the five-key row. Nothing ever played signed six. The convention was documented the
+same day the filed bytes disproved it and never re-validated against them (the §6.2 scoring
+failure shape, one shelf over). Found by anrbj666 against the reference's own artifact,
+2026-08-13; independently reproduced by imreeyal the same day. The row is now pinned to the
+reference's artifact by `tools/probes/probe_s6_consensus_scope.py`, which recomputes the shipped
+bundle hash from the five-key scope on every CI run — the trim loses nothing, since `tie` is
+derivable as `winner_group == null` and the tie COUNT already sits in the signed aggregate. The
+document row keeps `tie` (§6.2, the playbook's table); only the hash row never had it.*
 
 ### 6.1 One report per team, result-only (settled convention, documented tension)
 

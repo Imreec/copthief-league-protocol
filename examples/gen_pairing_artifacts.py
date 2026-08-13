@@ -281,10 +281,13 @@ def build() -> dict[str, dict]:
     winner = None if series_tie else max(totals, key=totals.get)
     aggregate = {"total_score": totals, "sub_games_won": won, "ties": ties,
                  "winner_group": winner, "series_tie": series_tie}
-    consensus_scope = {   # SPEC section 6's trimmed scope, verbatim
+    # SPEC section 6's trimmed scope — the reference's 5-key symmetric row, verbatim. An
+    # earlier revision signed a sixth key ("tie") that no played implementation signs; the
+    # tuple is pinned to the reference's own artifact by probe_s6_consensus_scope.py.
+    consensus_scope = {
         "game_id": GID, "aggregate": aggregate,
         "sub_games": [{k: r[k] for k in
-                       ("sub_game_number", "roles", "result", "winner_group", "tie", "score")}
+                       ("sub_game_number", "roles", "result", "winner_group", "score")}
                       for r in rows],
     }
     declaration = {
