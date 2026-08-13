@@ -45,11 +45,20 @@ every move is legal and on the board, and each sub-game reaches the outcome its 
 ## The consensus scope
 
 `mutual_agreement.sha256` is hashed over `{game_id, aggregate, sub_games-trimmed-rows}` — the row
-keeping `sub_game_number, roles, result, winner_group, tie, score`. That scope is **SPEC §6's
+keeping `sub_game_number, roles, result, winner_group, score`. That scope is **SPEC §6's
 default**, spelled out there key-for-key, not something a pairing has to invent; the serialization
 is the pinned spaced form from `vectors/report_consensus.json`. A second team can reproduce this
 hash from the result file alone, without reading the generator — which is the property that makes
 it worth carrying.
+
+The trimmed row is **not** the document row: the result file's rows carry `tie` (and timestamps,
+commits, tokens), the hash rows do not. An earlier revision of this bundle signed `tie` too — a
+six-key row matching nothing ever played, including the reference's own sample artifact, live from
+2026-08-04 to 2026-08-13 (found by anrbj666 against the reference's bytes; SPEC §6 carries the
+full correction). `tools/probes/probe_s6_consensus_scope.py` now recomputes this bundle's shipped
+hash from the five-key scope on every CI run, so the scope cannot drift from the reference form
+again — a calibrating team that had reproduced the six-key hash should re-run its pre-bind check
+against the regenerated bundle.
 
 ## What this bundle still does not show
 
