@@ -151,6 +151,9 @@ Run it before you agree a start time, not during one.
    [`PAIRING-PLAYBOOK.md`](PAIRING-PLAYBOOK.md) — the message that opens a pairing, the role
    convention, the friendly campaign that de-risks the counted series, and the retry agreement you
    want in writing before anything counts.
+5. **If your team splits its two roles across two repositories** (rule 41), read
+   [`ROLE-CONVENTIONS.md`](ROLE-CONVENTIONS.md) — which role convention a pairing declares, and why
+   the sub-game index in a report has to be derived rather than counted per repository. `PROPOSED`.
 
 ---
 
